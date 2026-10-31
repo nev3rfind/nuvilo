@@ -1,12 +1,61 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-#
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
+# Novelo ProGuard / R8 Rules for Release Build Hardening
+# AGP combines all keep rule files in src/main/keepRules to pass to R8.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve generic signatures, annotations, and inner class relationships
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+
+# 1. Room Database, Entities, and DAOs
+-keep class * extends androidx.room.RoomDatabase {
+    <init>(...);
+}
+-keep @androidx.room.Entity class * {
+    <fields>;
+    <init>(...);
+}
+-keep @androidx.room.Dao interface * {
+    *;
+}
+-keep class androidx.room.migration.Migration {
+    *;
+}
+-keep class com.example.nuvilo.data.local.NoveloDatabase_Impl {
+    *;
+}
+
+# 2. WorkManager Background Workers
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+-keep class com.example.nuvilo.system.work.LowStockCheckWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
+# 3. Encrypted Backup / Restore Data Models (JSON & SAF Serialization)
+-keepclassmembers class com.example.nuvilo.data.backup.** {
+    <fields>;
+    <methods>;
+}
+-keep class com.example.nuvilo.data.backup.EncryptedBackupEnvelope {
+    *;
+}
+-keep class com.example.nuvilo.data.backup.JsonBackupData {
+    *;
+}
+-keep class com.example.nuvilo.domain.model.** {
+    <fields>;
+    <methods>;
+}
+
+# 4. Broadcast Receivers (Exact Alarms, Notifications, Boot Recovery)
+-keep class com.example.nuvilo.system.alarm.AlarmReceiver {
+    public <init>();
+}
+-keep class com.example.nuvilo.system.notification.NotificationActionReceiver {
+    public <init>();
+}
+-keep class com.example.nuvilo.system.receiver.BootAndChangeReceiver {
+    public <init>();
+}
+
+# 5. Core Library Desugaring & Kotlin Coroutines
+-dontwarn java.time.**
