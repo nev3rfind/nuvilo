@@ -43,7 +43,7 @@ Status designations: `NOT STARTED` | `IN PROGRESS` | `BLOCKED` | `VERIFIED`
 | **Phase 4** | Phase 4 Verification & Launch | `VERIFIED` | `testDebugUnitTest` (32/32 PASSED), `connectedDebugAndroidTest` (15/15 PASSED), `lintDebug` (0 errors), `assembleDebug` (PASSED), APK installed & running cleanly | None | Complete |
 | **Phase 5** | Screen Polish & Design System Refinement | `VERIFIED` | NHS-inspired blue `#005EB8`, `#121820` dark mode foundation, Hero Dose + Timeline hybrid layout, reusable components (`HeroDoseCard`, `TimelineDoseItem`, `CompletedDayCard`, `AlertBanner`, `DoseStatusBadge`), edge-to-edge insets, dialog `imePadding()`, before/after screenshots | None | Ready for Phase 6 |
 | **Phase 6** | Privacy, Biometric Lock & SAF Export | `VERIFIED` | AndroidX BiometricPrompt (`FragmentActivity`), `AppLockManager` with monotonic clock grace periods, `LockScreen` overlay, `FLAG_SECURE` recents masking, PBKDF2/AES-256-GCM encrypted JSON export/restore, RFC 4180 CSV ZIP bundle export/import, atomic transactional restore with rollback, `android:allowBackup="false"`, auto-backup exclusion rules, 49 JVM unit tests passing, 18/18 connected instrumentation tests passing on `emulator-5554`, lint 0 errors, APK installed & verified | None | Complete |
-| **Phase 7** | Release Hardening & Verification | `NOT STARTED` | Final audit, accessibility pass, release build | None | Planned |
+| **Phase 7** | Release Hardening & Verification | `IN PROGRESS` | GitHub Issue [#1](https://github.com/nev3rfind/nuvilo/issues/1), Branch `chore/1-phase-07-release-hardening` | None | In Progress |
 
 ---
 
