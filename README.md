@@ -36,14 +36,15 @@ Designed with healthcare-grade rigor, Novelo focuses on mathematical stock integ
 
 ## 🚦 Project Status
 
-**Current Phase: Phase 0 (Environment, Skills & Product Preparation)**
-- [x] Android Studio environment inspected and verified with JDK 25 and AGP 9.4.1.
-- [x] Baseline build and unit tests passing (`BUILD SUCCESSFUL in 2m 22s`).
-- [x] Curated suite of 21 agent skills and custom medication safety skill configured in `.agents/skills/`.
-- [x] Architecture Decision Records (ADRs 0001–0006) established in `docs/decisions/`.
-- [x] Design system specifications and dashboard layout comparisons created in `docs/design/`.
-- [x] Implementation plan and product requirements established.
-- [ ] *Phase 1 (Data Architecture & Stock Ledger Engine) pending user review.*
+**Current Phase: Phase 7 Complete (Release Candidate Hardening & Final Quality Assurance)**
+- [x] **Phase 0**: Environment, architecture standards, design specifications, and agent skills configured.
+- [x] **Phase 1**: Database schema, append-only stock ledger engine (`ScaledQuantity`), deterministic occurrence calculations.
+- [x] **Phase 2**: Medication details, FEFO stock lot tracking, auditable adjustments, historical dose corrections (`DOSE_REVERSAL`).
+- [x] **Phase 3**: Bounded exact alarm scheduling (`AlarmManager`), system broadcasts, actionable notifications, deferrable low-stock worker (`WorkManager`).
+- [x] **Phase 4**: Adherence calculation engine, monthly calendar with accessible indicators (`✓`, `~`, `×`, `!`), prescription repeat tracking, database v3 migration.
+- [x] **Phase 5**: NHS-inspired healthcare aesthetic (`#005EB8`), `#121820` slate dark theme, Hero Dose + Timeline hybrid layout, reusable components.
+- [x] **Phase 6**: Biometric app lock (`BiometricPrompt` + device credentials), window `FLAG_SECURE` recents masking, PBKDF2/AES-256-GCM encrypted local SAF backup, RFC 4180 CSV ZIP export, atomic transactional restore.
+- [x] **Phase 7**: Release hardening, R8 minification (3.09 MB release APK, 86.6% reduction), keep rules, WCAG AA compliance audit ($\ge 48\text{dp}$ touch targets), lifecycle flow collections (`collectAsStateWithLifecycle`), automated accessibility tests (23/23 passing on-device tests, 49/49 JVM unit tests).
 
 ---
 
@@ -56,9 +57,19 @@ Novelo requires Java 25 or a compatible modern JDK (such as the bundled Android 
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ```
 
-### Run Unit Tests
+### Run Unit Tests (49 tests across 9 test classes)
 ```powershell
-.\gradlew.bat test
+.\gradlew.bat testDebugUnitTest
+```
+
+### Run On-Device Instrumented & Accessibility Tests (23 tests on connected device/emulator)
+```powershell
+.\gradlew.bat connectedDebugAndroidTest
+```
+
+### Static Analysis / Lint (0 errors)
+```powershell
+.\gradlew.bat lintDebug
 ```
 
 ### Assemble Debug APK
@@ -66,9 +77,9 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat assembleDebug
 ```
 
-### Static Analysis / Lint
+### Assemble Hardened Release APK (R8 Minified)
 ```powershell
-.\gradlew.bat lintDebug
+.\gradlew.bat assembleRelease
 ```
 
 For detailed testing instructions, device connections, and instrumentation configurations, see [TESTING.md](TESTING.md).
@@ -77,6 +88,11 @@ For detailed testing instructions, device connections, and instrumentation confi
 
 ## 📚 Project Documentation
 
+- [Release Checklist & Build Verification](docs/RELEASE_CHECKLIST.md)
+- [Accessibility Audit (WCAG AA)](docs/ACCESSIBILITY_AUDIT.md)
+- [Performance & Memory Leak Audit](docs/PERFORMANCE_AUDIT.md)
+- [Development Workflow](docs/DEVELOPMENT_WORKFLOW.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
 - [Product Requirements](docs/product-requirements.md)
 - [System Architecture](ARCHITECTURE.md)
 - [Domain Glossary](GLOSSARY.md)

@@ -207,7 +207,46 @@ No task or phase shall be marked complete without providing direct terminal exec
 
 ---
 
-## 9. Latest Verified Test Execution (Phase 6)
+## 10. Latest Verified Test Execution (Phase 7: Release Hardening)
+
+### Unit Tests (`testDebugUnitTest`)
+- **Status**: `BUILD SUCCESSFUL in 1m 11s`
+- **Result**: 49 unit tests executed across 9 test suites with 0 failures:
+  1. `com.example.nuvilo.security.AppLockManagerTest` (10 tests) [PASSED]
+  2. `com.example.nuvilo.data.backup.BackupCryptoTest` (3 tests) [PASSED]
+  3. `com.example.nuvilo.data.backup.BackupSerializationTest` (4 tests) [PASSED]
+  4. `com.example.nuvilo.domain.adherence.AdherenceCalculatorTest` (7 tests) [PASSED]
+  5. `com.example.nuvilo.domain.model.ScaledQuantityTest` (5 tests) [PASSED]
+  6. `com.example.nuvilo.domain.prescription.PrescriptionDomainTest` (5 tests) [PASSED]
+  7. `com.example.nuvilo.domain.schedule.ScheduleOccurrenceCalculatorTest` (3 tests) [PASSED]
+  8. `com.example.nuvilo.domain.stock.StockLedgerCalculatorTest` (11 tests) [PASSED]
+  9. `com.example.nuvilo.ExampleUnitTest` (1 test) [PASSED]
+
+### On-Device Connected Tests (`connectedDebugAndroidTest` on `emulator-5554`)
+- **Status**: `BUILD SUCCESSFUL in 1m 23s`
+- **Result**: 23 test cases executed across 6 test suites with 0 failures (100% pass rate):
+  1. `com.example.nuvilo.ui.AccessibilityTest` (5 tests) [PASSED]
+     - `heroDoseCard_actionButtons_meetMinimumTouchTargetSize_andProvideTalkBackLabels` [PASSED]
+     - `timelineDoseItem_actionButtons_meetMinimumTouchTargetSize_andAreIndependentlyAccessible` [PASSED]
+     - `sectionHeader_hasHeadingSemantics_forScreenReaderNavigation` [PASSED]
+     - `emptyStateCard_meetsAccessibilityTarget_andPresentsClearLabels` [PASSED]
+     - `lockScreen_isolatesSensitiveHealthData_andProvidesAccessibleUnlockTarget` [PASSED]
+  2. `com.example.nuvilo.data.BackupRestoreDatabaseTest` (3 tests) [PASSED]
+  3. `com.example.nuvilo.data.NoveloDatabaseTest` (8 tests) [PASSED]
+  4. `com.example.nuvilo.data.NoveloDatabaseMigrationTest` (1 test) [PASSED]
+  5. `com.example.nuvilo.system.NotificationAndSchedulerTest` (5 tests) [PASSED]
+  6. `com.example.nuvilo.ExampleInstrumentedTest` (1 test) [PASSED]
+
+### Static Analysis (`lintDebug`)
+- **Status**: `BUILD SUCCESSFUL in 3m 1s`
+- **Result**: 0 errors, 0 actionable warnings.
+
+### Release APK Assembly & Minification (`assembleRelease`)
+- **Status**: `BUILD SUCCESSFUL in 4m 53s`
+- **Output**: `app/build/outputs/apk/release/app-release-unsigned.apk` (3,097,805 bytes / ~3.09 MB vs 23 MB debug APK, 86.6% reduction).
+- **R8 Rules**: Verified via `app/src/main/keepRules/rules.keep`.
+- **Zero Network Invariant**: Confirmed `android.permission.INTERNET` absent and `ACCESS_NETWORK_STATE` stripped.
+
 
 ### Unit Tests (`testDebugUnitTest`)
 - **Status**: `BUILD SUCCESSFUL in 32s`
