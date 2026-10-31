@@ -28,6 +28,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -39,7 +40,6 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.domain.model.StockUnit
@@ -61,10 +62,10 @@ import com.example.nuvilo.ui.viewmodel.MedicationViewModel
 @Composable
 fun MedicationListScreen(
     viewModel: MedicationViewModel,
-    onMedicationClick: (medicationId: String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onMedicationClick: (medicationId: String) -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -283,7 +284,7 @@ fun AddMedicationDialog(
                         readOnly = true,
                         label = { Text("Form") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = formExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                     )
                     ExposedDropdownMenu(
                         expanded = formExpanded,
@@ -313,7 +314,7 @@ fun AddMedicationDialog(
                         readOnly = true,
                         label = { Text("Stock Unit") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                     )
                     ExposedDropdownMenu(
                         expanded = unitExpanded,

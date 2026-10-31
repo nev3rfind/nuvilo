@@ -61,7 +61,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +75,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.data.backup.BackupPreview
 import com.example.nuvilo.data.backup.NoveloDataBackup
 import com.example.nuvilo.data.preferences.ThemeMode
@@ -99,9 +99,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val prefs by viewModel.userPreferences.collectAsState()
-    val exportState by viewModel.exportState.collectAsState()
-    val restoreState by viewModel.restoreState.collectAsState()
+    val prefs by viewModel.userPreferences.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val restoreState by viewModel.restoreState.collectAsStateWithLifecycle()
 
     var showTestSentMessage by remember { mutableStateOf(false) }
     val biometricStatus = remember { viewModel.getBiometricStatus() }
