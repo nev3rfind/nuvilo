@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Novelo Privacy Policy: No automatic OS-managed cloud backup or device-to-device transfer -->
+    <exclude domain="database" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="root" path="." />
+    <exclude domain="file" path="." />
+</full-backup-content>
