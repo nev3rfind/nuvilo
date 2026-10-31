@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -195,15 +197,11 @@ fun HeroDoseCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
                 shape = RoundedCornerShape(20.dp)
-            )
-            .semantics(mergeDescendants = true) {
-                contentDescription = "Next dose: ${medication.name}, scheduled for $timeStr. Status: Due."
-            },
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -214,100 +212,114 @@ fun HeroDoseCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top Badge Row: "Next Actionable Dose" header pill and scheduled time
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Tappable Details section: collapses description for TalkBack and navigates to medication details
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "View details for ${medication.name}"
+                    ) { onClick() }
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "Next dose due: ${medication.name}, ${medication.strength} at $timeStr. Scheduled ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation}."
+                    },
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Top Badge Row: "Next Actionable Dose" header pill and scheduled time
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AccessTime,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(14.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "NEXT DOSE DUE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     Text(
-                        text = "NEXT DOSE DUE",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Due at $timeStr",
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Text(
-                    text = "Due at $timeStr",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Medication info row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
+                // Medication info row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Medication,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Medication,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = medication.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${medication.strength} · Dose: ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation} (${medication.form.displayName})",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
+                // Stock and Mode row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (stockBalance != null) {
+                        StockBadge(balance = stockBalance)
+                    }
+
+                    val modeTag = if (isConfirmMode) "Manual Confirm" else "Auto-Assumed"
                     Text(
-                        text = medication.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${medication.strength} · Dose: ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation} (${medication.form.displayName})",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Mode: $modeTag",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Stock and Mode row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (stockBalance != null) {
-                    StockBadge(balance = stockBalance)
-                }
-
-                val modeTag = if (isConfirmMode) "Manual Confirm" else "Auto-Assumed"
-                Text(
-                    text = "Mode: $modeTag",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Action Buttons
+            // Action Buttons: independently reachable and labelled for TalkBack
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -315,7 +327,10 @@ fun HeroDoseCard(
             ) {
                 OutlinedButton(
                     onClick = onSnooze,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .minimumInteractiveComponentSize(),
                     shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
@@ -325,12 +340,21 @@ fun HeroDoseCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Snooze", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = "Snooze",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Snooze ${medication.name} reminder"
+                        }
+                    )
                 }
 
                 OutlinedButton(
                     onClick = onSkip,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .minimumInteractiveComponentSize(),
                     shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
@@ -340,12 +364,21 @@ fun HeroDoseCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Skip", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = "Skip",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Skip ${medication.name} dose"
+                        }
+                    )
                 }
 
                 Button(
                     onClick = onTake,
-                    modifier = Modifier.weight(1.3f),
+                    modifier = Modifier
+                        .weight(1.3f)
+                        .heightIn(min = 48.dp)
+                        .minimumInteractiveComponentSize(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
@@ -361,7 +394,10 @@ fun HeroDoseCard(
                     Text(
                         text = if (isConfirmMode) "Take Dose" else "Confirm",
                         style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Record ${medication.name} as taken"
+                        }
                     )
                 }
             }
@@ -393,7 +429,6 @@ fun TimelineDoseItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -448,11 +483,7 @@ fun TimelineDoseItem(
 
         // Card content
         Card(
-            modifier = Modifier
-                .weight(1f)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = "$medicationName at $timeStr. Status: ${occurrence.status.name}."
-                },
+            modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -467,41 +498,55 @@ fun TimelineDoseItem(
                 modifier = Modifier.padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Info block: merged for screen readers and clickable for details
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = "View details for $medicationName"
+                        ) { onClick() }
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "$medicationName, $medicationStrength at $timeStr. Scheduled ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation}. Status: ${occurrence.status.displayName}."
+                        },
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = timeStr,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    DoseStatusBadge(status = occurrence.status)
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = medicationName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            text = timeStr,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "$medicationStrength · ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        DoseStatusBadge(status = occurrence.status)
                     }
 
-                    if (stockBalance != null) {
-                        StockBadge(balance = stockBalance)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = medicationName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "$medicationStrength · ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        if (stockBalance != null) {
+                            StockBadge(balance = stockBalance)
+                        }
                     }
                 }
 
@@ -515,19 +560,37 @@ fun TimelineDoseItem(
                     ) {
                         TextButton(
                             onClick = onSkip,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .minimumInteractiveComponentSize(),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text("Skip", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                text = "Skip",
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Skip $medicationName dose"
+                                }
+                            )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         FilledTonalButton(
                             onClick = onTake,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .minimumInteractiveComponentSize(),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Take", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                text = "Take",
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Take $medicationName dose"
+                                }
+                            )
                         }
                     }
                 }
@@ -687,8 +750,8 @@ fun MedicationItemCard(
     medication: Medication,
     stockBalance: StockBalance?,
     onArchiveToggle: () -> Unit,
-    onClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
@@ -791,10 +854,10 @@ fun MedicationItemCard(
 fun EmptyStateCard(
     title: String,
     description: String,
+    modifier: Modifier = Modifier,
     icon: ImageVector = Icons.Default.Info,
     actionButtonText: String? = null,
-    onActionClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onActionClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -846,6 +909,9 @@ fun EmptyStateCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = onActionClick,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .minimumInteractiveComponentSize(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
@@ -907,8 +973,8 @@ fun DoseOccurrenceCard(
     stockBalance: StockBalance?,
     onTake: () -> Unit,
     onSkip: () -> Unit,
-    onClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     TimelineDoseItem(
         occurrence = occurrence,
