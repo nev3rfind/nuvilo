@@ -1,5 +1,7 @@
 package com.example.nuvilo.domain.model
 
+import java.util.Locale
+
 /**
  * An immutable, exact fixed-point scaled quantity for medication stock and dose quantities.
  *
@@ -47,7 +49,7 @@ data class ScaledQuantity(val rawScaledValue: Long) : Comparable<ScaledQuantity>
         return if (fraction == 0L) {
             "$sign$whole"
         } else {
-            val fractionStr = String.format("%03d", fraction).trimEnd('0')
+            val fractionStr = String.format(Locale.ROOT, "%03d", fraction).trimEnd('0')
             "$sign$whole.$fractionStr"
         }
     }

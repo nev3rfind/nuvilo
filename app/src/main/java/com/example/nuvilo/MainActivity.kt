@@ -23,7 +23,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.nuvilo.data.preferences.UserPreferencesRepository
 import com.example.nuvilo.security.AppLockManager
@@ -95,8 +95,8 @@ class MainActivity : FragmentActivity() {
         val settingsViewModel: SettingsViewModel by viewModels { factory }
 
         setContent {
-            val userPrefs by settingsViewModel.userPreferences.collectAsState()
-            val isLocked by appLockManager.isLocked.collectAsState()
+            val userPrefs by settingsViewModel.userPreferences.collectAsStateWithLifecycle()
+            val isLocked by appLockManager.isLocked.collectAsStateWithLifecycle()
 
             // Window FLAG_SECURE management for recents preview masking and active lock
             LaunchedEffect(userPrefs.isRecentsPreviewMasked, isLocked) {

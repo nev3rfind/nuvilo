@@ -1,15 +1,47 @@
 # Novelo Session Handoff
 
 ## 1. Current State Summary
-- **Current Phase**: Phase 6 (Privacy, Biometric Lock & Local Backup/Restore) **VERIFIED & COMPLETE**.
+- **Current Phase**: Phase 7 (Release Hardening, Accessibility & Final Quality Assurance) **VERIFIED & COMPLETE** (Release Candidate Status).
 - **Project Name**: Novelo (package `com.example.nuvilo`).
+- **Repository**: `https://github.com/nev3rfind/nuvilo.git` | Branch: `chore/1-phase-07-release-hardening` | Issue: [#1](https://github.com/nev3rfind/nuvilo/issues/1).
 - **Build Status**: 100% green across all test and build suites:
-  - `.\gradlew.bat testDebugUnitTest` (Unit tests): **PASSED** (49 tests executed across 9 suites, 0 failures, 0 errors in 32s).
-  - `.\gradlew.bat connectedDebugAndroidTest` (On-device tests on `emulator-5554` API 37): **PASSED** (18 tests executed across 5 suites, 0 failures, 100% pass rate in 29s).
-  - `.\gradlew.bat lintDebug` (Static analysis): **PASSED** (0 errors in 1m 27s).
+  - `.\gradlew.bat testDebugUnitTest` (Unit tests): **PASSED** (49 tests executed across 9 suites, 0 failures, 0 errors in 1m 11s).
+  - `.\gradlew.bat connectedDebugAndroidTest` (On-device tests on `emulator-5554` API 37): **PASSED** (23 tests executed across 6 suites, 0 failures, 100% pass rate in 1m 23s, including 5 automated Compose accessibility tests).
+  - `.\gradlew.bat lintDebug` (Static analysis): **PASSED** (0 errors, 0 actionable warnings in 3m 1s).
   - `.\gradlew.bat assembleDebug`: **BUILD SUCCESSFUL in 27s**.
-  - App installed and actively running on `emulator-5554` with cold-start lock and `FLAG_SECURE` verified.
+  - `.\gradlew.bat assembleRelease`: **BUILD SUCCESSFUL in 4m 53s** (Release APK: `3,097,805 bytes / ~3.09 MB`, 86.6% reduction via R8 minification).
 - **JDK Configuration**: OpenJDK 25 (`C:\Program Files\Android\Android Studio\jbr`).
+
+---
+
+## 2. Completed Work in Phase 7
+- [x] **Git Workflow & GitHub Alignment**:
+  - Pushed all previous phases cleanly to `https://github.com/nev3rfind/nuvilo.git` (`main` branch).
+  - Created Issue #1: *"Phase 7: Release Hardening & Final Quality Assurance"*.
+  - Tracked work on branch `chore/1-phase-07-release-hardening`.
+  - Created `CONTRIBUTING.md` and `docs/DEVELOPMENT_WORKFLOW.md`.
+- [x] **R8 Release Optimization & Keep Rules**:
+  - Configured `app/src/main/keepRules/rules.keep` preserving Room DAOs, entities, migrations, WorkManager `LowStockCheckWorker`, cryptographic backup data models (`EncryptedBackupEnvelope`, `JsonBackupData`), and broadcast receivers.
+  - Reduced release APK size to 3.09 MB (86.6% reduction from debug APK).
+- [x] **Strict Zero-Network Boundary Enforcement**:
+  - Merged release manifest confirmed: `android.permission.INTERNET` is strictly absent.
+  - Stripped `android.permission.ACCESS_NETWORK_STATE` via `<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />`.
+- [x] **WCAG AA Accessibility Audit & Remediations**:
+  - Enforced $\ge 48\times 48\text{dp}$ touch target bounds (`heightIn(min = 48.dp)` and `minimumInteractiveComponentSize()`) across `HeroDoseCard`, `TimelineDoseItem`, and `EmptyStateCard`.
+  - Disentangled composite cards: header summaries are clickable for details, while "Take", "Skip", and "Snooze" buttons are independently reachable with explicit TalkBack labels.
+  - Verified screen reader content isolation on `LockScreen`.
+  - Created comprehensive `docs/ACCESSIBILITY_AUDIT.md`.
+- [x] **Automated Compose Semantics Test Suite**:
+  - Added `app/src/androidTest/java/com/example/nuvilo/ui/AccessibilityTest.kt` with 5 automated test cases.
+  - Upgraded `espresso-core` to `3.7.0` and `androidx.test.ext:junit` to `1.3.0` for full compatibility with Android 16 (API 37).
+- [x] **Performance & Memory Leak Audit**:
+  - Migrated flow collection across all screens and `MainActivity` from `collectAsState()` to lifecycle-aware `collectAsStateWithLifecycle()`.
+  - Resolved deprecated dropdown menu anchors in `MedicationListScreen.kt` using `ExposedDropdownMenuAnchorType.PrimaryNotEditable`.
+  - Standardized Compose modifier parameter ordering convention across all screens and reusable components.
+  - Created comprehensive `docs/PERFORMANCE_AUDIT.md`.
+- [x] **Release Documentation Freeze**:
+  - Created `docs/RELEASE_CHECKLIST.md`.
+  - Updated `README.md`, `ARCHITECTURE.md`, `SECURITY.md`, `TESTING.md`, `CHANGELOG.md`, and `PROGRESS.md`.
 
 ---
 

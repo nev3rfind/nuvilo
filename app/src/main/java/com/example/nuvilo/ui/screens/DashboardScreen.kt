@@ -28,7 +28,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +36,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.ui.components.AlertBanner
 import com.example.nuvilo.ui.components.CompletedDayCard
 import com.example.nuvilo.ui.components.EmptyStateCard
@@ -50,11 +50,11 @@ import com.example.nuvilo.ui.viewmodel.DashboardViewModel
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onNavigateToMedications: () -> Unit,
+    modifier: Modifier = Modifier,
     onNavigateToCalendar: () -> Unit = {},
-    onMedicationClick: (medicationId: String) -> Unit = {},
-    modifier: Modifier = Modifier
+    onMedicationClick: (medicationId: String) -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier

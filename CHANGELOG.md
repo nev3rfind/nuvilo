@@ -8,6 +8,21 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 7: Release Hardening, Accessibility & Final Quality Assurance (Refs #1)**:
+  - Added automated Jetpack Compose Semantics and Accessibility test suite in `app/src/androidTest/java/com/example/nuvilo/ui/AccessibilityTest.kt` verifying WCAG AA touch targets ($\ge 48\times 48\text{dp}$), TalkBack labels, heading navigation, and lock-screen content isolation.
+  - Formulated and documented comprehensive audit artifacts: `docs/ACCESSIBILITY_AUDIT.md`, `docs/PERFORMANCE_AUDIT.md`, `docs/RELEASE_CHECKLIST.md`, `docs/DEVELOPMENT_WORKFLOW.md`, and `CONTRIBUTING.md`.
+  - Configured project-specific R8 keep rules in `app/src/main/keepRules/rules.keep` for Room SQLite DAOs/entities/migrations, WorkManager workers, SAF cryptographic data models, and broadcast receivers.
+  - Achieved an 86.6% release binary size reduction with release APK measuring `3,097,805 bytes (~3.09 MB)`.
+
+### Changed
+- Migrated StateFlow UI consumption across all screens and `MainActivity` from `collectAsState()` to lifecycle-aware `collectAsStateWithLifecycle()` to eliminate background flow emissions and conserve battery.
+- Upgraded `androidx.test.espresso:espresso-core` to `3.7.0` and `androidx.test.ext:junit` to `1.3.0` for full compatibility with Android 16 (API 37) input manager architectures.
+- Updated deprecated dropdown menu anchors in `MedicationListScreen.kt` to `ExposedDropdownMenuAnchorType.PrimaryNotEditable`.
+- Enforced Compose modifier parameter convention (`modifier: Modifier = Modifier` as first optional parameter) across all UI screens and components.
+- Enforced strict $\ge 48\text{dp}$ touch target bounds (`heightIn(min = 48.dp)`) across action buttons in `HeroDoseCard`, `TimelineDoseItem`, and `EmptyStateCard`.
+- Disentangled composite card semantics in `HeroDoseCard` and `TimelineDoseItem` to allow TalkBack users independent access to "Take", "Skip", and "Snooze" buttons.
+- Explicitly stripped `android.permission.ACCESS_NETWORK_STATE` from merged manifests using `tools:node="remove"`, ensuring 100% zero-network boundary.
+- Removed redundant activity label and resolved all `DefaultLocale`, `UnusedResources`, and version catalog lint warnings.
 - **Phase 6: Privacy, Biometric Lock & Local SAF Export/Restore**:
   - Implemented AndroidX `BiometricPrompt` on `FragmentActivity` architecture supporting biometric credentials across API 24–37.
   - Implemented `BiometricAuthManager` supporting `BIOMETRIC_STRONG` (fingerprint, face) and `DEVICE_CREDENTIAL` (PIN/pattern/password fallback) without negative button conflict.

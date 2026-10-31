@@ -344,3 +344,27 @@ graph LR
   2. Inserts backup records in forward dependency order.
   3. 100% rollback guarantee: Any SQLite constraint failure rolls back the transaction, leaving existing data untouched.
 - **Post-Restore Reconciliation**: Automatically triggers `AlarmScheduler.reconcileUpcomingReminders()` to sync `AlarmManager` with newly imported medication schedules.
+
+---
+
+## 9. Release Hardening & Build Architecture
+
+### 9.1 R8 Code Optimization & Keep Rules (`app/src/main/keepRules/rules.keep`)
+Novelo employs R8 code shrinking, resource shrinking, and dead-code stripping in release builds, reducing the final binary size from ~23 MB down to 3.09 MB (~86.6% reduction).
+- **Preserved Attributes**: `*Annotation*`, `Signature`, `InnerClasses`, `EnclosingMethod` to ensure correct runtime reflection and type token preservation.
+- **Room Preservation**: Room entity classes, DAO interfaces, and database implementation classes are explicitly protected from obfuscation.
+- **Worker Preservation**: `LowStockCheckWorker` and subclasses of `ListenableWorker` are retained to allow WorkManager reflection instantiation.
+- **Cryptographic Model Preservation**: Backup data models (`EncryptedBackupEnvelope`, `JsonBackupData`) and domain data classes are preserved to ensure zero serialization mismatch across versions.
+- **Receiver Preservation**: `AlarmReceiver`, `NotificationActionReceiver`, and `BootAndChangeReceiver` retain public constructors for system invocation.
+
+### 9.2 Zero-Network Architectural Invariant
+Novelo strictly enforces zero-network permissions:
+- `android.permission.INTERNET` is forbidden across all manifests.
+- `android.permission.ACCESS_NETWORK_STATE` (automatically merged by WorkManager runtime) is explicitly stripped via `tools:node="remove"`.
+- All database backups are local-first via Android's Storage Access Framework (SAF) using user-selected URIs (`CreateDocument` / `OpenDocument`).
+
+### 9.3 Accessibility & TalkBack Architecture
+- **Semantic Separation**: Composite action cards (`HeroDoseCard`, `TimelineDoseItem`) separate header detail summaries (`Role.Button`) from action controls ("Take", "Skip", "Snooze"), allowing TalkBack users independent access.
+- **Touch Targets**: All interactive elements strictly enforce $\ge 48\times 48\,\text{dp}$ touch bounds (`heightIn(min = 48.dp)` and `minimumInteractiveComponentSize()`).
+- **Screen Reader Privacy Isolation**: When `LockScreen` is displayed, underlying medication data is completely omitted from the Compose composition hierarchy.
+- **Lifecycle Efficiency**: Flow collection across all screens uses `collectAsStateWithLifecycle()` to prevent background flow emissions when the activity is stopped.

@@ -59,7 +59,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.Medication
@@ -99,16 +99,17 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MedicationDetailScreen(
     viewModel: MedicationDetailViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToDoseHistory: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToDoseHistory: () -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showRestockDialog by remember { mutableStateOf(false) }
@@ -675,7 +676,7 @@ private fun ScheduleSummaryCard(
             } else {
                 for (sch in schedules) {
                     val timesFormatted = sch.targetTimesMinuteOfDay.joinToString(", ") { minute ->
-                        String.format("%02d:%02d", minute / 60, minute % 60)
+                        String.format(Locale.ROOT, "%02d:%02d", minute / 60, minute % 60)
                     }
                     Text(
                         text = "${sch.scheduleType.displayName}: $timesFormatted (${sch.doseQuantityPerOccurrence.toDisplayString()} per dose)",
