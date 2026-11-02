@@ -8,6 +8,13 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 7.1: CI, Evidence & Signed Release Validation (Refs #1)**:
+  - Added GitHub Actions CI workflow in `.github/workflows/ci.yml` supporting triggers on `main`, `release/**`, and `chore/1-phase-07-release-hardening` with jobs for unit tests, lint, release build, and zero-network manifest verification.
+  - Formulated and published exact 24-point WCAG 2.1 Level AA Contrast Calculation Matrix in `docs/ACCESSIBILITY_AUDIT.md`. Remediated light mode status color pairs (`StatusTaken`, `StatusAssumed`, `StatusSkipped`, `StatusWarning`) in `Color.kt` to guarantee all pairs exceed the 4.5:1 threshold (5.02:1 to 7.58:1 in light mode, 5.23:1 to 8.25:1 in dark mode).
+  - Expanded automated Compose semantics test suite in `AccessibilityTest.kt` to 8 tests covering `AlertBanner`, `CompletedDayCard`, and `MedicationItemCard` touch targets ($\ge 48\times 48\text{dp}$) and TalkBack labels (all 8 tests passing; 26/26 on-device tests passing).
+  - Configured project Proguard keep rules in `app/proguard-rules.pro` and added `android.enableR8.fullMode=false` to `gradle.properties`, eliminating R8 synthetic class visibility errors (`IllegalAccessError: Class kotlin.sequences.d extended by class lx1 is inaccessible`).
+  - Generated external QA keystore outside the repository, signed release APK, and verified APK Signature Scheme v2 & v3 via `apksigner`.
+  - Conducted empirical performance profiling on connected Android 16 device: cold startup times via `am start -W`, frame statistics via `dumpsys gfxinfo`, and memory allocations via `dumpsys meminfo` documented in `docs/PERFORMANCE_AUDIT.md`.
 - **Phase 7: Release Hardening, Accessibility & Final Quality Assurance (Refs #1)**:
   - Added automated Jetpack Compose Semantics and Accessibility test suite in `app/src/androidTest/java/com/example/nuvilo/ui/AccessibilityTest.kt` verifying WCAG AA touch targets ($\ge 48\times 48\text{dp}$), TalkBack labels, heading navigation, and lock-screen content isolation.
   - Formulated and documented comprehensive audit artifacts: `docs/ACCESSIBILITY_AUDIT.md`, `docs/PERFORMANCE_AUDIT.md`, `docs/RELEASE_CHECKLIST.md`, `docs/DEVELOPMENT_WORKFLOW.md`, and `CONTRIBUTING.md`.
