@@ -658,6 +658,9 @@ fun CompletedDayCard(
 
             TextButton(
                 onClick = onViewCalendar,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .minimumInteractiveComponentSize(),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text(
@@ -696,9 +699,13 @@ fun AlertBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .clickable(onClick = onActionClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$message. $actionText"
+            }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -834,12 +841,18 @@ fun MedicationItemCard(
 
                 OutlinedButton(
                     onClick = onArchiveToggle,
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .minimumInteractiveComponentSize(),
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = if (medication.isArchived) "Unarchive" else "Archive",
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (medication.isArchived) "Unarchive ${medication.name}" else "Archive ${medication.name}"
+                        }
                     )
                 }
             }

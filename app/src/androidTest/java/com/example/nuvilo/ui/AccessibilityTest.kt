@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -28,6 +29,8 @@ import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.security.BiometricStatus
+import com.example.nuvilo.ui.components.AlertBanner
+import com.example.nuvilo.ui.components.CompletedDayCard
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.HeroDoseCard
 import com.example.nuvilo.ui.components.MedicationItemCard
@@ -245,5 +248,74 @@ class AccessibilityTest {
         composeTestRule
             .onNode(hasContentDescription("Next dose"))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun medicationItemCard_archiveButton_meetsMinimumTouchTargetSize_andHasContentDescription() {
+        var archiveToggled = false
+        composeTestRule.setContent {
+            NoveloTheme {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    MedicationItemCard(
+                        medication = sampleMedication,
+                        stockBalance = sampleStock,
+                        onArchiveToggle = { archiveToggled = true }
+                    )
+                }
+            }
+        }
+
+        // Verify "Archive Amoxicillin" button meets 48x48dp interactive bounds
+        composeTestRule
+            .onNodeWithContentDescription("Archive Amoxicillin")
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun completedDayCard_button_meetsMinimumTouchTargetSize() {
+        var calendarClicked = false
+        composeTestRule.setContent {
+            NoveloTheme {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    CompletedDayCard(
+                        takenDoses = 3,
+                        totalDoses = 3,
+                        onViewCalendar = { calendarClicked = true }
+                    )
+                }
+            }
+        }
+
+        // Verify "View Adherence Calendar" button meets 48dp touch target
+        composeTestRule
+            .onNodeWithText("View Adherence Calendar")
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
+            .assertWidthIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun alertBanner_meetsMinimumTouchTargetSize_andMergesDescendants() {
+        var actionClicked = false
+        composeTestRule.setContent {
+            NoveloTheme {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    AlertBanner(
+                        icon = Icons.Default.Info,
+                        message = "Amoxicillin is running low",
+                        actionText = "Restock",
+                        onActionClick = { actionClicked = true }
+                    )
+                }
+            }
+        }
+
+        // Verify merged semantics exposes message + actionText in a single node meeting 48dp height
+        composeTestRule
+            .onNodeWithContentDescription("Amoxicillin is running low. Restock")
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
     }
 }
