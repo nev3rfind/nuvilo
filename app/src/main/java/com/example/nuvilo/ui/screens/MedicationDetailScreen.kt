@@ -1,16 +1,23 @@
 package com.example.nuvilo.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,15 +27,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
@@ -36,6 +46,7 @@ import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,8 +55,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +68,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -62,17 +78,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nuvilo.domain.adherence.AdherenceSummary
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.Medication
+import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
 import com.example.nuvilo.domain.model.Prescription
 import com.example.nuvilo.domain.model.PrescriptionEvent
@@ -80,26 +104,30 @@ import com.example.nuvilo.domain.model.PrescriptionStatus
 import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.ScheduleDefinition
+import com.example.nuvilo.domain.model.ScheduleType
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.ui.components.DoseStatusBadge
+import com.example.nuvilo.ui.components.ScheduleConfigurationContent
 import com.example.nuvilo.ui.components.StockBadge
-import com.example.nuvilo.ui.theme.StatusMissed
-import com.example.nuvilo.ui.theme.StatusMissedContainer
-import com.example.nuvilo.ui.theme.StatusSkipped
-import com.example.nuvilo.ui.theme.StatusSkippedContainer
-import com.example.nuvilo.ui.theme.StatusTaken
-import com.example.nuvilo.ui.theme.StatusTakenContainer
-import com.example.nuvilo.ui.theme.StatusWarning
-import com.example.nuvilo.ui.theme.StatusWarningContainer
+import com.example.nuvilo.ui.components.defaultStockUnitForForm
+import com.example.nuvilo.ui.components.formatMinuteOfDay
+import com.example.nuvilo.ui.components.parseAccentColor
+import com.example.nuvilo.ui.theme.MedicationAccentSwatches
+import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.MedicationDetailViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
+
+private val DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
+private val DOSE_ROW_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM · HH:mm")
+private val MOVEMENT_ROW_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM · HH:mm")
+private val AUDIT_TIMESTAMP_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,12 +140,17 @@ fun MedicationDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var showRestockDialog by remember { mutableStateOf(false) }
-    var showAdjustDialog by remember { mutableStateOf(false) }
+    var showRestockDialog by rememberSaveable { mutableStateOf(false) }
+    var showAdjustDialog by rememberSaveable { mutableStateOf(false) }
+    var showEditMedicationDialog by rememberSaveable { mutableStateOf(false) }
+    var showEditScheduleDialog by rememberSaveable { mutableStateOf(false) }
     var doseToCorrect by remember { mutableStateOf<DoseOccurrence?>(null) }
-    var showPrescriptionFormDialog by remember { mutableStateOf(false) }
+    var showPrescriptionFormDialog by rememberSaveable { mutableStateOf(false) }
     var prescriptionToEdit by remember { mutableStateOf<Prescription?>(null) }
-    var showPrescriptionHistoryDialog by remember { mutableStateOf(false) }
+    var showPrescriptionHistoryDialog by rememberSaveable { mutableStateOf(false) }
+
+    var lotsExpanded by rememberSaveable { mutableStateOf(false) }
+    var ledgerExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(uiState.actionSuccessMessage, uiState.errorMessage) {
         uiState.actionSuccessMessage?.let {
@@ -130,16 +163,29 @@ fun MedicationDetailScreen(
         }
     }
 
+    val med = uiState.medication
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = uiState.medication?.name ?: "Medication Details",
-                        maxLines = 1
-                    )
+                    Column {
+                        Text(
+                            text = med?.name ?: "Medication Details",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (med != null) {
+                            Text(
+                                text = "${med.strength} · ${med.form.displayName}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -150,36 +196,40 @@ fun MedicationDetailScreen(
                     }
                 },
                 actions = {
-                    uiState.medication?.let { med ->
-                        IconButton(
-                            onClick = { viewModel.setArchived(!med.isArchived) }
-                        ) {
+                    if (med != null) {
+                        IconButton(onClick = { showEditMedicationDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit medication details"
+                            )
+                        }
+                        IconButton(onClick = { viewModel.setArchived(!med.isArchived) }) {
                             Icon(
                                 imageVector = if (med.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
-                                contentDescription = if (med.isArchived) "Unarchive medication" else "Archive medication"
+                                contentDescription = if (med.isArchived) "Restore Medication" else "Archive Medication"
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         }
     ) { innerPadding ->
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        when {
+            uiState.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
-        } else {
-            val med = uiState.medication
-            if (med == null) {
+            med == null -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -188,42 +238,47 @@ fun MedicationDetailScreen(
                 ) {
                     Text(
                         text = uiState.errorMessage ?: "Medication not found",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error
+                        style = MaterialTheme.typography.bodyLarge
                     )
                 }
-            } else {
+            }
+            else -> {
+                val activeFefoLotId = uiState.lots
+                    .filter { it.remainingQuantity.isPositive() }
+                    .minWithOrNull(compareBy<StockLot> { it.expiryDateEpochMs ?: Long.MAX_VALUE }.thenBy { it.createdAtEpochMs })
+                    ?.id
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 36.dp)
                 ) {
-                    // 1. Medication Header & Form Card
-                    item {
-                        MedicationHeaderCard(med = med)
-                    }
-
-                    // 2. Stock Balance & Runway Summary Card
-                    item {
-                        StockOverviewCard(
+                    // 1. Unified Hero Medication & Stock Runway Card
+                    item(key = "hero_stock_card", contentType = "hero_card") {
+                        MedicationHeroAndStockCard(
+                            medication = med,
                             balance = uiState.stockBalance,
+                            adherenceSummary = uiState.medicationAdherenceSummary,
+                            onEditMedicationClick = { showEditMedicationDialog = true },
                             onRestockClick = { showRestockDialog = true },
                             onAdjustClick = { showAdjustDialog = true }
                         )
                     }
 
-                    // 3. Schedule & Adherence Mode Card
-                    item {
+                    // 2. Schedule Summary Card with Inline Edit Action
+                    item(key = "schedule_card", contentType = "schedule_card") {
                         ScheduleSummaryCard(
                             schedules = uiState.schedules,
-                            recordingMode = med.recordingMode
+                            unit = med.stockUnit,
+                            onEditScheduleClick = { showEditScheduleDialog = true }
                         )
                     }
 
-                    // 3b. Prescription & Repeat Tracking Section
-                    item {
+                    // 3. Prescription & Repeat Overview Section
+                    item(key = "prescription_section", contentType = "prescription_card") {
                         PrescriptionOverviewSection(
                             prescriptions = uiState.prescriptions,
                             stockUnit = med.stockUnit,
@@ -250,159 +305,133 @@ fun MedicationDetailScreen(
                         )
                     }
 
-                    // 4. Tracked Batches & Supplies (Lots)
-                    item {
-                        LotsSectionHeader(lotsCount = uiState.lots.size)
-                    }
-
-                    if (uiState.lots.isEmpty()) {
-                        item {
-                            EmptyLotCard(onAddLotClick = { showRestockDialog = true })
-                        }
-                    } else {
-                        items(uiState.lots, key = { it.id }) { lot ->
-                            LotItemCard(lot = lot)
-                        }
-                    }
-
-                    // 5. Recent Dose History & Corrections
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Recent Dose Records",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            TextButton(onClick = onNavigateToDoseHistory) {
-                                Icon(
-                                    imageVector = Icons.Default.History,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("View Full History")
-                            }
-                        }
-                    }
-
-                    if (uiState.recentDoses.isEmpty()) {
-                        item {
-                            Text(
-                                text = "No doses recorded yet for this treatment.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        items(uiState.recentDoses, key = { it.occurrenceId }) { dose ->
-                            DoseHistoryRow(
-                                dose = dose,
-                                onCorrectClick = { doseToCorrect = dose }
-                            )
-                        }
-                    }
-
-                    // 6. Recent Stock Movements Audit Trail
-                    item {
-                        Text(
-                            text = "Stock Ledger Audit Log",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(top = 8.dp)
+                    // 4. Recent Dose History & Audit Section (Top 5 preview + Full History button)
+                    item(key = "recent_doses_section", contentType = "recent_doses") {
+                        RecentDosesPreviewCard(
+                            recentDoses = uiState.recentDoses.take(5),
+                            totalDoseCount = uiState.recentDoses.size,
+                            onNavigateToDoseHistory = onNavigateToDoseHistory,
+                            onCorrectDose = { doseToCorrect = it }
                         )
                     }
 
-                    if (uiState.recentMovements.isEmpty()) {
-                        item {
-                            Text(
-                                text = "No ledger movements recorded.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        items(uiState.recentMovements, key = { it.id }) { movement ->
-                            StockMovementRow(movement = movement)
-                        }
+                    // 5. Collapsible Batch Lots (FEFO Allocation) Section
+                    item(key = "batch_lots_section", contentType = "collapsible_lots") {
+                        CollapsibleBatchLotsSection(
+                            lots = uiState.lots,
+                            activeFefoLotId = activeFefoLotId,
+                            expanded = lotsExpanded,
+                            onToggleExpand = { lotsExpanded = !lotsExpanded },
+                            onAddBatchClick = { showRestockDialog = true }
+                        )
+                    }
+
+                    // 6. Collapsible Stock Ledger Audit Trail Section
+                    item(key = "stock_ledger_section", contentType = "collapsible_ledger") {
+                        CollapsibleStockLedgerSection(
+                            movements = uiState.recentMovements,
+                            expanded = ledgerExpanded,
+                            onToggleExpand = { ledgerExpanded = !ledgerExpanded }
+                        )
                     }
                 }
             }
         }
     }
 
-    // Dialogs
-    if (showRestockDialog && uiState.medication != null) {
-        RestockDialog(
-            medication = uiState.medication!!,
-            onDismiss = { showRestockDialog = false },
-            onConfirm = { quantity, lotNum, expiryEpoch, notes ->
-                viewModel.restock(
-                    quantity = quantity,
-                    lotNumber = lotNum,
-                    expiryDateEpochMs = expiryEpoch,
-                    notes = notes
+    // Modal Dialogs
+    if (showEditMedicationDialog && med != null) {
+        EditMedicationDialog(
+            medication = med,
+            onDismiss = { showEditMedicationDialog = false },
+            onConfirm = { name, strength, form, unit, threshold, mode, notes, colorHex ->
+                viewModel.updateMedication(
+                    name = name,
+                    strength = strength,
+                    form = form,
+                    unit = unit,
+                    lowStockThresholdStr = threshold,
+                    recordingMode = mode,
+                    notes = notes,
+                    colorTagHex = colorHex
                 )
+                showEditMedicationDialog = false
+            }
+        )
+    }
+
+    if (showEditScheduleDialog && med != null) {
+        EditScheduleDialog(
+            existingSchedule = uiState.schedules.firstOrNull(),
+            stockUnit = med.stockUnit,
+            onDismiss = { showEditScheduleDialog = false },
+            onConfirm = { times, daysOfWeek, doseQty, instructions ->
+                viewModel.saveSchedule(
+                    existingSchedule = uiState.schedules.firstOrNull(),
+                    targetTimesMinuteOfDay = times,
+                    daysOfWeek = daysOfWeek,
+                    doseQuantityStr = doseQty,
+                    instructions = instructions
+                )
+                showEditScheduleDialog = false
+            }
+        )
+    }
+
+    if (showRestockDialog && med != null) {
+        RestockDialog(
+            medication = med,
+            currentBalance = uiState.stockBalance?.currentBalance ?: ScaledQuantity.ZERO,
+            onDismiss = { showRestockDialog = false },
+            onConfirm = { qty, lotNumber, expiryEpoch, notes ->
+                viewModel.restock(qty, lotNumber, expiryEpoch, notes)
                 showRestockDialog = false
             }
         )
     }
 
-    if (showAdjustDialog && uiState.medication != null) {
+    if (showAdjustDialog && med != null) {
+        val currentBal = uiState.stockBalance?.currentBalance ?: ScaledQuantity.ZERO
         AdjustStockDialog(
-            medication = uiState.medication!!,
-            currentBalance = uiState.stockBalance?.currentBalance ?: ScaledQuantity.ZERO,
+            medication = med,
+            currentBalance = currentBal,
             lots = uiState.lots,
             onDismiss = { showAdjustDialog = false },
-            onConfirm = { targetBalance, reason, targetLotId ->
-                viewModel.adjustStock(
-                    targetBalance = targetBalance,
-                    reason = reason,
-                    targetLotId = targetLotId
-                )
+            onConfirm = { targetBal, reason, targetLotId ->
+                viewModel.adjustStock(targetBal, reason, targetLotId)
                 showAdjustDialog = false
             }
         )
     }
 
-    doseToCorrect?.let { dose ->
+    val currentDoseToCorrect = doseToCorrect
+    if (currentDoseToCorrect != null && med != null) {
         CorrectDoseDialog(
-            dose = dose,
-            medicationName = uiState.medication?.name ?: "",
+            dose = currentDoseToCorrect,
+            medicationName = med.name,
             onDismiss = { doseToCorrect = null },
             onConfirm = { newStatus, reason ->
-                viewModel.correctDose(
-                    occurrenceId = dose.occurrenceId,
-                    targetStatus = newStatus,
-                    reason = reason
-                )
+                viewModel.correctDose(currentDoseToCorrect.occurrenceId, newStatus, reason)
                 doseToCorrect = null
             }
         )
     }
 
-    if (showPrescriptionFormDialog && uiState.medication != null) {
+    if (showPrescriptionFormDialog && med != null) {
         AddEditPrescriptionDialog(
             existingPrescription = prescriptionToEdit,
-            stockUnit = uiState.medication!!.stockUnit,
+            stockUnit = med.stockUnit,
             onDismiss = {
                 showPrescriptionFormDialog = false
                 prescriptionToEdit = null
             },
-            onConfirm = { refNum, issueDay, expiryDay, qtyPrescribed, repeatsAuth, repeatsRem, pharmacy, notes ->
+            onConfirm = { ref, issueDay, expiryDay, qty, repeatsAuth, repeatsRem, pharmacy, notes ->
                 viewModel.savePrescription(
                     existingPrescription = prescriptionToEdit,
-                    referenceNumber = refNum,
+                    referenceNumber = ref,
                     issueDateEpochDay = issueDay,
                     expiryDateEpochDay = expiryDay,
-                    quantityPrescribed = qtyPrescribed,
+                    quantityPrescribed = qty,
                     repeatsAuthorised = repeatsAuth,
                     repeatsRemaining = repeatsRem,
                     pharmacyName = pharmacy,
@@ -424,390 +453,773 @@ fun MedicationDetailScreen(
 }
 
 @Composable
-private fun MedicationHeaderCard(med: Medication) {
+private fun MedicationHeroAndStockCard(
+    medication: Medication,
+    balance: StockBalance?,
+    adherenceSummary: AdherenceSummary?,
+    onEditMedicationClick: () -> Unit,
+    onRestockClick: () -> Unit,
+    onAdjustClick: () -> Unit
+) {
+    val semantic = MaterialTheme.noveloColors
+    val accentColor = parseAccentColor(medication.colorTagHex, MaterialTheme.colorScheme.primary)
+    val isWarning = balance?.isLowStock == true || balance?.isNegative == true
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(
+            width = 1.5.dp,
+            color = if (isWarning) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Top Gradient Identity Header
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Medication,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = med.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${med.strength} · ${med.form.displayName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (med.notes.isNotBlank()) {
-                    Text(
-                        text = med.notes,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(semantic.heroGradientStart, semantic.heroGradientEnd)
+                        )
                     )
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(accentColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Medication,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = medication.name,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "${medication.strength} · ${medication.form.displayName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onEditMedicationClick,
+                            shape = MaterialTheme.shapes.small,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.heightIn(min = 38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Edit", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    // Pill Row: Recording Mode + 30-Day Adherence + Archive Status
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (medication.recordingMode == RecordingMode.CONFIRM) {
+                                        Icons.Default.VerifiedUser
+                                    } else {
+                                        Icons.Default.AutoAwesome
+                                    },
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = medication.recordingMode.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        if (adherenceSummary != null && adherenceSummary.adherencePercentage != null) {
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = semantic.takenContainer
+                            ) {
+                                Text(
+                                    text = "30d Adherence: ${adherenceSummary.adherencePercentage}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = semantic.taken,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        if (medication.isArchived) {
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = semantic.skippedContainer
+                            ) {
+                                Text(
+                                    text = "Archived",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = semantic.skipped,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (medication.notes.isNotBlank()) {
+                        Text(
+                            text = medication.notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                        )
+                    }
                 }
             }
 
-            if (med.isArchived) {
-                Box(
+            // Bottom Stock Runway & Actions Section
+            if (balance != null) {
+                Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text(
-                        text = "Archived",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "CURRENT STOCK BALANCE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = balance.currentBalance.toDisplayString(),
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isWarning) semantic.warning else MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = balance.unit.displayName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (balance.daysRemaining != null) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.extraSmall,
+                                    color = if (isWarning) semantic.warningContainer else MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isWarning) semantic.warningBorder else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                    )
+                                ) {
+                                    Text(
+                                        text = "~${balance.daysRemaining} day(s) supply",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isWarning) semantic.warning else MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+                            if (balance.isEstimate) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.extraSmall,
+                                    color = semantic.assumedContainer
+                                ) {
+                                    Text(
+                                        text = "ESTIMATED BALANCE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = semantic.assumed,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (isWarning) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = semantic.warningContainer,
+                            border = BorderStroke(1.dp, semantic.warningBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "Low stock warning",
+                                    tint = semantic.warning,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = if (balance.isNegative) {
+                                        "Balance is negative (${balance.currentBalance.toDisplayString()} ${balance.unit.abbreviation}). Please record a restock or recount adjustment."
+                                    } else {
+                                        "Stock is at or below your alert threshold (${medication.lowStockThreshold.toDisplayString()} ${medication.stockUnit.abbreviation})."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = semantic.warning
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onRestockClick,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Restock Supply", style = MaterialTheme.typography.labelLarge)
+                        }
+
+                        OutlinedButton(
+                            onClick = onAdjustClick,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Recount / Adjust", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StockOverviewCard(
-    balance: StockBalance?,
-    onRestockClick: () -> Unit,
-    onAdjustClick: () -> Unit
+private fun ScheduleSummaryCard(
+    schedules: List<ScheduleDefinition>,
+    unit: StockUnit,
+    onEditScheduleClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Inventory Balance",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (balance != null) {
-                    StockBadge(balance = balance)
-                }
-            }
-
-            if (balance != null) {
                 Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 ) {
-                    Text(
-                        text = balance.currentBalance.toDisplayString(),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (balance.isLowStock) StatusWarning else MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = balance.unit.displayName,
+                        text = "Dosage Regimen & Schedule",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                // Low Stock Warning Banner
-                if (balance.isLowStock) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(StatusWarningContainer)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = StatusWarning,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (balance.isNegative) "Stock depleted below zero. Please adjust count." else "Low stock alert: Refill recommended soon.",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = StatusWarning,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                TextButton(
+                    onClick = onEditScheduleClick,
+                    modifier = Modifier.heightIn(min = 40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Edit Schedule", style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 }
+            }
 
-                // Days remaining runway
-                if (balance.daysRemaining != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Estimated ${balance.daysRemaining} days remaining at scheduled consumption rate",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            if (schedules.isEmpty()) {
+                Text(
+                    text = "No active schedule configured. Tap 'Edit Schedule' to set daily or weekday dose times.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                val dayNames = mapOf(1 to "Mon", 2 to "Tue", 3 to "Wed", 4 to "Thu", 5 to "Fri", 6 to "Sat", 7 to "Sun")
+                for (sch in schedules) {
+                    val freqDesc = if (sch.scheduleType == ScheduleType.SPECIFIC_WEEKDAYS && sch.daysOfWeek.isNotEmpty()) {
+                        val days = sch.daysOfWeek.sorted().mapNotNull { dayNames[it] }.joinToString(", ")
+                        "Specific Weekdays ($days)"
+                    } else {
+                        "Every Day"
                     }
-                } else if (balance.isEstimate) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+
+                    Text(
+                        text = "$freqDesc · ${sch.doseQuantityPerOccurrence.toDisplayString()} ${unit.displayName.lowercase()} per dose",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        sch.targetTimesMinuteOfDay.sorted().forEach { min ->
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = formatMinuteOfDay(min),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (sch.instructions.isNotBlank()) {
                         Text(
-                            text = "Estimated consumption (sprays/drops). Exact days remaining cannot be calculated.",
+                            text = "Instructions: ${sch.instructions}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+        }
+    }
+}
 
-            // Quick Actions: Restock and Adjust Stock
+@Composable
+private fun RecentDosesPreviewCard(
+    recentDoses: List<DoseOccurrence>,
+    totalDoseCount: Int,
+    onNavigateToDoseHistory: () -> Unit,
+    onCorrectDose: (DoseOccurrence) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
-                    onClick = onRestockClick,
-                    shape = RoundedCornerShape(10.dp),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column {
+                        Text(
+                            text = "Recent Dose Records",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Tap 'Correct' to audit or revise a recorded outcome",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                FilledTonalButton(
+                    onClick = onNavigateToDoseHistory,
+                    shape = MaterialTheme.shapes.small,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.heightIn(min = 38.dp)
+                ) {
+                    Text(
+                        text = if (totalDoseCount > 0) "Full History ($totalDoseCount)" else "Full History",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            if (recentDoses.isEmpty()) {
+                Text(
+                    text = "No recorded dose events yet. You can also open Full History to inspect or log past scheduled occurrences.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    recentDoses.forEach { dose ->
+                        DoseHistoryRow(
+                            dose = dose,
+                            onCorrectClick = { onCorrectDose(dose) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollapsibleBatchLotsSection(
+    lots: List<StockLot>,
+    activeFefoLotId: String?,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onAddBatchClick: () -> Unit
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = NoveloMotion.standardFloatSpring(),
+        label = "lotsChevronRotation"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpand, role = Role.Button)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = Icons.Default.Inventory,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.size(6.dp))
-                    Text("Restock")
+                    Column {
+                        Text(
+                            text = "Batch Lots & FEFO Allocation (${lots.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Doses automatically deduct from earliest-expiring batch first",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
-                OutlinedButton(
-                    onClick = onAdjustClick,
-                    shape = RoundedCornerShape(10.dp),
+                Icon(
+                    imageVector = Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse batch lots" else "Expand batch lots",
+                    modifier = Modifier.rotate(chevronRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = NoveloMotion.sectionExpand(),
+                exit = NoveloMotion.sectionCollapse()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    if (lots.isEmpty()) {
+                        Text(
+                            text = "No batch lots recorded yet. Use 'Restock Supply' to register a new batch with lot number and expiry date.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        lots.forEach { lot ->
+                            StockLotRow(
+                                lot = lot,
+                                isActiveFefoLot = lot.id == activeFefoLotId
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onAddBatchClick,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Register New Batch / Restock")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollapsibleStockLedgerSection(
+    movements: List<StockLedgerEntry>,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = NoveloMotion.standardFloatSpring(),
+        label = "ledgerChevronRotation"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpand, role = Role.Button)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Tune,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.size(6.dp))
-                    Text("Adjust Count")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScheduleSummaryCard(
-    schedules: List<ScheduleDefinition>,
-    recordingMode: RecordingMode
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Schedule & Adherence",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            if (schedules.isEmpty()) {
-                Text(
-                    text = "No active reminders configured.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                for (sch in schedules) {
-                    val timesFormatted = sch.targetTimesMinuteOfDay.joinToString(", ") { minute ->
-                        String.format(Locale.ROOT, "%02d:%02d", minute / 60, minute % 60)
+                    Column {
+                        Text(
+                            text = "Append-Only Stock Ledger (${movements.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Immutable audit trail of all inflows, dose deductions, and adjustments",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Text(
-                        text = "${sch.scheduleType.displayName}: $timesFormatted (${sch.doseQuantityPerOccurrence.toDisplayString()} per dose)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse stock ledger" else "Expand stock ledger",
+                    modifier = Modifier.rotate(chevronRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = NoveloMotion.sectionExpand(),
+                exit = NoveloMotion.sectionCollapse()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    if (movements.isEmpty()) {
+                        Text(
+                            text = "No stock movements recorded yet.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        movements.forEach { movement ->
+                            StockMovementRow(movement = movement)
+                        }
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "Dose Recording Preference:",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = recordingMode.displayName,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
         }
     }
 }
 
 @Composable
-private fun LotsSectionHeader(lotsCount: Int) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "Tracked Supplies & Lots ($lotsCount)",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground
+private fun StockLotRow(
+    lot: StockLot,
+    isActiveFefoLot: Boolean = false
+) {
+    val semantic = MaterialTheme.noveloColors
+    val expiryStr = lot.expiryDateEpochMs?.let {
+        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+    } ?: "No expiry set"
+
+    val isExpiringSoon = lot.expiryDateEpochMs?.let {
+        val daysToExpiry = (it - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)
+        daysToExpiry <= 30
+    } ?: false
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isActiveFefoLot) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
         )
-        if (lotsCount > 1) {
-            Text(
-                text = "FEFO Policy Active",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyLotCard(onAddLotClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Inventory,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(32.dp)
-            )
-            Text(
-                text = "No batch lots tracked yet",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "Track individual supplies, lot numbers, and expiration dates with FEFO auto-allocation.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Button(
-                onClick = onAddLotClick,
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("Record New Supply")
-            }
-        }
-    }
-}
-
-@Composable
-private fun LotItemCard(lot: StockLot) {
-    val expiryStr = if (lot.expiryDateEpochMs != null) {
-        val date = Instant.ofEpochMilli(lot.expiryDateEpochMs)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-        date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))
-    } else {
-        "No expiry date"
-    }
-
-    val isExpiringSoon = lot.expiryDateEpochMs != null &&
-        (lot.expiryDateEpochMs - System.currentTimeMillis() < 30L * 24 * 60 * 60 * 1000)
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = lot.lotNumber?.let { "Lot #$it" } ?: "Unnumbered Batch",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = lot.lotNumber?.let { "Lot #$it" } ?: "Unnumbered Batch",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isActiveFefoLot) {
+                        Surface(
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "Active FEFO Batch",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 Text(
                     text = "Remaining: ${lot.remainingQuantity.toDisplayString()} of ${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}",
                     style = MaterialTheme.typography.bodySmall,
@@ -822,17 +1234,17 @@ private fun LotItemCard(lot: StockLot) {
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isExpiringSoon) StatusWarningContainer else MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            Surface(
+                shape = MaterialTheme.shapes.extraSmall,
+                color = if (isExpiringSoon) semantic.warningContainer else MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, if (isExpiringSoon) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Text(
                     text = "Exp: $expiryStr",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isExpiringSoon) StatusWarning else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
+                    color = if (isExpiringSoon) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
         }
@@ -844,16 +1256,15 @@ private fun DoseHistoryRow(
     dose: DoseOccurrence,
     onCorrectClick: () -> Unit
 ) {
-    val formatter = DateTimeFormatter.ofPattern("EEE, d MMM · HH:mm")
     val timeStr = Instant.ofEpochMilli(dose.scheduledEpochMs)
         .atZone(ZoneId.systemDefault())
-        .format(formatter)
+        .format(DOSE_ROW_FORMATTER)
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier
@@ -866,11 +1277,11 @@ private fun DoseHistoryRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = timeStr,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
@@ -888,9 +1299,9 @@ private fun DoseHistoryRow(
 
                     OutlinedButton(
                         onClick = onCorrectClick,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = MaterialTheme.shapes.extraSmall,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.heightIn(min = 34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -903,13 +1314,12 @@ private fun DoseHistoryRow(
                 }
             }
 
-            // Correction annotation if present
             if (dose.correctionNotes != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .background(MaterialTheme.colorScheme.surface)
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -921,7 +1331,7 @@ private fun DoseHistoryRow(
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "Correction note: ${dose.correctionNotes}",
+                        text = "Revision note: ${dose.correctionNotes}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -933,25 +1343,25 @@ private fun DoseHistoryRow(
 
 @Composable
 private fun StockMovementRow(movement: StockLedgerEntry) {
-    val formatter = DateTimeFormatter.ofPattern("d MMM · HH:mm")
+    val semantic = MaterialTheme.noveloColors
     val timeStr = Instant.ofEpochMilli(movement.timestampEpochMs)
         .atZone(ZoneId.systemDefault())
-        .format(formatter)
+        .format(MOVEMENT_ROW_FORMATTER)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = movement.movementType.displayName,
                 style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
@@ -962,7 +1372,7 @@ private fun StockMovementRow(movement: StockLedgerEntry) {
         }
 
         val prefix = if (movement.movementType.isInflow) "+" else "-"
-        val textColor = if (movement.movementType.isInflow) StatusTaken else MaterialTheme.colorScheme.error
+        val textColor = if (movement.movementType.isInflow) semantic.taken else semantic.missed
 
         Text(
             text = "$prefix${movement.quantity.toDisplayString()} ${movement.unit.abbreviation}",
@@ -973,9 +1383,270 @@ private fun StockMovementRow(movement: StockLedgerEntry) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun EditMedicationDialog(
+    medication: Medication,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        lowStockThreshold: String,
+        recordingMode: RecordingMode,
+        notes: String,
+        colorTagHex: String
+    ) -> Unit
+) {
+    var name by rememberSaveable { mutableStateOf(medication.name) }
+    var strength by rememberSaveable { mutableStateOf(medication.strength) }
+    var selectedFormName by rememberSaveable { mutableStateOf(medication.form.name) }
+    var selectedUnitName by rememberSaveable { mutableStateOf(medication.stockUnit.name) }
+    var lowStockThresholdStr by rememberSaveable { mutableStateOf(medication.lowStockThreshold.toDisplayString()) }
+    var selectedModeName by rememberSaveable { mutableStateOf(medication.recordingMode.name) }
+    var notes by rememberSaveable { mutableStateOf(medication.notes) }
+    var selectedColorHex by rememberSaveable { mutableStateOf(medication.colorTagHex) }
+
+    val selectedForm = runCatching { MedicationForm.valueOf(selectedFormName) }.getOrDefault(medication.form)
+    val selectedUnit = runCatching { StockUnit.valueOf(selectedUnitName) }.getOrDefault(medication.stockUnit)
+    val selectedMode = runCatching { RecordingMode.valueOf(selectedModeName) }.getOrDefault(medication.recordingMode)
+    val isValid = name.isNotBlank() && strength.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = { Text("Edit Medication Details", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Medication Name *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = strength,
+                    onValueChange = { strength = it },
+                    label = { Text("Strength / Concentration *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text("Dosage Form", style = MaterialTheme.typography.labelLarge)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    MedicationForm.entries.forEach { form ->
+                        FilterChip(
+                            selected = selectedForm == form,
+                            onClick = {
+                                selectedFormName = form.name
+                                selectedUnitName = defaultStockUnitForForm(form).name
+                            },
+                            label = { Text(form.displayName) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = lowStockThresholdStr,
+                    onValueChange = { lowStockThresholdStr = it },
+                    label = { Text("Low-Stock Warning Threshold (${selectedUnit.abbreviation})") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text("Visual Accent Tag", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MedicationAccentSwatches.forEach { (hex, label) ->
+                        val swatchColor = parseAccentColor(hex, MaterialTheme.colorScheme.primary)
+                        val isChosen = selectedColorHex.equals(hex, ignoreCase = true)
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(swatchColor)
+                                .border(
+                                    width = if (isChosen) 2.5.dp else 1.dp,
+                                    color = if (isChosen) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable { selectedColorHex = hex },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isChosen) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = label,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text("Recording Mode", style = MaterialTheme.typography.labelLarge)
+                RecordingModeSelectorCard(
+                    selectedMode = selectedMode,
+                    onSelectMode = { selectedModeName = it.name }
+                )
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Clinical Notes (Optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isValid) {
+                        onConfirm(
+                            name.trim(),
+                            strength.trim(),
+                            selectedForm,
+                            selectedUnit,
+                            lowStockThresholdStr,
+                            selectedMode,
+                            notes.trim(),
+                            selectedColorHex
+                        )
+                    }
+                },
+                enabled = isValid
+            ) {
+                Text("Save Changes")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditScheduleDialog(
+    existingSchedule: ScheduleDefinition?,
+    stockUnit: StockUnit,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        targetTimesMinuteOfDay: List<Int>,
+        daysOfWeek: Set<Int>,
+        doseQuantityStr: String,
+        instructions: String
+    ) -> Unit
+) {
+    var isSpecificWeekdays by rememberSaveable {
+        mutableStateOf(existingSchedule?.scheduleType == ScheduleType.SPECIFIC_WEEKDAYS && existingSchedule.daysOfWeek.isNotEmpty())
+    }
+    var selectedDaysList by rememberSaveable {
+        mutableStateOf(
+            existingSchedule?.daysOfWeek?.takeIf { it.isNotEmpty() }?.sorted() ?: listOf(1, 3, 5)
+        )
+    }
+    var selectedTimesList by rememberSaveable {
+        mutableStateOf(
+            existingSchedule?.targetTimesMinuteOfDay?.takeIf { it.isNotEmpty() }?.sorted() ?: listOf(480)
+        )
+    }
+    var doseQuantityStr by rememberSaveable {
+        mutableStateOf(existingSchedule?.doseQuantityPerOccurrence?.toDisplayString() ?: "1")
+    }
+    var instructions by rememberSaveable {
+        mutableStateOf(existingSchedule?.instructions ?: "")
+    }
+
+    val effectiveDays = if (isSpecificWeekdays) selectedDaysList.toSet() else emptySet()
+    val parsedDose = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }.getOrNull()
+    val isValid = selectedTimesList.isNotEmpty() &&
+        (!isSpecificWeekdays || effectiveDays.isNotEmpty()) &&
+        parsedDose != null && parsedDose.isPositive()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = { Text("Edit Dosage Schedule", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ScheduleConfigurationContent(
+                    isSpecificWeekdays = isSpecificWeekdays,
+                    onScheduleModeChange = { isSpecificWeekdays = it },
+                    selectedDaysOfWeek = selectedDaysList.toSet(),
+                    onToggleDayOfWeek = { day ->
+                        selectedDaysList = if (selectedDaysList.contains(day)) {
+                            if (selectedDaysList.size > 1) selectedDaysList - day else selectedDaysList
+                        } else {
+                            (selectedDaysList + day).sorted()
+                        }
+                    },
+                    selectedTimesMinuteOfDay = selectedTimesList,
+                    onToggleTimeMinuteOfDay = { timeMin ->
+                        selectedTimesList = if (selectedTimesList.contains(timeMin)) {
+                            if (selectedTimesList.size > 1) selectedTimesList - timeMin else selectedTimesList
+                        } else {
+                            (selectedTimesList + timeMin).sorted()
+                        }
+                    },
+                    doseQuantityStr = doseQuantityStr,
+                    onDoseQuantityChange = { doseQuantityStr = it },
+                    stockUnit = stockUnit,
+                    instructions = instructions,
+                    onInstructionsChange = { instructions = it }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isValid) {
+                        onConfirm(
+                            selectedTimesList.sorted(),
+                            effectiveDays,
+                            doseQuantityStr,
+                            instructions
+                        )
+                    }
+                },
+                enabled = isValid
+            ) {
+                Text("Update Schedule")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 @Composable
 fun RestockDialog(
     medication: Medication,
+    currentBalance: ScaledQuantity = ScaledQuantity.ZERO,
     onDismiss: () -> Unit,
     onConfirm: (
         quantity: ScaledQuantity,
@@ -984,14 +1655,18 @@ fun RestockDialog(
         notes: String?
     ) -> Unit
 ) {
-    var quantityStr by remember { mutableStateOf("30") }
-    var lotNumber by remember { mutableStateOf("") }
-    var expiryDaysAheadStr by remember { mutableStateOf("365") }
-    var notes by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
+    val semantic = MaterialTheme.noveloColors
+    var quantityStr by rememberSaveable { mutableStateOf("28") }
+    var lotNumber by rememberSaveable { mutableStateOf("") }
+    var expiryDaysAheadStr by rememberSaveable { mutableStateOf("365") }
+    var notes by rememberSaveable { mutableStateOf("") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
     val parsedQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }.getOrNull()
     val isValid = parsedQty != null && parsedQty.isPositive()
+    val newBalance = if (parsedQty != null) currentBalance + parsedQty else currentBalance
+    val daysAhead = expiryDaysAheadStr.toLongOrNull() ?: 365L
+    val computedExpiryDateStr = LocalDate.now().plusDays(daysAhead.coerceAtLeast(1L)).format(DATE_FORMATTER)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1005,15 +1680,49 @@ fun RestockDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Recording new supply for ${medication.name} (${medication.strength}). Appends an auditable RESTOCK ledger movement.",
+                    text = "Recording new supply for ${medication.name} (${medication.strength}). Appends an immutable RESTOCK entry and creates a FEFO batch lot.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                // Live Post-Restock Impact Preview
+                if (parsedQty != null && parsedQty.isPositive()) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = semantic.takenContainer,
+                        border = BorderStroke(1.dp, semantic.takenBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "Ledger Impact Preview (+RESTOCK)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = semantic.taken
+                            )
+                            Text(
+                                text = "${currentBalance.toDisplayString()} → ${newBalance.toDisplayString()} ${medication.stockUnit.abbreviation} (+${parsedQty.toDisplayString()})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = semantic.taken
+                            )
+                            Text(
+                                text = "Batch Expiry: $computedExpiryDateStr",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = semantic.taken.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = quantityStr,
                     onValueChange = { quantityStr = it },
                     label = { Text("Quantity Added (${medication.stockUnit.displayName}) *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -1030,7 +1739,8 @@ fun RestockDialog(
                 OutlinedTextField(
                     value = expiryDaysAheadStr,
                     onValueChange = { expiryDaysAheadStr = it },
-                    label = { Text("Expiry (Days from Today)") },
+                    label = { Text("Expiry (Days from Today — $computedExpiryDateStr)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     placeholder = { Text("e.g. 180 or 365") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -1040,7 +1750,7 @@ fun RestockDialog(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes (Optional)") },
-                    placeholder = { Text("e.g. Prescription refill") },
+                    placeholder = { Text("e.g. Pharmacy repeat collection") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1050,9 +1760,7 @@ fun RestockDialog(
                 onClick = {
                     if (isValid && !isSubmitting) {
                         isSubmitting = true
-                        val daysAhead = expiryDaysAheadStr.toLongOrNull() ?: 365L
                         val expiryEpoch = System.currentTimeMillis() + (daysAhead * 24 * 60 * 60 * 1000)
-
                         onConfirm(
                             parsedQty!!,
                             lotNumber.takeIf { it.isNotBlank() },
@@ -1086,10 +1794,11 @@ fun AdjustStockDialog(
         targetLotId: String?
     ) -> Unit
 ) {
-    var targetBalanceStr by remember { mutableStateOf(currentBalance.toDisplayString()) }
-    var reason by remember { mutableStateOf("") }
-    var selectedLotId by remember { mutableStateOf<String?>(null) }
-    var isSubmitting by remember { mutableStateOf(false) }
+    val semantic = MaterialTheme.noveloColors
+    var targetBalanceStr by rememberSaveable { mutableStateOf(currentBalance.toDisplayString()) }
+    var reason by rememberSaveable { mutableStateOf("") }
+    var selectedLotId by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
     val parsedTarget = runCatching { ScaledQuantity.fromDisplayString(targetBalanceStr) }.getOrNull()
     val isValid = parsedTarget != null && reason.isNotBlank()
@@ -1097,7 +1806,7 @@ fun AdjustStockDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.imePadding(),
-        title = { Text("Adjust Stock Count", fontWeight = FontWeight.Bold) },
+        title = { Text("Recount / Adjust Stock", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -1105,58 +1814,82 @@ fun AdjustStockDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = "Current calculated balance: ${currentBalance.toDisplayString()} ${medication.stockUnit.abbreviation}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (parsedTarget != null) {
+                    val delta = parsedTarget - currentBalance
+                    val isIncrease = delta.isPositive()
+                    val deltaPrefix = if (isIncrease) "+" else ""
+                    val movLabel = when {
+                        parsedTarget == currentBalance -> "No Balance Change"
+                        isIncrease -> "Ledger Movement: +ADJUSTMENT_IN"
+                        else -> "Ledger Movement: -ADJUSTMENT_OUT"
+                    }
+
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = movLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = "${currentBalance.toDisplayString()} → ${parsedTarget.toDisplayString()} ${medication.stockUnit.abbreviation} ($deltaPrefix${delta.toDisplayString()})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = targetBalanceStr,
                     onValueChange = { targetBalanceStr = it },
-                    label = { Text("Actual Observed Balance *") },
+                    label = { Text("Actual Observed Count (${medication.stockUnit.abbreviation}) *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
 
-                if (parsedTarget != null) {
-                    val delta = parsedTarget - currentBalance
-                    val deltaPrefix = if (delta.isPositive()) "+" else ""
-                    Text(
-                        text = "Ledger movement delta: $deltaPrefix${delta.toDisplayString()} ${medication.stockUnit.abbreviation}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
                 OutlinedTextField(
                     value = reason,
                     onValueChange = { reason = it },
-                    label = { Text("Reason for Correction *") },
-                    placeholder = { Text("e.g. Recounted blister pack, dropped pill") },
+                    label = { Text("Reason for Recount / Adjustment *") },
+                    placeholder = { Text("e.g. Physical blister pack recount, dropped tablet") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 if (lots.isNotEmpty()) {
                     Text(
-                        text = "Apply to specific lot (Default: FEFO auto-allocation):",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Apply adjustment to batch lot:",
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedLotId = null },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
                             selected = selectedLotId == null,
                             onClick = { selectedLotId = null }
                         )
-                        Text("Auto (FEFO / Oldest Lot)", style = MaterialTheme.typography.bodySmall)
+                        Text("Auto (FEFO / Earliest Expiring Batch)", style = MaterialTheme.typography.bodySmall)
                     }
                     for (lot in lots) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedLotId = lot.id },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
@@ -1177,7 +1910,7 @@ fun AdjustStockDialog(
                 onClick = {
                     if (isValid && !isSubmitting) {
                         isSubmitting = true
-                        onConfirm(parsedTarget!!, reason, selectedLotId)
+                        onConfirm(parsedTarget!!, reason.trim(), selectedLotId)
                     }
                 },
                 enabled = isValid && !isSubmitting
@@ -1200,16 +1933,29 @@ fun CorrectDoseDialog(
     onDismiss: () -> Unit,
     onConfirm: (newStatus: DoseStatus, reason: String) -> Unit
 ) {
-    var selectedStatus by remember { mutableStateOf(dose.status) }
-    var reason by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
+    val semantic = MaterialTheme.noveloColors
+    var selectedStatusName by rememberSaveable { mutableStateOf(dose.status.name) }
+    var reason by rememberSaveable { mutableStateOf("") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
+    val selectedStatus = runCatching { DoseStatus.valueOf(selectedStatusName) }.getOrDefault(dose.status)
     val isValid = selectedStatus != dose.status && reason.isNotBlank()
+
+    val wasDeducted = dose.status == DoseStatus.TAKEN || dose.status == DoseStatus.ASSUMED
+    val willBeDeducted = selectedStatus == DoseStatus.TAKEN || selectedStatus == DoseStatus.ASSUMED
+    val stockImpactDescription = when {
+        wasDeducted && !willBeDeducted ->
+            "+${dose.doseQuantity.toDisplayString()} ${dose.unit.abbreviation} restored via compensating DOSE_REVERSAL"
+        !wasDeducted && willBeDeducted ->
+            "-${dose.doseQuantity.toDisplayString()} ${dose.unit.abbreviation} deducted via DOSE_TAKEN"
+        else ->
+            "No net stock change (${dose.doseQuantity.toDisplayString()} ${dose.unit.abbreviation})"
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.imePadding(),
-        title = { Text("Correct Dose Record", fontWeight = FontWeight.Bold) },
+        title = { Text("Correct Historical Dose", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -1218,48 +1964,86 @@ fun CorrectDoseDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Correcting historical record for $medicationName.",
+                    text = "Revising record for $medicationName:",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = "Current Status: ${dose.status.displayName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+
+                // Status & Stock Impact Preview Card
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DoseStatusBadge(status = dose.status)
+                            Text("→", fontWeight = FontWeight.Bold)
+                            DoseStatusBadge(status = selectedStatus)
+                        }
+                        Text(
+                            text = "Stock Ledger Impact: $stockImpactDescription",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
 
                 Text(
-                    text = "Select Revised Status:",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "Select Revised Outcome:",
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 listOf(DoseStatus.TAKEN, DoseStatus.SKIPPED, DoseStatus.MISSED).forEach { statusOption ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedStatus == statusOption,
-                            onClick = { selectedStatus = statusOption }
+                    val isSelected = selectedStatus == statusOption
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { selectedStatusName = statusOption.name },
+                        shape = MaterialTheme.shapes.small,
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                         )
-                        Text(text = statusOption.displayName, style = MaterialTheme.typography.bodyMedium)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedStatusName = statusOption.name }
+                                )
+                                Text(
+                                    text = statusOption.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            DoseStatusBadge(status = statusOption)
+                        }
                     }
                 }
 
                 OutlinedTextField(
                     value = reason,
                     onValueChange = { reason = it },
-                    label = { Text("Reason for Revision *") },
-                    placeholder = { Text("e.g. Logged by mistake, forgot to record earlier") },
+                    label = { Text("Reason for Audit Revision *") },
+                    placeholder = { Text("e.g. Logged by mistake, took dose earlier without phone") },
                     modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "Safety Note: If changing from Taken to Skipped/Missed, a compensating DOSE_REVERSAL will automatically be recorded in the stock ledger to restore inventory balance.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
@@ -1268,7 +2052,7 @@ fun CorrectDoseDialog(
                 onClick = {
                     if (isValid && !isSubmitting) {
                         isSubmitting = true
-                        onConfirm(selectedStatus, reason)
+                        onConfirm(selectedStatus, reason.trim())
                     }
                 },
                 enabled = isValid && !isSubmitting
@@ -1295,16 +2079,16 @@ private fun PrescriptionOverviewSection(
     onArchivePrescriptionClick: (Prescription) -> Unit,
     onViewHistoryClick: () -> Unit
 ) {
+    val semantic = MaterialTheme.noveloColors
     val todayEpochDay = LocalDate.now().toEpochDay()
-    val dateFmt = DateTimeFormatter.ofPattern("d MMM yyyy")
     val primaryRx = prescriptions.firstOrNull { it.effectiveStatus(todayEpochDay) == PrescriptionStatus.ACTIVE }
         ?: prescriptions.firstOrNull()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1318,14 +2102,14 @@ private fun PrescriptionOverviewSection(
                 Text(
                     text = "Prescription & Repeat Tracking",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (prescriptions.isNotEmpty()) {
                         TextButton(onClick = onViewHistoryClick) {
-                            Text("History")
+                            Text("Audit Log")
                         }
                     }
                     TextButton(onClick = onAddPrescriptionClick) {
@@ -1342,14 +2126,14 @@ private fun PrescriptionOverviewSection(
 
             if (primaryRx == null) {
                 Text(
-                    text = "No prescription recorded for this medication yet. Add prescription details to track authorised repeats, issue/expiry dates, and pharmacy information.",
+                    text = "No prescription recorded for this medication yet. Add prescription details to track authorised repeats, issue/expiry dates, and pharmacy collection workflow.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 val effectiveStatus = primaryRx.effectiveStatus(todayEpochDay)
-                val issueDateStr = LocalDate.ofEpochDay(primaryRx.issueDateEpochDay).format(dateFmt)
-                val expiryDateStr = primaryRx.expiryDateEpochDay?.let { LocalDate.ofEpochDay(it).format(dateFmt) }
+                val issueDateStr = LocalDate.ofEpochDay(primaryRx.issueDateEpochDay).format(DATE_FORMATTER)
+                val expiryDateStr = primaryRx.expiryDateEpochDay?.let { LocalDate.ofEpochDay(it).format(DATE_FORMATTER) }
                 val daysToExpiry = primaryRx.daysUntilExpiry(todayEpochDay)
 
                 Row(
@@ -1357,7 +2141,7 @@ private fun PrescriptionOverviewSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = primaryRx.referenceNumber?.let { "Ref: $it" } ?: "Prescription Record",
                             style = MaterialTheme.typography.titleSmall,
@@ -1374,74 +2158,125 @@ private fun PrescriptionOverviewSection(
                     PrescriptionStatusBadge(status = effectiveStatus)
                 }
 
-                // Upcoming Expiry / Expired Warning Banner
-                if (effectiveStatus == PrescriptionStatus.EXPIRED) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(StatusMissedContainer)
-                            .padding(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // Visual Repeat Progress Bar
+                if (primaryRx.repeatsAuthorised > 0) {
+                    val repeatRatio = (primaryRx.repeatsRemaining.toFloat() / primaryRx.repeatsAuthorised.toFloat()).coerceIn(0f, 1f)
+                    val animatedRepeatProgress by animateFloatAsState(
+                        targetValue = repeatRatio,
+                        animationSpec = NoveloMotion.standardFloatSpring(),
+                        label = "repeatProgress"
+                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Expired prescription warning",
-                            tint = StatusMissed,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "This prescription has expired and is no longer active. Contact your prescriber or pharmacy for a new prescription.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = StatusMissed
-                        )
-                    }
-                } else if (primaryRx.isExpiringSoon(todayEpochDay)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(StatusWarningContainer)
-                            .padding(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Upcoming expiry warning",
-                            tint = StatusWarning,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Prescription expires in ${daysToExpiry ?: 0} day(s) ($expiryDateStr).",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = StatusWarning
-                        )
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Repeats Remaining",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "${primaryRx.repeatsRemaining} of ${primaryRx.repeatsAuthorised} authorised",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { animatedRepeatProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(7.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = if (primaryRx.repeatsRemaining <= 1) semantic.warning else MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                            if (primaryRx.hasPendingRepeatRequest) {
+                                Text(
+                                    text = "Status: Repeat requested — awaiting pharmacy collection",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = semantic.warning
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Repeats & Pharmacy Summary
+                // Upcoming Expiry / Expired Warning Banner
+                if (effectiveStatus == PrescriptionStatus.EXPIRED) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = semantic.missedContainer,
+                        border = BorderStroke(1.dp, semantic.missedBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Expired prescription warning",
+                                tint = semantic.missed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "This prescription has expired and is no longer active. Contact your prescriber or pharmacy for a renewal.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = semantic.missed
+                            )
+                        }
+                    }
+                } else if (primaryRx.isExpiringSoon(todayEpochDay)) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = semantic.warningContainer,
+                        border = BorderStroke(1.dp, semantic.warningBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Upcoming expiry warning",
+                                tint = semantic.warning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Prescription expires in ${daysToExpiry ?: 0} day(s) ($expiryDateStr).",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = semantic.warning
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "Repeats remaining: ${primaryRx.repeatsRemaining} of ${primaryRx.repeatsAuthorised} authorised",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (primaryRx.hasPendingRepeatRequest) {
-                            Text(
-                                text = "Status: Repeat requested — awaiting collection",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = StatusWarning
-                            )
-                        }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         primaryRx.quantityPrescribed?.let { qty ->
                             Text(
                                 text = "Quantity prescribed: ${qty.toDisplayString()} ${(primaryRx.unit ?: stockUnit).abbreviation}",
@@ -1496,22 +2331,26 @@ private fun PrescriptionOverviewSection(
                         OutlinedButton(
                             onClick = { onRequestRepeatClick(primaryRx) },
                             enabled = primaryRx.canRequestRepeat(todayEpochDay),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small
                         ) {
                             Text(
-                                text = if (primaryRx.hasPendingRepeatRequest) "Repeat Requested" else "Request Repeat",
+                                text = if (primaryRx.hasPendingRepeatRequest) "Repeat Requested" else "1. Request Repeat",
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }
                         Button(
                             onClick = { onCollectRepeatClick(primaryRx) },
                             enabled = primaryRx.canCollectRepeat(todayEpochDay),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small
                         ) {
                             Text(
-                                text = "Collect Repeat",
+                                text = "2. Collect Repeat",
                                 style = MaterialTheme.typography.labelMedium
                             )
                         }
@@ -1519,11 +2358,11 @@ private fun PrescriptionOverviewSection(
                 }
             }
 
-            // Mandatory Clinical & Manual Maintenance Disclaimer
+            // Clinical & Manual Maintenance Disclaimer
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(MaterialTheme.shapes.small)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     .padding(10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1536,7 +2375,7 @@ private fun PrescriptionOverviewSection(
                     modifier = Modifier.size(15.dp)
                 )
                 Text(
-                    text = "Prescription information is manually maintained for personal tracking. Requesting a repeat here logs a local note only and does not contact a pharmacy or decrement repeats until marked collected. Always verify details with your pharmacy or prescriber.",
+                    text = "Prescription information is manually maintained for personal tracking. Requesting a repeat here logs a local note only and does not contact a pharmacy or decrement repeats until marked collected.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1547,34 +2386,44 @@ private fun PrescriptionOverviewSection(
 
 @Composable
 private fun PrescriptionStatusBadge(status: PrescriptionStatus) {
-    val (bg, fg, icon, text) = when (status) {
-        PrescriptionStatus.ACTIVE -> listOf(StatusTakenContainer, StatusTaken, Icons.Default.Check, "Active")
-        PrescriptionStatus.EXPIRED -> listOf(StatusMissedContainer, StatusMissed, Icons.Default.Warning, "Expired")
-        PrescriptionStatus.COMPLETED -> listOf(StatusSkippedContainer, StatusSkipped, Icons.Default.Check, "Completed")
-        PrescriptionStatus.ARCHIVED -> listOf(StatusSkippedContainer, StatusSkipped, Icons.Default.Archive, "Archived")
+    val semantic = MaterialTheme.noveloColors
+    val (bg, fg, border, icon, text) = when (status) {
+        PrescriptionStatus.ACTIVE -> PrescriptionBadgeSpec(semantic.takenContainer, semantic.taken, semantic.takenBorder, Icons.Default.Check, "Active")
+        PrescriptionStatus.EXPIRED -> PrescriptionBadgeSpec(semantic.missedContainer, semantic.missed, semantic.missedBorder, Icons.Default.Warning, "Expired")
+        PrescriptionStatus.COMPLETED -> PrescriptionBadgeSpec(semantic.skippedContainer, semantic.skipped, semantic.skippedBorder, Icons.Default.Check, "Completed")
+        PrescriptionStatus.ARCHIVED -> PrescriptionBadgeSpec(semantic.skippedContainer, semantic.skipped, semantic.skippedBorder, Icons.Default.Archive, "Archived")
     }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg as Color)
+            .clip(MaterialTheme.shapes.extraSmall)
+            .background(bg)
+            .border(1.dp, border, MaterialTheme.shapes.extraSmall)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Icon(
-            imageVector = icon as androidx.compose.ui.graphics.vector.ImageVector,
+            imageVector = icon,
             contentDescription = null,
-            tint = fg as Color,
+            tint = fg,
             modifier = Modifier.size(13.dp)
         )
         Text(
-            text = text as String,
+            text = text,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             color = fg
         )
     }
 }
+
+private data class PrescriptionBadgeSpec(
+    val bg: Color,
+    val fg: Color,
+    val border: Color,
+    val icon: ImageVector,
+    val text: String
+)
 
 @Composable
 private fun AddEditPrescriptionDialog(
@@ -1596,23 +2445,26 @@ private fun AddEditPrescriptionDialog(
     val initialIssueStr = existingPrescription?.let { LocalDate.ofEpochDay(it.issueDateEpochDay).toString() }
         ?: today.toString()
     val initialExpiryStr = existingPrescription?.expiryDateEpochDay?.let { LocalDate.ofEpochDay(it).toString() }
-        ?: ""
+        ?: today.plusMonths(6).toString()
 
-    var referenceNumber by remember { mutableStateOf(existingPrescription?.referenceNumber ?: "") }
-    var issueDateStr by remember { mutableStateOf(initialIssueStr) }
-    var expiryDateStr by remember { mutableStateOf(initialExpiryStr) }
-    var quantityStr by remember { mutableStateOf(existingPrescription?.quantityPrescribed?.toDisplayString() ?: "") }
-    var repeatsAuthStr by remember { mutableStateOf((existingPrescription?.repeatsAuthorised ?: 0).toString()) }
-    var repeatsRemStr by remember { mutableStateOf((existingPrescription?.repeatsRemaining ?: 0).toString()) }
-    var pharmacyName by remember { mutableStateOf(existingPrescription?.pharmacyName ?: "") }
-    var notes by remember { mutableStateOf(existingPrescription?.notes ?: "") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var referenceNumber by rememberSaveable { mutableStateOf(existingPrescription?.referenceNumber ?: "") }
+    var issueDateStr by rememberSaveable { mutableStateOf(initialIssueStr) }
+    var expiryDateStr by rememberSaveable { mutableStateOf(initialExpiryStr) }
+    var quantityStr by rememberSaveable { mutableStateOf(existingPrescription?.quantityPrescribed?.toDisplayString() ?: "28") }
+    var repeatsAuthStr by rememberSaveable { mutableStateOf((existingPrescription?.repeatsAuthorised ?: 6).toString()) }
+    var repeatsRemStr by rememberSaveable { mutableStateOf((existingPrescription?.repeatsRemaining ?: 6).toString()) }
+    var pharmacyName by rememberSaveable { mutableStateOf(existingPrescription?.pharmacyName ?: "") }
+    var notes by rememberSaveable { mutableStateOf(existingPrescription?.notes ?: "") }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.imePadding(),
         title = {
-            Text(if (existingPrescription == null) "Add Prescription" else "Edit Prescription", fontWeight = FontWeight.Bold)
+            Text(
+                text = if (existingPrescription == null) "Add Prescription" else "Edit Prescription",
+                fontWeight = FontWeight.Bold
+            )
         },
         text = {
             Column(
@@ -1625,33 +2477,40 @@ private fun AddEditPrescriptionDialog(
                     value = referenceNumber,
                     onValueChange = { referenceNumber = it },
                     label = { Text("Reference / Script ID (Optional)") },
+                    placeholder = { Text("e.g. RX-2026-8410") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
-                    value = issueDateStr,
-                    onValueChange = {
-                        issueDateStr = it
-                        errorMessage = null
-                    },
-                    label = { Text("Issue Date (YYYY-MM-DD) *") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = expiryDateStr,
-                    onValueChange = {
-                        expiryDateStr = it
-                        errorMessage = null
-                    },
-                    label = { Text("Expiry Date (YYYY-MM-DD, Optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = issueDateStr,
+                        onValueChange = {
+                            issueDateStr = it
+                            errorMessage = null
+                        },
+                        label = { Text("Issue (YYYY-MM-DD) *") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = expiryDateStr,
+                        onValueChange = {
+                            expiryDateStr = it
+                            errorMessage = null
+                        },
+                        label = { Text("Expiry (YYYY-MM-DD)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 OutlinedTextField(
                     value = quantityStr,
                     onValueChange = { quantityStr = it },
                     label = { Text("Quantity Prescribed (${stockUnit.abbreviation}, Optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1666,6 +2525,7 @@ private fun AddEditPrescriptionDialog(
                             errorMessage = null
                         },
                         label = { Text("Repeats Auth.") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -1676,6 +2536,7 @@ private fun AddEditPrescriptionDialog(
                             errorMessage = null
                         },
                         label = { Text("Repeats Left") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -1684,6 +2545,7 @@ private fun AddEditPrescriptionDialog(
                     value = pharmacyName,
                     onValueChange = { pharmacyName = it },
                     label = { Text("Pharmacy Name (Optional)") },
+                    placeholder = { Text("e.g. High Street Pharmacy") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1763,13 +2625,11 @@ private fun PrescriptionHistoryDialog(
     onDismiss: () -> Unit
 ) {
     val todayEpochDay = LocalDate.now().toEpochDay()
-    val dateFmt = DateTimeFormatter.ofPattern("d MMM yyyy")
-    val tsFmt = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
     val zone = ZoneId.systemDefault()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Prescription & Repeat History") },
+        title = { Text("Prescription & Repeat Audit Log", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -1786,45 +2646,49 @@ private fun PrescriptionHistoryDialog(
 
                 prescriptions.forEach { rx ->
                     val effStatus = rx.effectiveStatus(todayEpochDay)
-                    val issueStr = LocalDate.ofEpochDay(rx.issueDateEpochDay).format(dateFmt)
-                    val expStr = rx.expiryDateEpochDay?.let { LocalDate.ofEpochDay(it).format(dateFmt) }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    val issueStr = LocalDate.ofEpochDay(rx.issueDateEpochDay).format(DATE_FORMATTER)
+                    val expStr = rx.expiryDateEpochDay?.let { LocalDate.ofEpochDay(it).format(DATE_FORMATTER) }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = rx.referenceNumber ?: "Prescription",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                PrescriptionStatusBadge(status = effStatus)
+                            }
                             Text(
-                                text = rx.referenceNumber ?: "Prescription",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
+                                text = "Issued: $issueStr" + (expStr?.let { " · Expires: $it" } ?: ""),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            PrescriptionStatusBadge(status = effStatus)
+                            Text(
+                                text = "Repeats: ${rx.repeatsRemaining} / ${rx.repeatsAuthorised} remaining",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
-                        Text(
-                            text = "Issued: $issueStr" + (expStr?.let { " · Expires: $it" } ?: ""),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Repeats: ${rx.repeatsRemaining} / ${rx.repeatsAuthorised} remaining",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Repeat & Status Audit Log (${events.size})",
+                    text = "Immutable Event Timeline (${events.size})",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -1838,23 +2702,34 @@ private fun PrescriptionHistoryDialog(
                     )
                 } else {
                     events.forEach { ev ->
-                        val tsStr = Instant.ofEpochMilli(ev.timestampEpochMs).atZone(zone).format(tsFmt)
-                        Column(
+                        val tsStr = Instant.ofEpochMilli(ev.timestampEpochMs).atZone(zone).format(AUDIT_TIMESTAMP_FORMATTER)
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Text(
-                                text = "${ev.eventType.displayName} · $tsStr",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 5.dp)
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
                             )
-                            Text(
-                                text = ev.notes ?: "Repeats remaining: ${ev.repeatsRemainingAfter}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${ev.eventType.displayName} · $tsStr",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = ev.notes ?: "Repeats remaining: ${ev.repeatsRemainingAfter}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

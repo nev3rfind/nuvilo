@@ -99,3 +99,13 @@ This document tracks all external and internal agent skills and workflows config
 | `compose-accessibility` | awesome-kotlin-android | Apache 2.0 | Workspace (`.agents/skills`) | Verified |
 | `kotlin-data-layer` | awesome-kotlin-android | Apache 2.0 | Workspace (`.agents/skills`) | Verified |
 | `novelo-medication-safety` | Internal (Novelo) | Proprietary | Workspace (`.agents/skills`) | Verified |
+
+---
+
+## 7. Phase 8 UI/UX Overhaul Skill Application Log
+
+During Phase 8 (*Premium Product Experience & Complete UI/UX Overhaul*), the following workspace skills were consulted and applied:
+- **`novelo-medication-safety`**: Verified that all UI workflow additions (3-step Add Medication wizard, Edit Medication dialog, Edit Schedule dialog, Restock/Adjust/Correct live ledger previews) preserve exact `ScaledQuantity` integer math, deterministic `occurrenceId` identity, `CONFIRM` vs `AUTO_ASSUME` distinction, and zero catch-up/double-dose recommendations.
+- **`compose-accessibility`**: Applied `semantics { heading() }`, `Role.Button` / `Role.Tab`, explicit `contentDescription` labels on action buttons, non-color status symbols (`✓`, `~`, `×`, `!`, `•`), and $\ge 48\times 48\text{dp}$ touch targets verified by 11 automated tests in `AccessibilityTest.kt`.
+- **`edge-to-edge`**: Configured single-owner `Scaffold` window insets, `window.isNavigationBarContrastEnforced = false`, and `Modifier.imePadding()` across all modal forms.
+- **`jetpack-compose-performance`**: Enforced stable `key` and `contentType` parameters across all `LazyColumn` lists (`DashboardScreen`, `MedicationListScreen`, `MedicationDetailScreen`, `AdherenceCalendarScreen`, `MedicationDoseHistoryScreen`) and `collectAsStateWithLifecycle()` across all screens.

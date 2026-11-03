@@ -239,7 +239,8 @@ class DashboardViewModel(
 
 data class MedicationListItem(
     val medication: Medication,
-    val stockBalance: StockBalance?
+    val stockBalance: StockBalance?,
+    val schedules: List<ScheduleDefinition> = emptyList()
 )
 
 data class MedicationListUiState(
@@ -257,12 +258,32 @@ class MedicationViewModel(
 
     val uiState: StateFlow<MedicationListUiState> = combine(
         medicationRepository.observeAllMedications(),
+        medicationRepository.observeAllSchedules(),
         stockRepository.observeAllMovements()
-    ) { allMeds, movements ->
+    ) { allMeds, allSchedules, movements ->
         val movementsByMed = movements.groupBy { it.medicationId }
+        val schedulesByMed = allSchedules.groupBy { it.medicationId }
 
         fun buildItem(med: Medication): MedicationListItem {
             val medMovements = movementsByMed[med.id].orEmpty()
+            val medSchedules = schedulesByMed[med.id].orEmpty()
+
+            var dailyConsumptionRaw = 0L
+            for (sch in medSchedules) {
+                if (sch.targetTimesMinuteOfDay.isNotEmpty()) {
+                    val dailyDosesRaw = sch.doseQuantityPerOccurrence.rawScaledValue * sch.targetTimesMinuteOfDay.size
+                    dailyConsumptionRaw += when (sch.scheduleType) {
+                        ScheduleType.DAILY -> dailyDosesRaw
+                        ScheduleType.SPECIFIC_WEEKDAYS -> {
+                            val activeDays = sch.daysOfWeek.size.coerceIn(1, 7)
+                            (dailyDosesRaw * activeDays) / 7L
+                        }
+                        else -> dailyDosesRaw
+                    }
+                }
+            }
+            val dailyRate = if (dailyConsumptionRaw > 0L) ScaledQuantity(dailyConsumptionRaw) else null
+
             val hasOpening = medMovements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
             val balance = stockCalculator.calculateBalance(
@@ -270,9 +291,14 @@ class MedicationViewModel(
                 openingUnit = med.stockUnit,
                 movements = medMovements,
                 lowStockThreshold = med.lowStockThreshold,
+                dailyConsumptionRate = dailyRate,
                 isEstimatedConsumption = med.form.isEstimatedConsumption
             )
-            return MedicationListItem(medication = med, stockBalance = balance)
+            return MedicationListItem(
+                medication = med,
+                stockBalance = balance,
+                schedules = medSchedules
+            )
         }
 
         val active = allMeds.filter { !it.isArchived }.map { buildItem(it) }
@@ -299,7 +325,10 @@ class MedicationViewModel(
         recordingMode: RecordingMode,
         targetTimesMinuteOfDay: List<Int>,
         daysOfWeek: Set<Int>,
-        doseQuantityStr: String
+        doseQuantityStr: String,
+        notes: String = "",
+        colorTagHex: String = "#005EB8",
+        instructions: String = ""
     ) {
         viewModelScope.launch {
             val medId = UUID.randomUUID().toString()
@@ -309,23 +338,26 @@ class MedicationViewModel(
 
             val medication = Medication(
                 id = medId,
-                name = name,
-                strength = strength,
+                name = name.trim(),
+                strength = strength.trim(),
                 form = form,
                 stockUnit = unit,
                 openingStock = opening,
                 lowStockThreshold = threshold,
-                recordingMode = recordingMode
+                recordingMode = recordingMode,
+                notes = notes.trim(),
+                colorTagHex = colorTagHex
             )
 
             val schedule = ScheduleDefinition(
                 id = UUID.randomUUID().toString(),
                 medicationId = medId,
                 scheduleType = if (daysOfWeek.isEmpty()) ScheduleType.DAILY else ScheduleType.SPECIFIC_WEEKDAYS,
-                targetTimesMinuteOfDay = targetTimesMinuteOfDay,
+                targetTimesMinuteOfDay = targetTimesMinuteOfDay.sorted(),
                 daysOfWeek = daysOfWeek,
                 doseQuantityPerOccurrence = doseQuantity,
-                startDateEpochDay = LocalDate.now().toEpochDay()
+                startDateEpochDay = LocalDate.now().toEpochDay(),
+                instructions = instructions.trim()
             )
 
             medicationRepository.createMedication(medication, schedule)
@@ -427,8 +459,16 @@ class MedicationDetailViewModel(
 
             var dailyConsumptionRaw = 0L
             for (sch in medSchedules) {
-                if (sch.scheduleType == ScheduleType.DAILY && sch.targetTimesMinuteOfDay.isNotEmpty()) {
-                    dailyConsumptionRaw += sch.doseQuantityPerOccurrence.rawScaledValue * sch.targetTimesMinuteOfDay.size
+                if (sch.targetTimesMinuteOfDay.isNotEmpty()) {
+                    val dailyDosesRaw = sch.doseQuantityPerOccurrence.rawScaledValue * sch.targetTimesMinuteOfDay.size
+                    dailyConsumptionRaw += when (sch.scheduleType) {
+                        ScheduleType.DAILY -> dailyDosesRaw
+                        ScheduleType.SPECIFIC_WEEKDAYS -> {
+                            val activeDays = sch.daysOfWeek.size.coerceIn(1, 7)
+                            (dailyDosesRaw * activeDays) / 7L
+                        }
+                        else -> dailyDosesRaw
+                    }
                 }
             }
             val dailyRate = if (dailyConsumptionRaw > 0L) ScaledQuantity(dailyConsumptionRaw) else null
@@ -686,6 +726,79 @@ class MedicationDetailViewModel(
         viewModelScope.launch {
             medicationRepository.setArchived(medicationId, archived)
             alarmScheduler?.reconcileUpcomingReminders()
+            _actionSuccessMessage.value = if (archived) "Medication archived" else "Medication restored to active"
+        }
+    }
+
+    fun updateMedication(
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        lowStockThresholdStr: String,
+        recordingMode: RecordingMode,
+        notes: String,
+        colorTagHex: String
+    ) {
+        viewModelScope.launch {
+            val current = uiState.value.medication ?: return@launch
+            val threshold = runCatching { ScaledQuantity.fromDisplayString(lowStockThresholdStr) }
+                .getOrDefault(current.lowStockThreshold)
+            val updated = current.copy(
+                name = name.trim(),
+                strength = strength.trim(),
+                form = form,
+                stockUnit = unit,
+                lowStockThreshold = threshold,
+                recordingMode = recordingMode,
+                notes = notes.trim(),
+                colorTagHex = colorTagHex
+            )
+            val result = medicationRepository.updateMedication(updated)
+            if (result.isSuccess) {
+                alarmScheduler?.reconcileUpcomingReminders()
+                _actionSuccessMessage.value = "Medication details updated"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to update medication"
+            }
+        }
+    }
+
+    fun saveSchedule(
+        existingSchedule: ScheduleDefinition?,
+        targetTimesMinuteOfDay: List<Int>,
+        daysOfWeek: Set<Int>,
+        doseQuantityStr: String,
+        instructions: String
+    ) {
+        viewModelScope.launch {
+            val doseQty = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }.getOrNull()
+            if (doseQty == null || !doseQty.isPositive()) {
+                _errorMessage.value = "Dose quantity must be greater than zero"
+                return@launch
+            }
+            if (targetTimesMinuteOfDay.isEmpty()) {
+                _errorMessage.value = "At least one dose time is required"
+                return@launch
+            }
+            val updatedSchedule = ScheduleDefinition(
+                id = existingSchedule?.id ?: UUID.randomUUID().toString(),
+                medicationId = medicationId,
+                scheduleType = if (daysOfWeek.isEmpty()) ScheduleType.DAILY else ScheduleType.SPECIFIC_WEEKDAYS,
+                targetTimesMinuteOfDay = targetTimesMinuteOfDay.distinct().sorted(),
+                daysOfWeek = daysOfWeek,
+                doseQuantityPerOccurrence = doseQty,
+                startDateEpochDay = existingSchedule?.startDateEpochDay ?: LocalDate.now(zoneId).toEpochDay(),
+                endDateEpochDay = existingSchedule?.endDateEpochDay,
+                instructions = instructions.trim()
+            )
+            val result = medicationRepository.updateSchedule(updatedSchedule)
+            if (result.isSuccess) {
+                alarmScheduler?.reconcileUpcomingReminders()
+                _actionSuccessMessage.value = "Schedule updated"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to update schedule"
+            }
         }
     }
 

@@ -36,6 +36,7 @@ interface MedicationRepository {
     suspend fun getSchedulesForMedication(medicationId: String): List<ScheduleDefinition>
     suspend fun createMedication(medication: Medication, schedule: ScheduleDefinition): Result<Unit>
     suspend fun updateMedication(medication: Medication): Result<Unit>
+    suspend fun updateSchedule(schedule: ScheduleDefinition): Result<Unit> = Result.success(Unit)
     suspend fun setArchived(id: String, archived: Boolean): Result<Unit>
 }
 
@@ -176,6 +177,10 @@ class NoveloRepositoryImpl(
 
     override suspend fun updateMedication(medication: Medication): Result<Unit> = runCatching {
         medicationDao.updateMedication(medication.toEntity())
+    }
+
+    override suspend fun updateSchedule(schedule: ScheduleDefinition): Result<Unit> = runCatching {
+        scheduleDao.insertSchedule(schedule.toEntity())
     }
 
     override suspend fun setArchived(id: String, archived: Boolean): Result<Unit> = runCatching {

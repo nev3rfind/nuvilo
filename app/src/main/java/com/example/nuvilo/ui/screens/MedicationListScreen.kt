@@ -1,55 +1,78 @@
 package com.example.nuvilo.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.model.MedicationForm
@@ -57,133 +80,206 @@ import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.MedicationItemCard
+import com.example.nuvilo.ui.components.ScheduleConfigurationContent
+import com.example.nuvilo.ui.components.defaultStockUnitForForm
+import com.example.nuvilo.ui.components.formatMinuteOfDay
+import com.example.nuvilo.ui.components.parseAccentColor
+import com.example.nuvilo.ui.theme.MedicationAccentSwatches
+import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.MedicationViewModel
 
 @Composable
 fun MedicationListScreen(
     viewModel: MedicationViewModel,
-    modifier: Modifier = Modifier,
-    onMedicationClick: (medicationId: String) -> Unit = {}
+    onSelectMedication: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var showAddDialog by remember { mutableStateOf(false) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showAddDialog by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var filterLowStockOnly by rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // Top Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Medications",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.semantics { heading() }
-                )
-                Text(
-                    text = "${uiState.activeMedications.size} active treatments",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+    val rawList = if (selectedTabIndex == 0) uiState.activeMedications else uiState.archivedMedications
+    val filteredList = rawList.filter { item ->
+        val matchesQuery = searchQuery.isBlank() ||
+            item.medication.name.contains(searchQuery.trim(), ignoreCase = true) ||
+            item.medication.strength.contains(searchQuery.trim(), ignoreCase = true) ||
+            item.medication.form.displayName.contains(searchQuery.trim(), ignoreCase = true)
+        val matchesLowStock = !filterLowStockOnly || (item.stockBalance?.isLowStock == true)
+        matchesQuery && matchesLowStock
+    }
 
-            Button(
+    val lowStockActiveCount = uiState.activeMedications.count { it.stockBalance?.isLowStock == true }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
                 onClick = { showAddDialog = true },
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.size(6.dp))
-                Text(
-                    text = "Add",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
-        // Tabs: Active vs Archived
-        PrimaryTabRow(
-            selectedTabIndex = selectedTabIndex,
-            containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.primary
-        ) {
-            Tab(
-                selected = selectedTabIndex == 0,
-                onClick = { selectedTabIndex = 0 },
-                text = { Text("Active (${uiState.activeMedications.size})") }
-            )
-            Tab(
-                selected = selectedTabIndex == 1,
-                onClick = { selectedTabIndex = 1 },
-                text = { Text("Archived (${uiState.archivedMedications.size})") }
-            )
-        }
-
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-        } else {
-            val currentList = if (selectedTabIndex == 0) {
-                uiState.activeMedications
-            } else {
-                uiState.archivedMedications
-            }
-
-            if (currentList.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val isArchivedTab = selectedTabIndex == 1
-                    EmptyStateCard(
-                        title = if (isArchivedTab) "No archived medications" else "No medications added",
-                        description = if (isArchivedTab) {
-                            "Completed treatments you archive will appear here for historical reference."
-                        } else {
-                            "Track your prescriptions, manage stock, and never miss a dose."
-                        },
-                        icon = Icons.Default.Medication,
-                        actionButtonText = if (!isArchivedTab) "Add Medication" else null,
-                        onActionClick = if (!isArchivedTab) { { showAddDialog = true } } else null
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = MaterialTheme.shapes.medium,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Add Medication",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Editorial Header
+            Text(
+                text = "Medications",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() }
+            )
+            Text(
+                text = "Manage prescriptions, regimens, and append-only stock balances",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Segmented Pill Switcher: Active vs Archived
+            SegmentedMedicationTabs(
+                selectedTabIndex = selectedTabIndex,
+                activeCount = uiState.activeMedications.size,
+                archivedCount = uiState.archivedMedications.size,
+                onSelectTab = { selectedTabIndex = it }
+            )
+
+            // Search & Quick Filter Bar (shown when there are medications in the tab or active search)
+            if (rawList.isNotEmpty() || searchQuery.isNotEmpty() || filterLowStockOnly) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(currentList, key = { it.medication.id }) { item ->
-                        MedicationItemCard(
-                            medication = item.medication,
-                            stockBalance = item.stockBalance,
-                            onClick = { onMedicationClick(item.medication.id) },
-                            onArchiveToggle = {
-                                viewModel.setArchived(item.medication.id, !item.medication.isArchived)
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search name, strength, form...") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        trailingIcon = if (searchQuery.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear search",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        } else null,
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    if (selectedTabIndex == 0 && lowStockActiveCount > 0) {
+                        FilterChip(
+                            selected = filterLowStockOnly,
+                            onClick = { filterLowStockOnly = !filterLowStockOnly },
+                            label = { Text("Low Stock ($lowStockActiveCount)") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
                             }
                         )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                rawList.isEmpty() -> {
+                    EmptyStateCard(
+                        icon = Icons.Default.Medication,
+                        title = if (selectedTabIndex == 0) "No Active Medications" else "No Archived Medications",
+                        description = if (selectedTabIndex == 0) {
+                            "Add your first medication to configure dose times, weekday regimens, and exact stock tracking."
+                        } else {
+                            "Medications you archive when a course finishes will appear here with their full audit history intact."
+                        },
+                        actionLabel = if (selectedTabIndex == 0) "Add Medication" else null,
+                        onActionClick = if (selectedTabIndex == 0) { { showAddDialog = true } } else null
+                    )
+                }
+                filteredList.isEmpty() -> {
+                    EmptyStateCard(
+                        icon = Icons.Default.Search,
+                        title = "No Matching Medications",
+                        description = "No medications matched your current search or low-stock filter.",
+                        actionLabel = "Reset Filters",
+                        onActionClick = {
+                            searchQuery = ""
+                            filterLowStockOnly = false
+                        }
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 96.dp)
+                    ) {
+                        items(
+                            items = filteredList,
+                            key = { it.medication.id },
+                            contentType = { "medication_directory_card" }
+                        ) { item ->
+                            MedicationItemCard(
+                                medication = item.medication,
+                                stockBalance = item.stockBalance,
+                                schedules = item.schedules,
+                                onArchiveToggle = {
+                                    viewModel.setArchived(item.medication.id, !item.medication.isArchived)
+                                },
+                                onCardClick = {
+                                    onSelectMedication(item.medication.id)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -193,7 +289,7 @@ fun MedicationListScreen(
     if (showAddDialog) {
         AddMedicationDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, strength, form, unit, opening, threshold, mode, times, days, doseQty ->
+            onConfirm = { name, strength, form, unit, opening, threshold, mode, times, daysOfWeek, doseQty, notes, colorHex, instructions ->
                 viewModel.createMedication(
                     name = name,
                     strength = strength,
@@ -203,8 +299,11 @@ fun MedicationListScreen(
                     lowStockThresholdStr = threshold,
                     recordingMode = mode,
                     targetTimesMinuteOfDay = times,
-                    daysOfWeek = days,
-                    doseQuantityStr = doseQty
+                    daysOfWeek = daysOfWeek,
+                    doseQuantityStr = doseQty,
+                    notes = notes,
+                    colorTagHex = colorHex,
+                    instructions = instructions
                 )
                 showAddDialog = false
             }
@@ -212,7 +311,72 @@ fun MedicationListScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SegmentedMedicationTabs(
+    selectedTabIndex: Int,
+    activeCount: Int,
+    archivedCount: Int,
+    onSelectTab: (Int) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val tabs = listOf(
+                0 to "Active ($activeCount)",
+                1 to "Archived ($archivedCount)"
+            )
+            tabs.forEach { (index, label) ->
+                val isSelected = selectedTabIndex == index
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .clickable(
+                            onClick = { onSelectTab(index) },
+                            role = Role.Tab
+                        ),
+                    shape = MaterialTheme.shapes.small,
+                    color = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
+                    shadowElevation = if (isSelected) 2.dp else 0.dp
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Progressive-disclosure 3-Step Add Medication Wizard.
+ * - Step 1: Medication Identity, Dosage Form (with smart StockUnit defaulting), Accent Color, & Notes
+ * - Step 2: Schedule Frequency (Daily vs Specific Weekdays), Custom/Preset Dose Times, Dose Quantity, & Recording Mode
+ * - Step 3: Opening Stock, Low-Stock Threshold, Estimated Consumption Notice, & Regimen Summary
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddMedicationDialog(
     onDismiss: () -> Unit,
@@ -226,236 +390,516 @@ fun AddMedicationDialog(
         recordingMode: RecordingMode,
         targetTimes: List<Int>,
         daysOfWeek: Set<Int>,
-        doseQuantity: String
+        doseQuantity: String,
+        notes: String,
+        colorTagHex: String,
+        instructions: String
     ) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var strength by remember { mutableStateOf("") }
-    var selectedForm by remember { mutableStateOf(MedicationForm.TABLET) }
-    var selectedUnit by remember { mutableStateOf(StockUnit.TABLETS) }
-    var openingStock by remember { mutableStateOf("30") }
-    var lowStockThreshold by remember { mutableStateOf("5") }
-    var doseQuantity by remember { mutableStateOf("1") }
-    var morningDose by remember { mutableStateOf(true) }
-    var eveningDose by remember { mutableStateOf(false) }
-    var selectedMode by remember { mutableStateOf(RecordingMode.CONFIRM) }
+    var currentStep by rememberSaveable { mutableIntStateOf(0) }
 
-    var formExpanded by remember { mutableStateOf(false) }
-    var unitExpanded by remember { mutableStateOf(false) }
+    // Step 1 State
+    var name by rememberSaveable { mutableStateOf("") }
+    var strength by rememberSaveable { mutableStateOf("") }
+    var selectedFormName by rememberSaveable { mutableStateOf(MedicationForm.TABLET.name) }
+    var selectedUnitName by rememberSaveable { mutableStateOf(StockUnit.TABLETS.name) }
+    var selectedColorHex by rememberSaveable { mutableStateOf("#005EB8") }
+    var notes by rememberSaveable { mutableStateOf("") }
+
+    // Step 2 State
+    var isSpecificWeekdays by rememberSaveable { mutableStateOf(false) }
+    var selectedDaysList by rememberSaveable { mutableStateOf(listOf(1, 3, 5)) }
+    var selectedTimesList by rememberSaveable { mutableStateOf(listOf(480)) } // Default 08:00
+    var doseQuantity by rememberSaveable { mutableStateOf("1") }
+    var instructions by rememberSaveable { mutableStateOf("") }
+    var selectedModeName by rememberSaveable { mutableStateOf(RecordingMode.CONFIRM.name) }
+
+    // Step 3 State
+    var openingStock by rememberSaveable { mutableStateOf("28") }
+    var lowStockThreshold by rememberSaveable { mutableStateOf("7") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val selectedForm = runCatching { MedicationForm.valueOf(selectedFormName) }.getOrDefault(MedicationForm.TABLET)
+    val selectedUnit = runCatching { StockUnit.valueOf(selectedUnitName) }.getOrDefault(StockUnit.TABLETS)
+    val selectedMode = runCatching { RecordingMode.valueOf(selectedModeName) }.getOrDefault(RecordingMode.CONFIRM)
+
+    val effectiveDays = if (isSpecificWeekdays) selectedDaysList.toSet() else emptySet()
+    val hasValidIdentity = name.isNotBlank() && strength.isNotBlank()
+    val hasValidSchedule = selectedTimesList.isNotEmpty() && (!isSpecificWeekdays || effectiveDays.isNotEmpty())
+    val canSubmit = hasValidIdentity && hasValidSchedule && !isSubmitting
+
+    val semantic = MaterialTheme.noveloColors
 
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.imePadding(),
-        title = { Text("Add Medication", fontWeight = FontWeight.Bold) },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Add Medication",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Step ${currentStep + 1} of 3",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // Interactive 3-Step Indicator Bar
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val steps = listOf(
+                        0 to "1. Identity",
+                        1 to "2. Schedule",
+                        2 to "3. Stock"
+                    )
+                    steps.forEach { (idx, stepTitle) ->
+                        val isActive = currentStep == idx
+                        val isDone = idx < currentStep
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(MaterialTheme.shapes.extraSmall)
+                                .clickable { currentStep = idx },
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = when {
+                                isActive -> MaterialTheme.colorScheme.primary
+                                isDone -> MaterialTheme.colorScheme.primaryContainer
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        ) {
+                            Text(
+                                text = stepTitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    isActive -> MaterialTheme.colorScheme.onPrimary
+                                    isDone -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Medication Name *") },
-                    placeholder = { Text("e.g. Paracetamol, Metformin") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = strength,
-                    onValueChange = { strength = it },
-                    label = { Text("Strength") },
-                    placeholder = { Text("e.g. 500 mg, 10 ml") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                // Form Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = formExpanded,
-                    onExpandedChange = { formExpanded = it },
-                    modifier = Modifier.fillMaxWidth()
+            AnimatedContent(
+                targetState = currentStep,
+                transitionSpec = { NoveloMotion.directionalHorizontalTransition(targetState > initialState) },
+                label = "addMedicationWizardStep"
+            ) { step ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = selectedForm.displayName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Form") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = formExpanded) },
-                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = formExpanded,
-                        onDismissRequest = { formExpanded = false }
-                    ) {
-                        MedicationForm.values().forEach { form ->
-                            DropdownMenuItem(
-                                text = { Text(form.displayName) },
-                                onClick = {
-                                    selectedForm = form
-                                    formExpanded = false
+                    when (step) {
+                        0 -> {
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Medication Name *") },
+                                placeholder = { Text("e.g. Atorvastatin, Lisinopril") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            OutlinedTextField(
+                                value = strength,
+                                onValueChange = { strength = it },
+                                label = { Text("Strength / Concentration *") },
+                                placeholder = { Text("e.g. 20mg, 500mg, 100mcg/puff") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Text(
+                                text = "Dosage Form (auto-matches stock unit)",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(
+                                    MedicationForm.TABLET,
+                                    MedicationForm.CAPSULE,
+                                    MedicationForm.LIQUID_ML,
+                                    MedicationForm.INHALER_PUFFS,
+                                    MedicationForm.DROPS,
+                                    MedicationForm.TOPICAL_CREAM,
+                                    MedicationForm.INJECTION,
+                                    MedicationForm.PATCH
+                                ).forEach { form ->
+                                    FilterChip(
+                                        selected = selectedForm == form,
+                                        onClick = {
+                                            selectedFormName = form.name
+                                            selectedUnitName = defaultStockUnitForForm(form).name
+                                        },
+                                        label = { Text(form.displayName) },
+                                        leadingIcon = if (selectedForm == form) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp)) }
+                                        } else null
+                                    )
                                 }
+                            }
+
+                            Text(
+                                text = "Stock Counting Unit",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                StockUnit.entries.forEach { unit ->
+                                    FilterChip(
+                                        selected = selectedUnit == unit,
+                                        onClick = { selectedUnitName = unit.name },
+                                        label = { Text("${unit.displayName} (${unit.abbreviation})") }
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Visual Accent Tag",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                MedicationAccentSwatches.forEach { (hex, label) ->
+                                    val swatchColor = parseAccentColor(hex, MaterialTheme.colorScheme.primary)
+                                    val isChosen = selectedColorHex.equals(hex, ignoreCase = true)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(swatchColor)
+                                            .border(
+                                                width = if (isChosen) 2.5.dp else 1.dp,
+                                                color = if (isChosen) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                                shape = CircleShape
+                                            )
+                                            .clickable(
+                                                onClick = { selectedColorHex = hex },
+                                                onClickLabel = "Select $label color tag"
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isChosen) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = label,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                label = { Text("Clinical Notes (Optional)") },
+                                placeholder = { Text("e.g. Prescribed for blood pressure") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
                         }
-                    }
-                }
 
-                // Stock Unit Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = unitExpanded,
-                    onExpandedChange = { unitExpanded = it },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = selectedUnit.displayName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Stock Unit") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
-                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = unitExpanded,
-                        onDismissRequest = { unitExpanded = false }
-                    ) {
-                        StockUnit.values().forEach { unit ->
-                            DropdownMenuItem(
-                                text = { Text("${unit.displayName} (${unit.abbreviation})") },
-                                onClick = {
-                                    selectedUnit = unit
-                                    unitExpanded = false
-                                }
+                        1 -> {
+                            ScheduleConfigurationContent(
+                                isSpecificWeekdays = isSpecificWeekdays,
+                                onScheduleModeChange = { isSpecificWeekdays = it },
+                                selectedDaysOfWeek = selectedDaysList.toSet(),
+                                onToggleDayOfWeek = { day ->
+                                    selectedDaysList = if (selectedDaysList.contains(day)) {
+                                        if (selectedDaysList.size > 1) selectedDaysList - day else selectedDaysList
+                                    } else {
+                                        (selectedDaysList + day).sorted()
+                                    }
+                                },
+                                selectedTimesMinuteOfDay = selectedTimesList,
+                                onToggleTimeMinuteOfDay = { timeMin ->
+                                    selectedTimesList = if (selectedTimesList.contains(timeMin)) {
+                                        if (selectedTimesList.size > 1) selectedTimesList - timeMin else selectedTimesList
+                                    } else {
+                                        (selectedTimesList + timeMin).sorted()
+                                    }
+                                },
+                                doseQuantityStr = doseQuantity,
+                                onDoseQuantityChange = { doseQuantity = it },
+                                stockUnit = selectedUnit,
+                                instructions = instructions,
+                                onInstructionsChange = { instructions = it }
+                            )
+
+                            Text(
+                                text = "Adherence Recording Mode",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            RecordingModeSelectorCard(
+                                selectedMode = selectedMode,
+                                onSelectMode = { selectedModeName = it.name }
                             )
                         }
-                    }
-                }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = openingStock,
-                        onValueChange = { openingStock = it },
-                        label = { Text("Initial Stock") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = lowStockThreshold,
-                        onValueChange = { lowStockThreshold = it },
-                        label = { Text("Low Stock Alert") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
+                        else -> {
+                            if (selectedForm.isEstimatedConsumption) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = semantic.warningContainer),
+                                    border = BorderStroke(1.dp, semantic.warningBorder),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            tint = semantic.warning,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = "${selectedForm.displayName} supplies are tracked as ESTIMATED balances because physical actuation/application volume can vary.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = semantic.warning
+                                        )
+                                    }
+                                }
+                            }
 
-                OutlinedTextField(
-                    value = doseQuantity,
-                    onValueChange = { doseQuantity = it },
-                    label = { Text("Dose Quantity per Time") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = openingStock,
+                                    onValueChange = { openingStock = it },
+                                    label = { Text("Opening Stock (${selectedUnit.abbreviation})") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
 
-                // Schedule times toggle
-                Text(
-                    text = "Daily Reminder Times:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { morningDose = !morningDose },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f),
-                        colors = if (morningDose) ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ) else ButtonDefaults.outlinedButtonColors()
-                    ) {
-                        Text("Morning (08:00)")
-                    }
-                    OutlinedButton(
-                        onClick = { eveningDose = !eveningDose },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f),
-                        colors = if (eveningDose) ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ) else ButtonDefaults.outlinedButtonColors()
-                    ) {
-                        Text("Evening (20:00)")
-                    }
-                }
+                                OutlinedTextField(
+                                    value = lowStockThreshold,
+                                    onValueChange = { lowStockThreshold = it },
+                                    label = { Text("Low Alert (${selectedUnit.abbreviation})") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                            }
 
-                // Recording Mode
-                Text(
-                    text = "Recording Mode:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { selectedMode = RecordingMode.CONFIRM },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f),
-                        colors = if (selectedMode == RecordingMode.CONFIRM) ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ) else ButtonDefaults.outlinedButtonColors()
-                    ) {
-                        Text("Manual Confirm", style = MaterialTheme.typography.labelSmall)
-                    }
-                    OutlinedButton(
-                        onClick = { selectedMode = RecordingMode.AUTO_ASSUME },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f),
-                        colors = if (selectedMode == RecordingMode.AUTO_ASSUME) ButtonDefaults.outlinedButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ) else ButtonDefaults.outlinedButtonColors()
-                    ) {
-                        Text("Auto-Assume", style = MaterialTheme.typography.labelSmall)
+                            // Regimen Review Summary Card
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Regimen Summary",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "${name.ifBlank { "Unnamed Medication" }} · ${strength.ifBlank { "No strength" }} (${selectedForm.displayName})",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    val timesSummary = selectedTimesList.sorted().joinToString(", ") { formatMinuteOfDay(it) }
+                                    val freqLabel = if (isSpecificWeekdays) "${effectiveDays.size} weekday(s)/week" else "Every day"
+                                    Text(
+                                        text = "Schedule: $freqLabel at $timesSummary ($doseQuantity ${selectedUnit.abbreviation} per dose)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Opening Ledger Balance: $openingStock ${selectedUnit.abbreviation} (Low-stock alert at $lowStockThreshold ${selectedUnit.abbreviation})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        val times = mutableListOf<Int>()
-                        if (morningDose) times.add(8 * 60)
-                        if (eveningDose) times.add(20 * 60)
-                        if (times.isEmpty()) times.add(8 * 60) // Default to 08:00
-
-                        onConfirm(
-                            name,
-                            strength,
-                            selectedForm,
-                            selectedUnit,
-                            openingStock,
-                            lowStockThreshold,
-                            selectedMode,
-                            times,
-                            emptySet(),
-                            doseQuantity
-                        )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (currentStep < 2) {
+                    FilledTonalButton(
+                        onClick = { currentStep += 1 }
+                    ) {
+                        Text("Next Step")
                     }
-                },
-                enabled = name.isNotBlank(),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("Save Medication", fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = {
+                        if (canSubmit) {
+                            isSubmitting = true
+                            val notesCombined = buildString {
+                                if (notes.isNotBlank()) append(notes.trim())
+                                if (instructions.isNotBlank()) {
+                                    if (isNotEmpty()) append(" · ")
+                                    append(instructions.trim())
+                                }
+                            }
+                            onConfirm(
+                                name.trim(),
+                                strength.trim(),
+                                selectedForm,
+                                selectedUnit,
+                                openingStock.ifBlank { "0" },
+                                lowStockThreshold.ifBlank { "7" },
+                                selectedMode,
+                                selectedTimesList.sorted(),
+                                effectiveDays,
+                                doseQuantity.ifBlank { "1" },
+                                notesCombined,
+                                selectedColorHex,
+                                instructions.trim()
+                            )
+                        }
+                    },
+                    enabled = canSubmit
+                ) {
+                    Text("Save")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (currentStep > 0) {
+                    OutlinedButton(onClick = { currentStep -= 1 }) {
+                        Text("Back")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
             }
         }
     )
+}
+
+@Composable
+fun RecordingModeSelectorCard(
+    selectedMode: RecordingMode,
+    onSelectMode: (RecordingMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        val options = listOf(
+            Triple(
+                RecordingMode.CONFIRM,
+                "Manual Confirmation (Recommended)",
+                "Requires your explicit tap to record a dose as taken and deduct stock."
+            ),
+            Triple(
+                RecordingMode.AUTO_ASSUME,
+                "Auto-Assume Adherence",
+                "Assumes doses are taken according to schedule; distinctly marked as Assumed."
+            )
+        )
+        options.forEach { (mode, title, desc) ->
+            val isSelected = selectedMode == mode
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable(
+                        onClick = { onSelectMode(mode) },
+                        role = Role.RadioButton
+                    ),
+                shape = MaterialTheme.shapes.small,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                },
+                border = BorderStroke(
+                    width = if (isSelected) 1.5.dp else 1.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = null
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (mode == RecordingMode.CONFIRM) Icons.Default.VerifiedUser else Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
