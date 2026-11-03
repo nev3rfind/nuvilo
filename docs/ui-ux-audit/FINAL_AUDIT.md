@@ -38,28 +38,25 @@ Novelo's Phase 8 overhaul transformed the application from a functional Material
 ---
 
 ## 3. Before vs. After Visual Evidence
-All baseline screenshots are archived in `docs/screenshots/phase8/before/` (15 captures) and post-redesign screenshots in `docs/screenshots/phase8/after/` (22 captures):
+All baseline screenshots are archived in `docs/screenshots/phase8/before/` (8 captures) and post-redesign screenshots in `docs/screenshots/phase8/after/` (21 captures):
 
 - **Empty & Onboarding States:**
   - Before: `01_dashboard_empty_light.png`, `02_medications_empty_light.png`
   - After: `01_dashboard_empty_light_after.png`, `02_medications_empty_light_after.png`
 - **Progressive 3-Step Add Medication Wizard:**
-  - Before: `03_add_medication_dialog_top_light.png`, `04_add_medication_dialog_bottom_light.png`
+  - Before: `03_add_medication_dialog_before.png`
   - After: `03_add_medication_step1_after.png`, `04_add_medication_step2_after.png`, `05_add_medication_step3_after.png`
 - **Active Today Dashboard & Completed Day:**
-  - Before: `07_dashboard_active_light.png`, `10_dashboard_after_actions_light.png`
   - After: `08_dashboard_active_light_after.png`, `14_dashboard_completed_light_after.png`, `22_dashboard_dark_after.png`
 - **Medications List & Search/Filter:**
-  - Before: `05_medications_active_light.png`
   - After: `06_medications_active_light_after.png`, `21_medications_dark_after.png`
 - **Medication Detail, Edit Medication, Edit Schedule & Live Restock Preview:**
-  - Before: `06_medication_detail_top_light.png`, `08_medication_detail_ledger_light.png`, `09_restock_dialog_light.png`
-  - After: `07_medication_detail_top_light_after.png`, `09_edit_medication_dialog_after.png`, `10_edit_schedule_dialog_after.png`, `11_restock_dialog_preview_after.png`, `12_medication_detail_bottom_light_after.png`, `13_dose_history_light_after.png`
+  - After: `07_medication_detail_top_light_after.png`, `09_edit_medication_dialog_after.png`, `10_edit_schedule_dialog_after.png`, `11_restock_dialog_preview_after.png`, `12_medication_detail_bottom_light_after.png`
 - **Adherence Calendar (Light & Dark):**
-  - Before: `11_adherence_calendar_light.png`
+  - Before: `04_calendar_before_light.png`
   - After: `15_adherence_calendar_light_after.png`, `20_adherence_calendar_dark_after.png`
 - **Settings, Encrypted Backup & Diagnostics (Light & Dark):**
-  - Before: `12_settings_top_light.png`, `13_settings_bottom_light.png`, `14_settings_dark.png`
+  - Before: `05_settings_top_before_light.png`, `06_settings_bottom_before_light.png`, `14_backup_passphrase_dialog_before.png`, `15_app_lock_screen_before.png`
   - After: `16_settings_light_after.png`, `17_settings_backup_diagnostics_light_after.png`, `18_settings_dark_after.png`, `19_backup_passphrase_dialog_dark_after.png`
 
 ---

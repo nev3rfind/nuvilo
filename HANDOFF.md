@@ -41,4 +41,4 @@
   - `UX_DECISIONS.md`
   - `USER_JOURNEYS.md`
   - `FINAL_AUDIT.md`
-- Captured 15 baseline screenshots (`docs/screenshots/phase8/before/`) and 22 post-redesign screenshots (`docs/screenshots/phase8/after/`) across Light and Dark modes.
+- Captured 8 baseline screenshots (`docs/screenshots/phase8/before/`) and 21 post-redesign screenshots (`docs/screenshots/phase8/after/`) across Light and Dark modes.
