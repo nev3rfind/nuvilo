@@ -4,30 +4,42 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// NHS-Inspired Primary Brand Palette — Light Mode
+// =========================================================================
+// 1. PRIMARY & INTERACTION PALETTE (UI/UX Pro Max Layered Medical Blue)
+// =========================================================================
+
+// Novelo Primary Brand Anchor (NHS Clinical Blue — trust, credibility, heritage)
 val NoveloBlue = Color(0xFF005EB8)
 val NoveloDarkBlue = Color(0xFF003087)
 val NoveloBrightBlue = Color(0xFF0072CE)
-val NoveloLightBlueContainer = Color(0xFFE1EFFF)
+
+// UI/UX Pro Max Clinical Interaction Blue (Buttons, focused borders, active rings)
+val NoveloInteractionBlue = Color(0xFF0284C7)
+val NoveloLightBlueContainer = Color(0xFFE0F2FE)
 val NoveloOnPrimaryContainer = Color(0xFF002B5B)
 
-// Secondary Clinical Teal — Light Mode
-val NoveloTeal = Color(0xFF007F7B)
+// UI/UX Pro Max Secondary Cyan/Teal (Accents, active pills, secondary KPI bars)
+val NoveloCyanAccent = Color(0xFF0891B2)
 val NoveloTealContainer = Color(0xFFDDF5F4)
 val NoveloOnTealContainer = Color(0xFF003735)
 
-// Dark Mode Primary & Secondary Palette
+// Dark Mode Primary & Interaction Palette
 val NoveloBlueDark = Color(0xFF6EB4FF)
-val NoveloBlueContainerDark = Color(0xFF00448A)
+val NoveloInteractionBlueDark = Color(0xFF38BDF8)
+val NoveloBlueContainerDark = Color(0xFF0C4A6E)
 val NoveloOnPrimaryDark = Color(0xFF002F64)
-val NoveloOnPrimaryContainerDark = Color(0xFFD8E9FF)
+val NoveloOnPrimaryContainerDark = Color(0xFFE0F2FE)
 
-val NoveloTealDark = Color(0xFF5AD6D0)
-val NoveloTealContainerDark = Color(0xFF004F4D)
-val NoveloOnTealDark = Color(0xFF003735)
-val NoveloOnTealContainerDark = Color(0xFFC2F5F2)
+val NoveloCyanAccentDark = Color(0xFF22D3EE)
+val NoveloTealContainerDark = Color(0xFF164E63)
+val NoveloOnTealDark = Color(0xFF083344)
+val NoveloOnTealContainerDark = Color(0xFFCFFAFE)
 
-// Semantic Status Colors (Light Mode — WCAG AA >= 5.2:1 contrast)
+// =========================================================================
+// 2. CLINICAL SEMANTIC STATUS PALETTE (WCAG AA >= 5.0:1 Contrast Guaranteed)
+// =========================================================================
+
+// Light Mode Semantics
 val StatusTaken = Color(0xFF0D6832)
 val StatusTakenContainer = Color(0xFFE6F4EA)
 val StatusTakenBorder = Color(0xFFA7F3D0)
@@ -48,7 +60,7 @@ val StatusWarning = Color(0xFF92400E)
 val StatusWarningContainer = Color(0xFFFEF3C7)
 val StatusWarningBorder = Color(0xFFFDE68A)
 
-// Semantic Status Colors (Dark Mode — WCAG AA >= 5.2:1 contrast)
+// Dark Mode Semantics
 val StatusTakenDark = Color(0xFF6EE7B7)
 val StatusTakenContainerDark = Color(0xFF064E3B)
 val StatusTakenBorderDark = Color(0xFF047857)
@@ -69,30 +81,36 @@ val StatusWarningDark = Color(0xFFFCD34D)
 val StatusWarningContainerDark = Color(0xFF78350F)
 val StatusWarningBorderDark = Color(0xFF92400E)
 
-// Neutral Surface & Text Hierarchy — Light Mode
-val NeutralBackgroundLight = Color(0xFFF6F8FB)
+// =========================================================================
+// 3. NEUTRAL SURFACES & SLATE TYPOGRAPHY HIERARCHY
+// =========================================================================
+
+// Light Mode Neutrals (Slate 50 background + White cards)
+val NeutralBackgroundLight = Color(0xFFF8FAFC)
 val NeutralSurfaceLight = Color(0xFFFFFFFF)
-val NeutralSurfaceVariantLight = Color(0xFFEDF2F7)
+val NeutralSurfaceVariantLight = Color(0xFFF1F5F9)
 val NeutralTextPrimaryLight = Color(0xFF0F172A)
 val NeutralTextSecondaryLight = Color(0xFF475569)
+val NeutralTextTertiaryLight = Color(0xFF64748B)
 val NeutralOutlineLight = Color(0xFFCBD5E1)
 val NeutralOutlineVariantLight = Color(0xFFE2E8F0)
 
-// Neutral Surface & Text Hierarchy — Dark Mode
-val NeutralBackgroundDark = Color(0xFF0B111A)
-val NeutralSurfaceDark = Color(0xFF131C27)
-val NeutralSurfaceVariantDark = Color(0xFF1D2938)
-val NeutralTextPrimaryDark = Color(0xFFF1F5F9)
+// Dark Mode Neutrals (Slate 900 background + Slate 800 cards)
+val NeutralBackgroundDark = Color(0xFF0F172A)
+val NeutralSurfaceDark = Color(0xFF1E293B)
+val NeutralSurfaceVariantDark = Color(0xFF334155)
+val NeutralTextPrimaryDark = Color(0xFFF8FAFC)
 val NeutralTextSecondaryDark = Color(0xFF94A3B8)
-val NeutralOutlineDark = Color(0xFF334155)
-val NeutralOutlineVariantDark = Color(0xFF1E293B)
+val NeutralTextTertiaryDark = Color(0xFF64748B)
+val NeutralOutlineDark = Color(0xFF475569)
+val NeutralOutlineVariantDark = Color(0xFF334155)
 
 /**
- * Curated medication accent tags for visual differentiation across schedules and cards.
+ * Curated medication accent tags for visual differentiation across regimens.
  */
 val MedicationAccentSwatches: List<Pair<String, String>> = listOf(
     "#005EB8" to "Clinical Blue",
-    "#007F7B" to "Calm Teal",
+    "#0891B2" to "Clinical Cyan",
     "#4F46E5" to "Indigo",
     "#0D6832" to "Emerald",
     "#B45309" to "Warm Amber",
@@ -101,7 +119,7 @@ val MedicationAccentSwatches: List<Pair<String, String>> = listOf(
 )
 
 /**
- * Theme-aware semantic color tokens for clinical statuses and surface borders.
+ * Theme-aware semantic color tokens with UI/UX Pro Max extensions.
  */
 @Immutable
 data class NoveloSemanticColors(
@@ -124,6 +142,9 @@ data class NoveloSemanticColors(
     val elevatedSurface: Color,
     val heroGradientStart: Color,
     val heroGradientEnd: Color,
+    val interactionBlue: Color,
+    val accentCyan: Color,
+    val bulletBenchmark: Color,
     val isDark: Boolean
 )
 
@@ -145,8 +166,11 @@ val LightNoveloSemanticColors = NoveloSemanticColors(
     warningBorder = StatusWarningBorder,
     cardBorder = NeutralOutlineVariantLight,
     elevatedSurface = NeutralSurfaceLight,
-    heroGradientStart = Color(0xFFE8F2FF),
-    heroGradientEnd = Color(0xFFD9EAFF),
+    heroGradientStart = Color(0xFFE0F2FE),
+    heroGradientEnd = Color(0xFFBAE6FD),
+    interactionBlue = NoveloInteractionBlue,
+    accentCyan = NoveloCyanAccent,
+    bulletBenchmark = Color(0xFF0F172A),
     isDark = false
 )
 
@@ -167,9 +191,12 @@ val DarkNoveloSemanticColors = NoveloSemanticColors(
     warningContainer = StatusWarningContainerDark,
     warningBorder = StatusWarningBorderDark,
     cardBorder = NeutralOutlineVariantDark,
-    elevatedSurface = Color(0xFF172230),
-    heroGradientStart = Color(0xFF0E294B),
-    heroGradientEnd = Color(0xFF133764),
+    elevatedSurface = Color(0xFF243248),
+    heroGradientStart = Color(0xFF0C4A6E),
+    heroGradientEnd = Color(0xFF075985),
+    interactionBlue = NoveloInteractionBlueDark,
+    accentCyan = NoveloCyanAccentDark,
+    bulletBenchmark = Color(0xFFF8FAFC),
     isDark = true
 )
 

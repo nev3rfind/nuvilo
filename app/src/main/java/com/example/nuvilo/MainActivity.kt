@@ -323,7 +323,9 @@ private fun NoveloMainContent(
         ) { innerPadding ->
             AnimatedContent(
                 targetState = currentScreen,
-                transitionSpec = { NoveloMotion.screenTransition() },
+                transitionSpec = {
+                    NoveloMotion.directionalHorizontalTransition(targetState.ordinal > initialState.ordinal)
+                },
                 label = "mainTabTransition",
                 modifier = Modifier.padding(innerPadding)
             ) { targetScreen ->

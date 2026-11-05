@@ -55,8 +55,10 @@ import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.HeroDoseCard
 import com.example.nuvilo.ui.components.SectionHeader
 import com.example.nuvilo.ui.components.TimelineDoseItem
+import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.DashboardUiState
 import com.example.nuvilo.ui.viewmodel.DashboardViewModel
 import kotlinx.coroutines.launch
@@ -318,7 +320,7 @@ private fun DashboardHeaderSection(uiState: DashboardUiState) {
             val isComplete = uiState.takenDoses == uiState.totalDoses
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
+                shape = NoveloCardShape,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -353,7 +355,7 @@ private fun DashboardHeaderSection(uiState: DashboardUiState) {
                         ) {
                             Text(
                                 text = "${uiState.takenDoses} / ${uiState.totalDoses} taken (${(rawProgress * 100).toInt()}%)",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.tabular,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isComplete) {
                                     semantic.taken

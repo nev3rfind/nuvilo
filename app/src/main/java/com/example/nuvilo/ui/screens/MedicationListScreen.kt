@@ -91,8 +91,11 @@ import com.example.nuvilo.ui.components.defaultStockUnitForForm
 import com.example.nuvilo.ui.components.formatMinuteOfDay
 import com.example.nuvilo.ui.components.parseAccentColor
 import com.example.nuvilo.ui.theme.MedicationAccentSwatches
+import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.NoveloPillShape
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.MedicationViewModel
 import kotlinx.coroutines.launch
 
@@ -132,7 +135,7 @@ fun MedicationListScreen(
                 onClick = { showAddDialog = true },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = MaterialTheme.shapes.medium,
+                shape = NoveloPillShape,
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -212,7 +215,7 @@ fun MedicationListScreen(
                             }
                         } else null,
                         singleLine = true,
-                        shape = MaterialTheme.shapes.small,
+                        shape = NoveloPillShape,
                         modifier = Modifier.weight(1f)
                     )
 
@@ -357,7 +360,7 @@ private fun SegmentedMedicationTabs(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = NoveloPillShape,
         color = MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
@@ -377,12 +380,12 @@ private fun SegmentedMedicationTabs(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 44.dp)
-                        .clip(MaterialTheme.shapes.small)
+                        .clip(NoveloPillShape)
                         .clickable(
                             onClick = { onSelectTab(index) },
                             role = Role.Tab
                         ),
-                    shape = MaterialTheme.shapes.small,
+                    shape = NoveloPillShape,
                     color = if (isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
                     shadowElevation = if (isSelected) 2.dp else 0.dp
                 ) {
@@ -505,9 +508,9 @@ fun AddMedicationDialog(
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(MaterialTheme.shapes.extraSmall)
+                                .clip(NoveloPillShape)
                                 .clickable { currentStep = idx },
-                            shape = MaterialTheme.shapes.extraSmall,
+                            shape = NoveloPillShape,
                             color = when {
                                 isActive -> MaterialTheme.colorScheme.primary
                                 isDone -> MaterialTheme.colorScheme.primaryContainer
@@ -713,7 +716,7 @@ fun AddMedicationDialog(
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = semantic.warningContainer),
                                     border = BorderStroke(1.dp, semantic.warningBorder),
-                                    shape = MaterialTheme.shapes.small
+                                    shape = NoveloCardShape
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(12.dp),
@@ -761,7 +764,7 @@ fun AddMedicationDialog(
                             // Regimen Review Summary Card
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.medium,
+                                shape = NoveloCardShape,
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                                 ),
@@ -887,12 +890,12 @@ fun RecordingModeSelectorCard(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.small)
+                    .clip(NoveloCardShape)
                     .clickable(
                         onClick = { onSelectMode(mode) },
                         role = Role.RadioButton
                     ),
-                shape = MaterialTheme.shapes.small,
+                shape = NoveloCardShape,
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
                 } else {

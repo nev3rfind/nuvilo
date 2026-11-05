@@ -120,8 +120,11 @@ import com.example.nuvilo.ui.components.defaultStockUnitForForm
 import com.example.nuvilo.ui.components.formatMinuteOfDay
 import com.example.nuvilo.ui.components.parseAccentColor
 import com.example.nuvilo.ui.theme.MedicationAccentSwatches
+import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.NoveloPillShape
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.MedicationDetailViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -1357,22 +1360,23 @@ private fun StockLotRow(
                     )
                     if (isActiveFefoLot) {
                         Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.primaryContainer
+                            shape = NoveloPillShape,
+                            color = semantic.takenContainer,
+                            border = BorderStroke(1.dp, semantic.takenBorder)
                         ) {
                             Text(
-                                text = "Active FEFO Batch",
+                                text = "✓ Active FEFO Lot",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                color = semantic.taken,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
                 }
                 Text(
                     text = "Remaining: ${lot.remainingQuantity.toDisplayString()} of ${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.tabular,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (lot.notes != null) {
@@ -1385,16 +1389,16 @@ private fun StockLotRow(
             }
 
             Surface(
-                shape = MaterialTheme.shapes.extraSmall,
-                color = if (isExpiringSoon) semantic.warningContainer else MaterialTheme.colorScheme.surface,
+                shape = NoveloPillShape,
+                color = if (isExpiringSoon) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant,
                 border = BorderStroke(1.dp, if (isExpiringSoon) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Text(
                     text = "Exp: $expiryStr",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.tabular,
                     color = if (isExpiringSoon) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                 )
             }
         }
@@ -1449,14 +1453,14 @@ private fun DoseHistoryRow(
 
                     OutlinedButton(
                         onClick = onCorrectClick,
-                        shape = MaterialTheme.shapes.extraSmall,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.heightIn(min = 34.dp)
+                        shape = NoveloPillShape,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Correct dose record",
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.size(4.dp))
                         Text("Correct", style = MaterialTheme.typography.labelSmall)
@@ -1498,38 +1502,54 @@ private fun StockMovementRow(movement: StockLedgerEntry) {
         .atZone(ZoneId.systemDefault())
         .format(MOVEMENT_ROW_FORMATTER)
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    val isInflow = movement.movementType.isInflow
+    val prefix = if (isInflow) "+" else "-"
+    val textColor = if (isInflow) semantic.taken else semantic.missed
+    val containerColor = if (isInflow) semantic.takenContainer else semantic.missedContainer
+    val borderColor = if (isInflow) semantic.takenBorder else semantic.missedBorder
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = NoveloCardShape,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = movement.movementType.displayName,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "$timeStr · ${movement.reason ?: "No reason noted"}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = movement.movementType.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "$timeStr · ${movement.reason ?: "No reason noted"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                shape = NoveloPillShape,
+                color = containerColor,
+                border = BorderStroke(1.dp, borderColor),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text(
+                    text = "$prefix${movement.quantity.toDisplayString()} ${movement.unit.abbreviation}",
+                    style = MaterialTheme.typography.labelMedium.tabular,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                )
+            }
         }
-
-        val prefix = if (movement.movementType.isInflow) "+" else "-"
-        val textColor = if (movement.movementType.isInflow) semantic.taken else semantic.missed
-
-        Text(
-            text = "$prefix${movement.quantity.toDisplayString()} ${movement.unit.abbreviation}",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = textColor
-        )
     }
 }
 

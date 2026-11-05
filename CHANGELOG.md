@@ -8,6 +8,16 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Stage 2: UI/UX Pro Max Implementation & Design System Rollout**:
+  - Implemented `fontFeatureSettings = "tnum"` tabular numbers (`NoveloNumericTypography` & `.tabular` extension) in `Type.kt` for jitter-free counters, timestamps, stock balances, and adherence stats.
+  - Added layered color tokens in `Color.kt` and `Theme.kt`: `NoveloInteractionBlue` (`#0284C7`), `NoveloCyanAccent` (`#0891B2`), `NoveloLightContainer` (`#E0F2FE`), `NoveloDarkContainer` (`#1E293B`), and `NoveloBulletBenchmark`.
+  - Added expressive silhouettes in `Shape.kt`: `NoveloPillShape` (`RoundedCornerShape(999.dp)`) and `NoveloCardShape` (`RoundedCornerShape(18.dp)`).
+  - Built `NoveloBulletKpiCard` displaying clinical adherence against an 80% benchmark target with WCAG AA non-color status indicators.
+  - Rolled out 3-tier mobile data row pattern (`NoveloDataRow`) across stock ledger and chronological dose history.
+  - Refactored medication search bar and segmented Active/Archived switcher to `NoveloPillShape`.
+  - Upgraded bottom navigation tab switching with directional horizontal spatial transitions (`NoveloMotion.directionalHorizontalTransition`).
+  - Added official Novelo 3D brand asset, multi-density launcher icon suite, and animated `SplashScreen` with progress bar and radiant glow.
+  - Documented complete visual verification and captured 11 paired before/after screenshots in `docs/screenshots/stage2/` and `docs/ui-ux-audit/stage2/`.
 - **Phase 8: Premium Product Experience & Complete UI/UX Overhaul (Refs #3)**:
   - Added theme-aware semantic status color system (`NoveloSemanticColors`, `LocalNoveloColors`, `MaterialTheme.noveloColors`) in `Color.kt` and `Theme.kt` so all status badges, alert banners, stock pills, and calendar cells automatically resolve dark-mode or light-mode palettes with $\ge 5.2:1$ WCAG AA contrast.
   - Added centralized shape (`Shape.kt`) and motion (`Motion.kt` / `NoveloMotion`) systems providing spring-based progress animations, screen transitions, Hero Dose -> Completed Day transitions, and collapsible section animations.
