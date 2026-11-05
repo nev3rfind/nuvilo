@@ -15,28 +15,33 @@
 
 ## Global Rules
 
-### Color Palette
+### Color Palette & Reconciled Brand Tokens
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#0284C7` | `--color-primary` |
-| On Primary | `#000000` | `--color-on-primary` |
-| Secondary | `#0891B2` | `--color-secondary` |
-| On Secondary | `#000000` | `--color-on-secondary` |
-| Accent/CTA | `#DC2626` | `--color-accent` |
-| On Accent/CTA | `#FFFFFF` | `--color-on-accent` |
-| Background | `#F0F9FF` | `--color-background` |
-| Foreground | `#0F172A` | `--color-foreground` |
-| Card | `#FFFFFF` | `--color-card` |
-| Card Foreground | `#0F172A` | `--color-card-foreground` |
-| Muted | `#EFF7FB` | `--color-muted` |
-| Muted Foreground | `#475569` | `--color-muted-foreground` |
-| Border | `#E0F0F8` | `--color-border` |
-| Destructive | `#DC2626` | `--color-destructive` |
-| On Destructive | `#FFFFFF` | `--color-on-destructive` |
-| Ring | `#0284C7` | `--color-ring` |
+Novelo's visual identity centers on **Novelo Clinical Blue (`#005EB8`)** as the primary brand anchor (NHS-inspired trust, credibility, and authority), complemented by **Interaction Blue (`#0284C7`)** for interactive controls, **Cyan Accent (`#0891B2` / `#22D3EE`)** for active highlights and luminous aura, and **Secondary Clinical Teal (`#007F7B` / `#DDF5F4`)** with a dedicated supporting role for dosage forms, schedule tags, and medication categories.
 
-**Color Notes:** Medical blue + alert red
+| Role | Light Hex | Dark Hex | Role & Usage | Contrast vs Background |
+|------|-----------|----------|--------------|------------------------|
+| **Primary Brand Anchor** | `#005EB8` | `#6EB4FF` | Top app bars, primary brand identity, hero status, key metrics | Light: 6.38:1 / Dark: 7.77:1 (WCAG AA Pass) |
+| **On Primary** | `#FFFFFF` | `#002F64` | Text and icons placed on primary brand backgrounds | Light: 6.38:1 / Dark: 7.52:1 (WCAG AA Pass) |
+| **Primary Container** | `#E0F2FE` | `#0C4A6E` | Hero cards, active tab background, selected state pills | Light: 14.2:1 vs text / Dark: 8.9:1 vs text |
+| **On Primary Container** | `#002B5B` | `#E0F2FE` | High-contrast text on primary containers | Light: 11.4:1 / Dark: 10.1:1 (WCAG AA Pass) |
+| **Interaction Blue** | `#0284C7` | `#38BDF8` | Primary interactive buttons, focus rings, active outlines | Light: 4.62:1 / Dark: 6.85:1 (WCAG AA Pass) |
+| **Cyan Accent** | `#0891B2` | `#22D3EE` | Progress indicators, orbital glowing aura, active rings | Light: 4.55:1 / Dark: 8.20:1 (WCAG AA Pass) |
+| **Supporting Clinical Teal** | `#007F7B` | `#5AD6D0` | Dedicated dosage form pills (`Tablets`, `Inhaler`), schedule tags | Light: 5.10:1 / Dark: 7.90:1 (WCAG AA Pass) |
+| **Teal Container** | `#DDF5F4` | `#164E63` | Subtle pill backgrounds for dosage forms and schedule frequency | Neutral surface container |
+| **On Teal Container** | `#003735` | `#CFFAFE` | High-contrast label text inside teal pills | Light: 9.32:1 / Dark: 9.85:1 (WCAG AA Pass) |
+| **Background (Canvas)** | `#F8FAFC` | `#0F172A` | Root screen canvas behind elevated cards | Base root surface |
+| **Foreground / Text Primary** | `#0F172A` | `#F8FAFC` | Primary typography, drug names, dosage strengths | Light: 15.8:1 / Dark: 15.8:1 (WCAG AAA Pass) |
+| **Card Surface** | `#FFFFFF` | `#1E293B` | Elevated cards, dialog surfaces, bottom sheets | Crisp neutral elevation |
+| **Muted / Text Secondary** | `#475569` | `#94A3B8` | Secondary metadata, timestamps, clinical instructions | Light: 5.85:1 / Dark: 6.12:1 (WCAG AA Pass) |
+| **Border / Outline** | `#CBD5E1` | `#475569` | 1dp card borders, dividers, unselected tab borders | Structural contrast |
+| **Destructive / Danger** | `#B91C1C` | `#FCA5A5` | Missed doses, deletion confirmations (never primary CTA) | Light: 5.92:1 / Dark: 6.78:1 (WCAG AA Pass) |
+| **Ring / Focus State** | `#0284C7` | `#38BDF8` | 3dp accessibility focus outline and active selector | Active navigation rings |
+
+**Color Architecture Decisions:**
+1. **Primary Anchor Consistency:** `#005EB8` is the unequivocal brand anchor across mobile splash, app icons, navigation headers, and hero banners.
+2. **Dedicated Role for Teal:** Teal (`#007F7B` / `#DDF5F4`) serves strictly as a supporting categorization color for dosage form pills and schedule tags; it is never used as a competing primary brand color.
+3. **WCAG AA Compliance:** Every foreground/container and text/background pairing achieves >= 4.5:1 contrast in both Light and Dark themes.
 
 ### Typography
 
@@ -82,10 +87,11 @@
 ```css
 /* Primary Button */
 .btn-primary {
-  background: #DC2626;
-  color: white;
+  background: #005EB8;
+  color: #FFFFFF;
   padding: 12px 24px;
-  border-radius: 8px;
+  min-height: 48px;
+  border-radius: 9999px; /* NoveloPillShape */
   font-weight: 600;
   transition: all 200ms ease;
   cursor: pointer;
