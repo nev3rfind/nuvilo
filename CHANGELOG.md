@@ -8,6 +8,17 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 8: Premium Product Experience & Complete UI/UX Overhaul (Refs #3)**:
+  - Added theme-aware semantic status color system (`NoveloSemanticColors`, `LocalNoveloColors`, `MaterialTheme.noveloColors`) in `Color.kt` and `Theme.kt` so all status badges, alert banners, stock pills, and calendar cells automatically resolve dark-mode or light-mode palettes with $\ge 5.2:1$ WCAG AA contrast.
+  - Added centralized shape (`Shape.kt`) and motion (`Motion.kt` / `NoveloMotion`) systems providing spring-based progress animations, screen transitions, Hero Dose -> Completed Day transitions, and collapsible section animations.
+  - Replaced single-scroll Add Medication dialog with a progressive-disclosure **3-Step Medication Wizard** (`1. Identity`, `2. Schedule`, `3. Stock`) featuring smart `MedicationForm` -> `StockUnit` defaulting, visual accent color swatches, weekday selector (`Mon–Sun`), preset + custom 24-hour (`HH:MM`) time picker, and regimen summary preview.
+  - Added in-place **Edit Medication** (`EditMedicationDialog`) and **Edit Schedule** (`EditScheduleDialog`) flows on `MedicationDetailScreen`, backed by `MedicationRepository.updateSchedule()` and automatic `AlarmScheduler` reconciliation.
+  - Added instant search and low-stock quick filter bar + segmented `Active / Archived` pill switcher on `MedicationListScreen`.
+  - Added live **Ledger Impact Preview** banners inside `RestockDialog`, `AdjustStockDialog`, and `CorrectDoseDialog` showing `Current Balance -> New Balance` and exact ledger movement deltas before confirmation.
+  - Added visual repeat progress bar (`LinearProgressIndicator`) in `PrescriptionOverviewSection` and vertical event timeline in `PrescriptionHistoryDialog`.
+  - Added chronological date section grouping (`Today`, `Yesterday`, `EEEE, d MMMM yyyy`) in `MedicationDoseHistoryScreen`.
+  - Added 3-column visual theme selector cards (`System`, `Light`, `Dark`) and collapsible `Reminder & Alarm Diagnostics` in `SettingsScreen`.
+  - Added complete UI/UX audit and design documentation in `docs/ui-ux-audit/` (`SCREEN_INVENTORY.md`, `ISSUES.md`, `DESIGN_SYSTEM.md`, `UX_DECISIONS.md`, `USER_JOURNEYS.md`, `FINAL_AUDIT.md`) and before/after screenshot evidence in `docs/screenshots/phase8/`.
 - **Phase 7.1: CI, Evidence & Signed Release Validation (Refs #1)**:
   - Added GitHub Actions CI workflow in `.github/workflows/ci.yml` supporting triggers on `main`, `release/**`, and `chore/1-phase-07-release-hardening` with jobs for unit tests, lint, release build, and zero-network manifest verification.
   - Formulated and published exact 24-point WCAG 2.1 Level AA Contrast Calculation Matrix in `docs/ACCESSIBILITY_AUDIT.md`. Remediated light mode status color pairs (`StatusTaken`, `StatusAssumed`, `StatusSkipped`, `StatusWarning`) in `Color.kt` to guarantee all pairs exceed the 4.5:1 threshold (5.02:1 to 7.58:1 in light mode, 5.23:1 to 8.25:1 in dark mode).

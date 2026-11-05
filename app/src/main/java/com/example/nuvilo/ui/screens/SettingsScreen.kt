@@ -1,43 +1,53 @@
 package com.example.nuvilo.ui.screens
 
-import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.FolderZip
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.TableView
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -47,43 +57,52 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.nuvilo.data.backup.BackupPreview
-import com.example.nuvilo.data.backup.NoveloDataBackup
 import com.example.nuvilo.data.preferences.ThemeMode
+import com.example.nuvilo.security.BiometricAuthManager
+import com.example.nuvilo.security.BiometricAuthResult
 import com.example.nuvilo.security.BiometricStatus
 import com.example.nuvilo.security.LockGracePeriod
-import com.example.nuvilo.ui.theme.StatusMissed
-import com.example.nuvilo.ui.theme.StatusTaken
-import com.example.nuvilo.ui.theme.StatusWarning
+import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.ExportState
 import com.example.nuvilo.ui.viewmodel.RestoreState
 import com.example.nuvilo.ui.viewmodel.SettingsViewModel
@@ -92,433 +111,360 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+private val EXPORT_TS_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
+private val FILE_TS_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val prefs by viewModel.userPreferences.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val restoreState by viewModel.restoreState.collectAsStateWithLifecycle()
+    val semantic = MaterialTheme.noveloColors
 
-    var showTestSentMessage by remember { mutableStateOf(false) }
-    val biometricStatus = remember { viewModel.getBiometricStatus() }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Dialog & Flow States
-    var showCreatePassphraseDialog by remember { mutableStateOf(false) }
+    var canExactAlarms by remember { mutableStateOf(viewModel.canScheduleExactAlarms()) }
+    var notificationsEnabled by remember { mutableStateOf(viewModel.areNotificationsEnabled()) }
+    var biometricStatus by remember { mutableStateOf(viewModel.getBiometricStatus()) }
+    var showTestSentMessage by rememberSaveable { mutableStateOf(false) }
+    var showReconcileSuccess by rememberSaveable { mutableStateOf(false) }
+    var biometricMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var diagnosticsExpanded by rememberSaveable { mutableStateOf(false) }
+
+    // Backup/Restore Dialog states
+    var showCreatePassphraseDialog by rememberSaveable { mutableStateOf(false) }
     var pendingExportPassphrase by remember { mutableStateOf<String?>(null) }
-    var showCsvExportConfirmDialog by remember { mutableStateOf(false) }
+    var showCsvExportConfirmDialog by rememberSaveable { mutableStateOf(false) }
 
     var decryptPassphraseInput by remember { mutableStateOf("") }
     var decryptPassphraseError by remember { mutableStateOf<String?>(null) }
 
-    // SAF File Pickers
+    // SAF Launchers
     val createJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
+    ) { uri: Uri? ->
         viewModel.setSystemDialogActive(false)
-        if (uri != null && pendingExportPassphrase != null) {
-            val passChars = pendingExportPassphrase!!.toCharArray()
-            pendingExportPassphrase = null
-            try {
-                val outputStream = context.contentResolver.openOutputStream(uri)
-                if (outputStream != null) {
-                    viewModel.exportEncryptedJson(passChars, outputStream)
-                }
-            } catch (e: Exception) {
-                // Handled in ViewModel
+        val pass = pendingExportPassphrase
+        pendingExportPassphrase = null
+        if (uri != null && pass != null) {
+            val out = context.contentResolver.openOutputStream(uri)
+            if (out != null) {
+                viewModel.exportEncryptedJson(pass.toCharArray(), out)
             }
         }
     }
 
     val createZipLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri ->
+    ) { uri: Uri? ->
         viewModel.setSystemDialogActive(false)
         if (uri != null) {
-            try {
-                val outputStream = context.contentResolver.openOutputStream(uri)
-                if (outputStream != null) {
-                    viewModel.exportCsvZip(outputStream)
-                }
-            } catch (e: Exception) {
-                // Handled in ViewModel
+            val out = context.contentResolver.openOutputStream(uri)
+            if (out != null) {
+                viewModel.exportCsvZip(out)
             }
         }
     }
 
     val openBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
+    ) { uri: Uri? ->
         viewModel.setSystemDialogActive(false)
         if (uri != null) {
             try {
+                val mime = context.contentResolver.getType(uri).orEmpty()
+                val isZipHint = mime.contains("zip", ignoreCase = true) || uri.toString().endsWith(".zip", ignoreCase = true)
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null) {
-                    val path = uri.path ?: ""
-                    val isZipHint = path.endsWith(".zip", ignoreCase = true)
                     viewModel.inspectImportFile(bytes, isZipHint)
                 }
-            } catch (e: Exception) {
-                // Handled in ViewModel
+            } catch (_: Exception) {
+                // Handled by ViewModel state
             }
         }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canExactAlarms = viewModel.canScheduleExactAlarms()
+                notificationsEnabled = viewModel.areNotificationsEnabled()
+                biometricStatus = viewModel.getBiometricStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.semantics { heading() }
-        )
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Status Banners for Export / Restore
-        when (val exp = exportState) {
-            is ExportState.InProgress -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Text(
-                            text = "Exporting data...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-            is ExportState.Success -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = StatusTaken.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, StatusTaken.copy(alpha = 0.4f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusTaken)
-                        Text(
-                            text = exp.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.resetExportState() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss")
-                        }
-                    }
-                }
-            }
-            is ExportState.Error -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                        Text(
-                            text = exp.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.resetExportState() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss")
-                        }
-                    }
-                }
-            }
-            else -> {}
+        Column {
+            Text(
+                text = "Settings & Privacy",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() }
+            )
+            Text(
+                text = "Appearance, biometric lock, encrypted local backups, and system health",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        when (val res = restoreState) {
-            is RestoreState.Validating -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Text(
-                            text = "Inspecting backup package...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-            is RestoreState.Restoring -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Text(
-                            text = "Restoring database transactionally...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-            is RestoreState.Success -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = StatusTaken.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, StatusTaken.copy(alpha = 0.4f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusTaken)
-                        Text(
-                            text = res.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.resetRestoreState() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss")
-                        }
-                    }
-                }
-            }
-            is RestoreState.Error -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                        Text(
-                            text = res.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.resetRestoreState() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss")
-                        }
-                    }
-                }
-            }
-            else -> {}
-        }
-
-        // Privacy Guarantee Banner
+        // 1. Appearance & Theme Selector Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
-                )
-                Column {
-                    Text(
-                        text = "100% Offline & Private",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Novelo requests zero network permissions. Your medication history is never transmitted to any cloud or third party.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-
-        // App Lock & Biometrics Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Fingerprint,
+                        imageVector = Icons.Default.DarkMode,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Text(
-                        text = "App Lock & Security",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            text = "Appearance & Theme",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Choose your preferred visual palette",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
-                // Biometric status indication
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val statusColor = when (biometricStatus) {
-                        BiometricStatus.AVAILABLE -> StatusTaken
-                        BiometricStatus.DEVICE_CREDENTIAL_ONLY -> StatusTaken
-                        BiometricStatus.NONE_ENROLLED -> StatusWarning
-                        BiometricStatus.NO_HARDWARE -> MaterialTheme.colorScheme.onSurfaceVariant
-                        BiometricStatus.UNAVAILABLE -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    val statusText = when (biometricStatus) {
-                        BiometricStatus.AVAILABLE -> "Biometrics (Fingerprint / Face) & Device PIN ready"
-                        BiometricStatus.DEVICE_CREDENTIAL_ONLY -> "Device PIN/Pattern/Password ready (No biometric enrolled)"
-                        BiometricStatus.NONE_ENROLLED -> "No screen lock or biometric enrolled on device"
-                        BiometricStatus.NO_HARDWARE -> "Biometric hardware unavailable (PIN fallback supported)"
-                        BiometricStatus.UNAVAILABLE -> "Authentication hardware unavailable"
-                    }
-                    val isReady = biometricStatus == BiometricStatus.AVAILABLE || biometricStatus == BiometricStatus.DEVICE_CREDENTIAL_ONLY
-                    Icon(
-                        imageVector = if (isReady) Icons.Default.CheckCircle else Icons.Default.Info,
-                        contentDescription = null,
-                        tint = statusColor,
-                        modifier = Modifier.size(16.dp)
+                    ThemeOptionCard(
+                        title = "System",
+                        subtitle = "Auto match",
+                        icon = Icons.Default.BrightnessAuto,
+                        selected = prefs.themeMode == ThemeMode.SYSTEM,
+                        onClick = { viewModel.setThemeMode(ThemeMode.SYSTEM) },
+                        modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = statusColor
+                    ThemeOptionCard(
+                        title = "Light",
+                        subtitle = "NHS Blue",
+                        icon = Icons.Default.LightMode,
+                        selected = prefs.themeMode == ThemeMode.LIGHT,
+                        onClick = { viewModel.setThemeMode(ThemeMode.LIGHT) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ThemeOptionCard(
+                        title = "Dark",
+                        subtitle = "Slate Navy",
+                        icon = Icons.Default.DarkMode,
+                        selected = prefs.themeMode == ThemeMode.DARK,
+                        onClick = { viewModel.setThemeMode(ThemeMode.DARK) },
+                        modifier = Modifier.weight(1f)
                     )
                 }
+            }
+        }
 
-                // App Lock Toggle
+        // 2. Privacy & Security Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column {
+                        Text(
+                            text = "Privacy & App Lock",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Protect sensitive prescription and adherence data on your device",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Biometric / Device Credential App Lock
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                         Text(
-                            text = "Require Biometric or Device PIN",
+                            text = "Biometric / Device Lock",
                             style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        val isAuthAvailable = biometricStatus == BiometricStatus.AVAILABLE ||
+                            biometricStatus == BiometricStatus.DEVICE_CREDENTIAL_ONLY
+                        val subText = when (biometricStatus) {
+                            BiometricStatus.AVAILABLE -> "Require fingerprint, face, or device PIN to open Novelo."
+                            BiometricStatus.DEVICE_CREDENTIAL_ONLY -> "Require device PIN, pattern, or password to open Novelo."
+                            BiometricStatus.NONE_ENROLLED -> "No biometric or screen lock enrolled in Android Settings."
+                            BiometricStatus.NO_HARDWARE, BiometricStatus.UNAVAILABLE -> "Device security authentication is unavailable on this device."
+                        }
                         Text(
-                            text = "Locks Novelo when leaving the application. Uses fingerprint, face, or system PIN.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = subText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isAuthAvailable) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                semantic.warning
+                            }
                         )
                     }
+                    val isAuthAvailable = biometricStatus == BiometricStatus.AVAILABLE ||
+                        biometricStatus == BiometricStatus.DEVICE_CREDENTIAL_ONLY
                     Switch(
                         checked = prefs.isBiometricLockEnabled,
-                        onCheckedChange = { viewModel.setBiometricLock(it) }
+                        enabled = isAuthAvailable || prefs.isBiometricLockEnabled,
+                        onCheckedChange = { wantEnabled ->
+                            biometricMessage = null
+                            if (!wantEnabled) {
+                                viewModel.setBiometricLock(false)
+                            } else {
+                                val activity = context as? FragmentActivity
+                                if (activity != null && isAuthAvailable) {
+                                    viewModel.setSystemDialogActive(true)
+                                    val authManager = BiometricAuthManager(context)
+                                    authManager.authenticate(
+                                        activity = activity,
+                                        onResult = { result ->
+                                            viewModel.setSystemDialogActive(false)
+                                            when (result) {
+                                                is BiometricAuthResult.Success -> {
+                                                    viewModel.setBiometricLock(true)
+                                                    biometricMessage = "App Lock enabled"
+                                                }
+                                                is BiometricAuthResult.Failed -> {
+                                                    biometricMessage = result.message
+                                                }
+                                                is BiometricAuthResult.Error -> {
+                                                    biometricMessage = result.errString.toString()
+                                                }
+                                                is BiometricAuthResult.Cancelled -> {}
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    biometricMessage = "Please set up a screen lock or fingerprint in Android Settings first."
+                                }
+                            }
+                        }
+                    )
+                }
+
+                if (biometricStatus == BiometricStatus.NONE_ENROLLED) {
+                    OutlinedButton(
+                        onClick = {
+                            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                Intent(Settings.ACTION_BIOMETRIC_ENROLL)
+                            } else {
+                                Intent(Settings.ACTION_SECURITY_SETTINGS)
+                            }
+                            context.startActivity(intent)
+                        },
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Enrol Biometrics / Screen Lock")
+                    }
+                }
+
+                if (biometricMessage != null) {
+                    Text(
+                        text = biometricMessage!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
                 if (prefs.isBiometricLockEnabled) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    // Grace Period Options
-                    Text(
-                        text = "Automatic Lock Grace Period",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Time elapsed after leaving Novelo before the app re-locks:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        LockGracePeriod.values().forEach { period ->
-                            val selected = prefs.lockGracePeriod == period
-                            FilterChip(
-                                selected = selected,
-                                onClick = { viewModel.setLockGracePeriod(period) },
-                                label = { Text(period.displayName) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Auto-Lock Grace Period",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            LockGracePeriod.entries.forEach { period ->
+                                FilterChip(
+                                    selected = prefs.lockGracePeriod == period,
+                                    onClick = { viewModel.setLockGracePeriod(period) },
+                                    label = { Text(period.displayName) }
                                 )
-                            )
+                            }
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                    // Recents Masking Toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                             Text(
-                                text = "Mask in Android Recents",
+                                text = "Mask App Switcher Preview",
                                 style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Hides medication content when switching apps by applying secure window flag.",
-                                style = MaterialTheme.typography.bodyMedium,
+                                text = "Applies FLAG_SECURE to hide screen previews in recent apps.",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -528,161 +474,25 @@ fun SettingsScreen(
                         )
                     }
                 }
-            }
-        }
 
-        // Local Data & Backup Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.FolderZip,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Local Data & Offline Backup",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                Text(
-                    text = "Novelo stores all data strictly on your device. Use local backups to safeguard your medication logs or transfer them to another device via USB, SD card, or local storage.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Last Export Timestamp
-                val lastExportEpoch = prefs.lastExportEpochMs
-                val lastExportStr = if (lastExportEpoch > 0L) {
-                    val dt = Instant.ofEpochMilli(lastExportEpoch).atZone(ZoneId.systemDefault())
-                    dt.format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm"))
-                } else {
-                    "Never exported"
-                }
-
+                // Notification Privacy Mode
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Last Export:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = lastExportStr,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                // Action 1: Encrypted JSON Backup
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(
-                        onClick = { showCreatePassphraseDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Create Encrypted Backup (JSON)")
-                    }
-                    Text(
-                        text = "Protected with AES-256-GCM and PBKDF2 encryption using your personal passphrase.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Action 2: CSV ZIP Export
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    OutlinedButton(
-                        onClick = { showCsvExportConfirmDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export CSV Bundle (ZIP)")
-                    }
-                    Text(
-                        text = "Plain CSV files readable by spreadsheet tools (Excel, Sheets). Unencrypted.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Action 3: Restore Data
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.setSystemDialogActive(true)
-                            openBackupLauncher.launch(arrayOf("application/json", "application/zip", "application/octet-stream", "*/*"))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Restore from Backup")
-                    }
-                    Text(
-                        text = "Restores medications, schedules, adherence logs, stock lots, and prescriptions.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        // Notification Privacy Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.VisibilityOff,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Notification Privacy",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                         Text(
-                            text = "Mask Notification Details",
+                            text = "Mask Lock-Screen Notifications",
                             style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Hides medication names on lock screens to protect health privacy.",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "Hides medication names and dose strengths on reminders ('You have a scheduled medication reminder').",
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -694,216 +504,389 @@ fun SettingsScreen(
             }
         }
 
-        // Reminder Engine & Diagnostics Card
+        // 3. Local Data Backup & Restore (SAF)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.NotificationsActive,
+                        imageVector = Icons.Default.Restore,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Text(
-                        text = "Reminders & Diagnostics",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                val notificationsEnabled = viewModel.areNotificationsEnabled()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Notification System Permission", style = MaterialTheme.typography.bodyLarge)
+                    Column {
                         Text(
-                            text = if (notificationsEnabled) "Granted (Alerts will appear)" else "Disabled in system settings",
+                            text = "Local Data Backup & Restore",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val lastExportText = prefs.lastExportEpochMs.takeIf { it > 0L }?.let { ts ->
+                            val dt = Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault())
+                            "Last backup: ${dt.format(EXPORT_TS_FORMATTER)}"
+                        } ?: "No local backup exported yet"
+                        Text(
+                            text = lastExportText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (notificationsEnabled) StatusTaken else StatusWarning
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
-                    Icon(
-                        imageVector = if (notificationsEnabled) Icons.Default.CheckCircle else Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = if (notificationsEnabled) StatusTaken else StatusWarning
-                    )
                 }
 
-                val exactAlarmsAllowed = viewModel.canScheduleExactAlarms()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Option A: Encrypted Full Backup Card
+                BackupFormatCard(
+                    icon = Icons.Default.Lock,
+                    badge = "RECOMMENDED FOR MIGRATION",
+                    title = "Encrypted JSON Backup (.novelo.json)",
+                    description = "Protects medications, schedules, doses, stock ledger, and prescriptions with AES-256-GCM + PBKDF2 passphrase encryption.",
+                    buttonLabel = "Export Encrypted Backup",
+                    isPrimary = true,
+                    onClick = {
+                        viewModel.resetExportState()
+                        showCreatePassphraseDialog = true
+                    }
+                )
+
+                // Option B: Readable CSV ZIP Archive Card
+                BackupFormatCard(
+                    icon = Icons.Default.TableView,
+                    badge = "UNENCRYPTED SPREADSHEET BUNDLE",
+                    title = "Readable CSV Archive (.zip)",
+                    description = "Exports 6 human-readable CSV tables for personal spreadsheet review or clinical printing.",
+                    buttonLabel = "Export CSV Bundle (.zip)",
+                    isPrimary = false,
+                    onClick = {
+                        viewModel.resetExportState()
+                        showCsvExportConfirmDialog = true
+                    }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                FilledTonalButton(
+                    onClick = {
+                        viewModel.resetRestoreState()
+                        viewModel.setSystemDialogActive(true)
+                        openBackupLauncher.launch(arrayOf("*/*"))
+                    },
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Exact Alarm Scheduling", style = MaterialTheme.typography.bodyLarge)
+                    Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Import & Restore from Backup File", style = MaterialTheme.typography.labelLarge)
+                }
+
+                // Export / Restore Status Feedback
+                when (val s = exportState) {
+                    is ExportState.InProgress -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text("Exporting backup...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    is ExportState.Success -> {
                         Text(
-                            text = if (exactAlarmsAllowed) "Permitted (Precise dose timing active)" else "Restricted (System may delay reminders)",
+                            text = s.message,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (exactAlarmsAllowed) StatusTaken else StatusWarning
+                            color = semantic.taken,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-                    Icon(
-                        imageVector = if (exactAlarmsAllowed) Icons.Default.CheckCircle else Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = if (exactAlarmsAllowed) StatusTaken else StatusWarning
-                    )
+                    is ExportState.Error -> {
+                        Text(
+                            text = s.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = semantic.missed,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    ExportState.Idle -> {}
                 }
 
-                val lastRecon = prefs.lastReconciliationEpochMs
-                val lastReconStr = if (lastRecon > 0L) {
-                    val dt = Instant.ofEpochMilli(lastRecon).atZone(ZoneId.systemDefault())
-                    dt.format(DateTimeFormatter.ofPattern("EEE, d MMM · HH:mm"))
-                } else {
-                    "Not reconciled yet"
+                when (val r = restoreState) {
+                    is RestoreState.Validating, is RestoreState.Restoring -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(
+                                text = if (r is RestoreState.Validating) "Validating backup file..." else "Restoring database...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    is RestoreState.Success -> {
+                        Text(
+                            text = r.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = semantic.taken,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    is RestoreState.Error -> {
+                        Text(
+                            text = r.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = semantic.missed,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    else -> {}
                 }
+            }
+        }
 
+        // 4. Collapsible System & Reminder Diagnostics
+        val chevronRotation by animateFloatAsState(
+            targetValue = if (diagnosticsExpanded) 180f else 0f,
+            animationSpec = NoveloMotion.standardFloatSpring(),
+            label = "diagnosticsChevron"
+        )
+        val allHealthy = canExactAlarms && notificationsEnabled
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            onClick = { diagnosticsExpanded = !diagnosticsExpanded },
+                            role = Role.Button
+                        )
+                        .padding(18.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Last Alarms Reconciliation:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = if (allHealthy) MaterialTheme.colorScheme.primary else semantic.warning
+                        )
+                        Column {
+                            Text(
+                                text = "Reminder & Alarm Diagnostics",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (allHealthy) {
+                                    "All reminder permissions and exact alarms healthy"
+                                } else {
+                                    "Action needed: Check alarm or notification permissions"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (allHealthy) semantic.taken else semantic.warning
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = if (diagnosticsExpanded) "Collapse diagnostics" else "Expand diagnostics",
+                        modifier = Modifier.rotate(chevronRotation),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = diagnosticsExpanded || !allHealthy,
+                    enter = NoveloMotion.sectionExpand(),
+                    exit = NoveloMotion.sectionCollapse()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        DiagnosticRow(
+                            title = "Exact Alarm Permission",
+                            isHealthy = canExactAlarms,
+                            healthyLabel = "Granted (Exact timing active)",
+                            warningLabel = "Restricted (Tap to grant exact alarm access)"
+                        )
+                        if (!canExactAlarms && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                        data = Uri.parse("package:${context.packageName}")
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Grant Exact Alarm Permission")
+                            }
+                        }
+
+                        DiagnosticRow(
+                            title = "Notification Channels",
+                            isHealthy = notificationsEnabled,
+                            healthyLabel = "Enabled",
+                            warningLabel = "Blocked in System Settings"
+                        )
+                        if (!notificationsEnabled) {
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Open Notification Settings")
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.reconcileReminders()
+                                    showReconcileSuccess = true
+                                },
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 44.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Reconcile", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.triggerTestNotification()
+                                    showTestSentMessage = true
+                                },
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 44.dp)
+                            ) {
+                                Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Test Alert", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+
+                        if (showReconcileSuccess) {
+                            Text(
+                                text = "Upcoming alarms reconciled with active schedules.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = semantic.taken,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (showTestSentMessage) {
+                            Text(
+                                text = "Test notification dispatched! Check your notification shade.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = semantic.taken,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. About Novelo Footer
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = lastReconStr,
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Novelo 1.0 · Medication, made manageable.",
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { viewModel.reconcileReminders() },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(imageVector = Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.size(4.dp))
-                        Text("Sync Alarms", style = MaterialTheme.typography.labelSmall)
-                    }
-
-                    Button(
-                        onClick = {
-                            viewModel.triggerTestNotification()
-                            showTestSentMessage = true
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(imageVector = Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.size(4.dp))
-                        Text("Test Alert", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-
-                if (showTestSentMessage) {
-                    Text(
-                        text = "Test notification sent! Check your notification drawer.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = StatusTaken,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Text(
+                    text = "100% Offline SQLite Room · Zero Network Permissions · AES-256-GCM Backup",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
 
-        // Appearance Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(imageVector = Icons.Default.DarkMode, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text(
-                        text = "Appearance",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Follow System Theme", style = MaterialTheme.typography.bodyLarge)
-                    RadioButton(
-                        selected = prefs.themeMode == ThemeMode.SYSTEM,
-                        onClick = { viewModel.setThemeMode(ThemeMode.SYSTEM) }
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Light Mode (NHS Blue)", style = MaterialTheme.typography.bodyLarge)
-                    RadioButton(
-                        selected = prefs.themeMode == ThemeMode.LIGHT,
-                        onClick = { viewModel.setThemeMode(ThemeMode.LIGHT) }
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Dark Mode (Slate Navy)", style = MaterialTheme.typography.bodyLarge)
-                    RadioButton(
-                        selected = prefs.themeMode == ThemeMode.DARK,
-                        onClick = { viewModel.setThemeMode(ThemeMode.DARK) }
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            text = "Novelo 1.0 (Phase 6 Privacy & Security)\nOffline SQLite Room · Zero Network Guarantee",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Spacer(modifier = Modifier.height(24.dp))
     }
 
     // Passphrase Creation Dialog for Encrypted JSON Backup
     if (showCreatePassphraseDialog) {
-        var passphrase by remember { mutableStateOf("") }
-        var confirmPassphrase by remember { mutableStateOf("") }
-        var errorMessage by remember { mutableStateOf<String?>(null) }
-        var showPassphrase by remember { mutableStateOf(false) }
+        var passphrase by rememberSaveable { mutableStateOf("") }
+        var confirmPassphrase by rememberSaveable { mutableStateOf("") }
+        var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+        var showPassphrase by rememberSaveable { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showCreatePassphraseDialog = false },
             icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Set Backup Passphrase") },
+            title = { Text("Encrypt Backup File", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Your backup will be encrypted with AES-256-GCM. You will need this passphrase to restore your data. Novelo cannot recover forgotten passphrases.",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "Your backup will be encrypted using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation. Keep this passphrase safe — Novelo operates offline and cannot recover forgotten passphrases.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     OutlinedTextField(
@@ -959,7 +942,7 @@ fun SettingsScreen(
                         } else {
                             pendingExportPassphrase = passphrase
                             showCreatePassphraseDialog = false
-                            val timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now())
+                            val timestamp = FILE_TS_FORMATTER.format(LocalDateTime.now())
                             viewModel.setSystemDialogActive(true)
                             createJsonLauncher.launch("novelo_backup_$timestamp.novelo.json")
                         }
@@ -980,11 +963,11 @@ fun SettingsScreen(
     if (showCsvExportConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showCsvExportConfirmDialog = false },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = StatusWarning) },
-            title = { Text("Export Unencrypted CSV?") },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = semantic.warning) },
+            title = { Text("Export Unencrypted CSV Archive?", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    text = "CSV bundle files are unencrypted plain text. Anyone with access to the exported ZIP file can view your medication schedules and adherence history.\n\nOnly export if you are importing into spreadsheets or trusted tools on a secure device.",
+                    text = "CSV archives are unencrypted plain text so you can open them in spreadsheet software. Anyone with access to the exported ZIP file can read your medication names, schedules, and adherence logs.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -992,7 +975,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         showCsvExportConfirmDialog = false
-                        val timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now())
+                        val timestamp = FILE_TS_FORMATTER.format(LocalDateTime.now())
                         viewModel.setSystemDialogActive(true)
                         createZipLauncher.launch("novelo_export_$timestamp.zip")
                     }
@@ -1016,11 +999,11 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { viewModel.resetRestoreState() },
             icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Enter Backup Passphrase") },
+            title = { Text("Unlock Encrypted Backup", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "This backup is encrypted with AES-256-GCM. Enter the passphrase created when this backup was exported:",
+                        text = "This backup is protected with AES-256-GCM encryption. Enter the passphrase used when it was exported:",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
@@ -1089,7 +1072,7 @@ fun SettingsScreen(
 
         val exportTimeStr = if (preview.exportTimestampEpochMs > 0L) {
             val dt = Instant.ofEpochMilli(preview.exportTimestampEpochMs).atZone(ZoneId.systemDefault())
-            dt.format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm"))
+            dt.format(EXPORT_TS_FORMATTER)
         } else {
             "Unknown"
         }
@@ -1097,52 +1080,48 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { viewModel.resetRestoreState() },
             icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Restore Confirmation") },
+            title = { Text("Validated Backup Preview", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "The backup file has been validated. Inspect the contents below before proceeding:",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "All referential integrity and ledger checks passed. Review the contents before restoring:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Card(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Exported:", style = MaterialTheme.typography.labelSmall)
-                                Text(exportTimeStr, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Medications:", style = MaterialTheme.typography.labelSmall)
-                                Text("${preview.medicationCount}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Schedules:", style = MaterialTheme.typography.labelSmall)
-                                Text("${preview.scheduleCount}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Dose Records:", style = MaterialTheme.typography.labelSmall)
-                                Text("${preview.doseEventCount}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Stock Lots & Ledger:", style = MaterialTheme.typography.labelSmall)
-                                Text("${preview.stockLotCount} lots, ${preview.stockLedgerEntryCount} movements", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Prescriptions:", style = MaterialTheme.typography.labelSmall)
-                                Text("${preview.prescriptionCount}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            PreviewRow("Exported Date", exportTimeStr)
+                            PreviewRow("Medications", "${preview.medicationCount}")
+                            PreviewRow("Schedules", "${preview.scheduleCount}")
+                            PreviewRow("Dose Records", "${preview.doseEventCount}")
+                            PreviewRow("Stock Lots", "${preview.stockLotCount}")
+                            PreviewRow("Ledger Entries", "${preview.stockLedgerEntryCount}")
+                            PreviewRow("Prescriptions", "${preview.prescriptionCount}")
                         }
                     }
 
-                    Text(
-                        text = "Caution: Restoring will overwrite all existing medication data, schedules, and history on this device. This action cannot be undone.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = StatusMissed,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = semantic.missedContainer,
+                        border = BorderStroke(1.dp, semantic.missedBorder)
+                    ) {
+                        Text(
+                            text = "Replacement Warning: Restoring will atomically replace all current medications, schedules, and history on this device. This cannot be undone.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = semantic.missed,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -1158,6 +1137,211 @@ fun SettingsScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun ThemeOptionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onClick, role = Role.RadioButton),
+        shape = MaterialTheme.shapes.medium,
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (selected) Icons.Default.Check else icon,
+                    contentDescription = null,
+                    tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackupFormatCard(
+    icon: ImageVector,
+    badge: String,
+    title: String,
+    description: String,
+    buttonLabel: String,
+    isPrimary: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = if (isPrimary) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        },
+        border = BorderStroke(
+            1.dp,
+            if (isPrimary) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(15.dp)
+                )
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (isPrimary) {
+                Button(
+                    onClick = onClick,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 46.dp)
+                ) {
+                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(buttonLabel, style = MaterialTheme.typography.labelLarge)
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onClick,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 46.dp)
+                ) {
+                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(buttonLabel, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticRow(
+    title: String,
+    isHealthy: Boolean,
+    healthyLabel: String,
+    warningLabel: String
+) {
+    val semantic = MaterialTheme.noveloColors
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (isHealthy) healthyLabel else warningLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isHealthy) semantic.taken else semantic.warning
+            )
+        }
+        Icon(
+            imageVector = if (isHealthy) Icons.Default.CheckCircle else Icons.Default.Warning,
+            contentDescription = if (isHealthy) "Healthy" else "Warning",
+            tint = if (isHealthy) semantic.taken else semantic.warning,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun PreviewRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

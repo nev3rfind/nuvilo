@@ -1,5 +1,8 @@
 package com.example.nuvilo.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,55 +28,54 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.adherence.AdherenceSummary
 import com.example.nuvilo.domain.adherence.DailyAdherenceRecord
 import com.example.nuvilo.domain.adherence.MonthlyCalendarData
 import com.example.nuvilo.domain.adherence.ResolvedDoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.ui.components.DoseStatusBadge
-import com.example.nuvilo.ui.theme.StatusAssumed
-import com.example.nuvilo.ui.theme.StatusAssumedContainer
-import com.example.nuvilo.ui.theme.StatusMissed
-import com.example.nuvilo.ui.theme.StatusMissedContainer
-import com.example.nuvilo.ui.theme.StatusSkipped
-import com.example.nuvilo.ui.theme.StatusSkippedContainer
-import com.example.nuvilo.ui.theme.StatusTaken
-import com.example.nuvilo.ui.theme.StatusTakenContainer
+import com.example.nuvilo.ui.components.EmptyStateCard
+import com.example.nuvilo.ui.components.SectionHeader
+import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.AdherenceCalendarViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -80,328 +83,219 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+private val MONTH_YEAR_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM yyyy")
+private val SELECTED_DAY_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
+private val CELL_DATE_A11Y_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM")
+private val TIME_ONLY_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
 @Composable
 fun AdherenceCalendarScreen(
     viewModel: AdherenceCalendarViewModel,
-    onMedicationClick: (String) -> Unit,
+    onSelectMedication: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showMethodologyInfo by rememberSaveable { mutableStateOf(false) }
 
-    if (uiState.isLoading) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-        }
-        return
-    }
-
-    LazyColumn(
+    Scaffold(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Adherence & Calendar",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.semantics { heading() }
-                )
-                Text(
-                    text = "Track confirmed, assumed, skipped, and missed doses across your schedule.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        if (!uiState.hasAnyScheduleOrHistory) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Text(
-                            text = "No Adherence History Yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Add a medication schedule in the Medications tab to start tracking daily, weekly, and monthly adherence.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-        } else {
-            // 1. Quick Period Overview Row (Today, 7-Day, Month)
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    QuickRateTile(
-                        title = "Today",
-                        summary = uiState.todaySummary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    QuickRateTile(
-                        title = "Last 7 Days",
-                        summary = uiState.weeklySummary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    QuickRateTile(
-                        title = "Selected Month",
-                        summary = uiState.monthlySummary,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            // 2. Selected Period Analytics & Calculation Breakdown Card
-            item {
-                uiState.selectedPeriodSummary?.let { periodSummary ->
-                    PeriodAnalyticsCard(
-                        summary = periodSummary,
-                        selectedDays = uiState.selectedPeriodDays,
-                        onSelectDays = viewModel::onSelectPeriodDays
-                    )
-                }
-            }
-
-            // 3. Monthly Calendar Card
-            item {
-                uiState.calendarData?.let { calendarData ->
-                    MonthlyCalendarCard(
-                        calendarData = calendarData,
-                        selectedDate = uiState.selectedDate,
-                        onPreviousMonth = viewModel::onPreviousMonth,
-                        onNextMonth = viewModel::onNextMonth,
-                        onJumpToToday = viewModel::onJumpToToday,
-                        onSelectDate = viewModel::onSelectDate
-                    )
-                }
-            }
-
-            // 4. Selected Date Schedule & Recorded Outcomes
-            item {
-                val dateFmt = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
-                Text(
-                    text = uiState.selectedDate.format(dateFmt),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-
-            val dayOccurrences = uiState.selectedDayRecord?.occurrences.orEmpty()
-            if (dayOccurrences.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Text(
-                            text = "No scheduled or recorded doses on this date.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            } else {
-                items(dayOccurrences, key = { it.occurrence.occurrenceId }) { resolved ->
-                    CalendarDayOccurrenceCard(
-                        resolved = resolved,
-                        onClick = { onMedicationClick(resolved.occurrence.medicationId) },
-                        onTake = { viewModel.onTakeDose(resolved.occurrence) },
-                        onSkip = { viewModel.onSkipDose(resolved.occurrence) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickRateTile(
-    title: String,
-    summary: AdherenceSummary?,
-    modifier: Modifier = Modifier
-) {
-    val pctText = summary?.adherencePercentage?.let { "$it%" } ?: "—"
-    val subText = if (summary != null && summary.eligibleOccurrencesCount > 0) {
-        "${summary.adherentCount}/${summary.eligibleOccurrencesCount} doses"
-    } else {
-        "No past doses"
-    }
-
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = pctText,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = subText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+            Spacer(modifier = Modifier.height(12.dp))
 
-@Composable
-private fun PeriodAnalyticsCard(
-    summary: AdherenceSummary,
-    selectedDays: Int,
-    onSelectDays: (Int) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
-                        text = "Period Adherence Breakdown",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "Adherence & History",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() }
                     )
                     Text(
-                        text = if (summary.adherencePercentage != null) {
-                            "${summary.adherencePercentage}% overall (${summary.confirmedOnlyPercentage ?: 0}% confirmed)"
-                        } else {
-                            "No eligible past doses in period"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                        text = "Monthly schedule outcomes & verified vs assumed adherence",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(14, 30, 90).forEach { days ->
-                        FilterChip(
-                            selected = selectedDays == days,
-                            onClick = { onSelectDays(days) },
-                            label = { Text("${days}d") }
-                        )
+                TextButton(
+                    onClick = { viewModel.onJumpToToday() },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Today,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Today", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            when {
+                uiState.isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                !uiState.hasAnyScheduleOrHistory -> {
+                    EmptyStateCard(
+                        icon = Icons.Default.CalendarMonth,
+                        title = "No Adherence Data Yet",
+                        description = "Add a medication and schedule in the Medications tab to start tracking your daily and monthly adherence."
+                    )
+                }
+                else -> {
+                    val dayRecord = uiState.selectedDayRecord
+                    val dayFormatStr = uiState.selectedDate.format(SELECTED_DAY_FORMATTER)
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(bottom = 28.dp)
+                    ) {
+                        // 1. Period Summary Strip + Period Selector
+                        item(key = "summary_strip", contentType = "summary_strip") {
+                            AdherenceOverviewStrip(
+                                todaySummary = uiState.todaySummary,
+                                weeklySummary = uiState.weeklySummary,
+                                periodSummary = uiState.selectedPeriodSummary,
+                                selectedPeriodDays = uiState.selectedPeriodDays,
+                                onSelectPeriodDays = { viewModel.onSelectPeriodDays(it) }
+                            )
+                        }
+
+                        // 2. Monthly Calendar Card with Animated Month Transitions
+                        val calendarData = uiState.calendarData
+                        if (calendarData != null) {
+                            item(key = "calendar_card", contentType = "calendar_card") {
+                                MonthlyCalendarCard(
+                                    calendarData = calendarData,
+                                    selectedDate = uiState.selectedDate,
+                                    onPreviousMonth = { viewModel.onPreviousMonth() },
+                                    onNextMonth = { viewModel.onNextMonth() },
+                                    onSelectDate = { viewModel.onSelectDate(it) }
+                                )
+                            }
+                        }
+
+                        // 3. Selected Day Breakdown Header & Summary
+                        item(key = "selected_day_header", contentType = "section_header") {
+                            SectionHeader(
+                                title = dayFormatStr,
+                                subtitle = dayRecord?.let { rec ->
+                                    if (rec.totalScheduledCount == 0) {
+                                        "No scheduled doses on this date"
+                                    } else {
+                                        "${rec.confirmedCount} confirmed · ${rec.assumedCount} assumed · ${rec.skippedCount} skipped · ${rec.missedCount} missed"
+                                    }
+                                }
+                            )
+                        }
+
+                        if (dayRecord == null || dayRecord.occurrences.isEmpty()) {
+                            item(key = "empty_day_card", contentType = "empty_day") {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.medium,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    Text(
+                                        text = "No doses were scheduled for this date.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(18.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            items(
+                                items = dayRecord.occurrences,
+                                key = { it.occurrence.occurrenceId },
+                                contentType = { "calendar_day_occurrence" }
+                            ) { resolved ->
+                                CalendarDayOccurrenceCard(
+                                    resolved = resolved,
+                                    isToday = uiState.selectedDate == LocalDate.now(),
+                                    onTakeClick = { viewModel.onTakeDose(resolved.occurrence) },
+                                    onSkipClick = { viewModel.onSkipDose(resolved.occurrence) },
+                                    onOpenMedicationClick = { onSelectMedication(resolved.occurrence.medicationId) }
+                                )
+                            }
+                        }
+
+                        // 4. Collapsible Calculation Methodology Card
+                        item(key = "calculation_note", contentType = "methodology_card") {
+                            CollapsibleMethodologyCard(
+                                expanded = showMethodologyInfo,
+                                onToggle = { showMethodologyInfo = !showMethodologyInfo }
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
 
-            // Outcome Counts Grid (Confirmed, Assumed, Skipped, Missed)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutcomeCountPill(
-                    label = "Confirmed",
-                    count = summary.confirmedCount,
-                    icon = Icons.Default.Check,
-                    tint = StatusTaken,
-                    bg = StatusTakenContainer,
-                    modifier = Modifier.weight(1f)
-                )
-                OutcomeCountPill(
-                    label = "Assumed",
-                    count = summary.assumedCount,
-                    icon = Icons.Default.Schedule,
-                    tint = StatusAssumed,
-                    bg = StatusAssumedContainer,
-                    modifier = Modifier.weight(1f)
-                )
-                OutcomeCountPill(
-                    label = "Skipped",
-                    count = summary.skippedCount,
-                    icon = Icons.Default.Close,
-                    tint = StatusSkipped,
-                    bg = StatusSkippedContainer,
-                    modifier = Modifier.weight(1f)
-                )
-                OutcomeCountPill(
-                    label = "Missed",
-                    count = summary.missedCount,
-                    icon = Icons.Default.Warning,
-                    tint = StatusMissed,
-                    bg = StatusMissedContainer,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+@Composable
+private fun AdherenceOverviewStrip(
+    todaySummary: AdherenceSummary?,
+    weeklySummary: AdherenceSummary?,
+    periodSummary: AdherenceSummary?,
+    selectedPeriodDays: Int,
+    onSelectPeriodDays: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MetricSummaryCard(
+                title = "Today",
+                summary = todaySummary,
+                modifier = Modifier.weight(1f)
+            )
+            MetricSummaryCard(
+                title = "Last 7 Days",
+                summary = weeklySummary,
+                modifier = Modifier.weight(1f)
+            )
+            MetricSummaryCard(
+                title = "Last $selectedPeriodDays Days",
+                summary = periodSummary,
+                modifier = Modifier.weight(1f)
+            )
+        }
 
-            // Calculation Explanation Box
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .padding(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = summary.explanation,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Rolling Window:",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            listOf(7, 14, 30, 90).forEach { days ->
+                FilterChip(
+                    selected = selectedPeriodDays == days,
+                    onClick = { onSelectPeriodDays(days) },
+                    label = { Text("${days}D") }
                 )
             }
         }
@@ -409,44 +303,59 @@ private fun PeriodAnalyticsCard(
 }
 
 @Composable
-private fun OutcomeCountPill(
-    label: String,
-    count: Int,
-    icon: ImageVector,
-    tint: Color,
-    bg: Color,
+private fun MetricSummaryCard(
+    title: String,
+    summary: AdherenceSummary?,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .padding(vertical = 8.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+    val semantic = MaterialTheme.noveloColors
+    val pctText = summary?.adherencePercentage?.let { "$it%" } ?: "—"
+    val detailText = if (summary == null || summary.eligibleOccurrencesCount == 0) {
+        "No due doses"
+    } else if (summary.assumedCount > 0) {
+        "${summary.confirmedCount}v + ${summary.assumedCount}a / ${summary.eligibleOccurrencesCount}"
+    } else {
+        "${summary.confirmedCount}/${summary.eligibleOccurrencesCount} taken"
+    }
+
+    val pctColor = when (val pct = summary?.adherencePercentage) {
+        null -> MaterialTheme.colorScheme.onSurfaceVariant
+        in 85..100 -> semantic.taken
+        in 60..84 -> semantic.warning
+        else -> semantic.missed
+    }
+
+    Card(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(14.dp)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = tint
+                text = pctText,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = pctColor
+            )
+            Text(
+                text = detailText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = tint
-        )
     }
 }
 
@@ -456,29 +365,24 @@ private fun MonthlyCalendarCard(
     selectedDate: LocalDate,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    onJumpToToday: () -> Unit,
     onSelectDate: (LocalDate) -> Unit
 ) {
-    val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy")
-    val firstDayOfMonth = calendarData.yearMonth.atDay(1)
-    // Monday = 1 .. Sunday = 7 -> leading empty cells = dayOfWeek.value - 1
-    val leadingEmptyCells = firstDayOfMonth.dayOfWeek.value - 1
-    val daysInMonth = calendarData.yearMonth.lengthOfMonth()
-    val totalCells = leadingEmptyCells + daysInMonth
-    val rows = (totalCells + 6) / 7
+    val yearMonth = calendarData.yearMonth
+    val today = LocalDate.now()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Month Header with Navigation
+            // Month Switcher Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -493,108 +397,232 @@ private fun MonthlyCalendarCard(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = firstDayOfMonth.format(monthFmt),
+                        text = yearMonth.format(MONTH_YEAR_FORMATTER),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    val mSummary = calendarData.monthSummary
-                    Text(
-                        text = if (mSummary.adherencePercentage != null) {
-                            "Monthly adherence: ${mSummary.adherencePercentage}% (${mSummary.confirmedCount}✓ ${mSummary.assumedCount}~ ${mSummary.skippedCount}× ${mSummary.missedCount}!)"
-                        } else {
-                            "No past scheduled doses this month"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onJumpToToday) {
-                        Text("Today", style = MaterialTheme.typography.labelMedium)
-                    }
-                    IconButton(onClick = onNextMonth) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = "Next month"
+                    val monthPct = calendarData.monthSummary.adherencePercentage
+                    if (monthPct != null) {
+                        Text(
+                            text = "Monthly Adherence: $monthPct%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-            }
 
-            // Accessible Legend (Symbols + Labels, not colour alone)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                LegendItem(symbol = "✓", label = "Confirmed", color = StatusTaken)
-                LegendItem(symbol = "~", label = "Assumed", color = StatusAssumed)
-                LegendItem(symbol = "×", label = "Skipped", color = StatusSkipped)
-                LegendItem(symbol = "!", label = "Missed", color = StatusMissed)
-            }
-
-            // Weekday Header Row
-            Row(modifier = Modifier.fillMaxWidth()) {
-                listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { dayName ->
-                    Text(
-                        text = dayName,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f)
+                IconButton(onClick = onNextMonth) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Next month"
                     )
                 }
             }
 
-            // Calendar Grid Rows
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (row in 0 until rows) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        for (col in 0 until 7) {
-                            val cellIndex = row * 7 + col
-                            val dayOfMonth = cellIndex - leadingEmptyCells + 1
-                            if (dayOfMonth in 1..daysInMonth) {
-                                val date = calendarData.yearMonth.atDay(dayOfMonth)
-                                val record = calendarData.daysByDate[date]
-                                CalendarDayCell(
-                                    date = date,
-                                    record = record,
-                                    isSelected = date == selectedDate,
-                                    onClick = { onSelectDate(date) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
+            // Weekday Headers (Mon..Sun)
+            val dayHeaders = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+            Row(modifier = Modifier.fillMaxWidth()) {
+                dayHeaders.forEach { d ->
+                    Text(
+                        text = d,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Animated Month Grid
+            AnimatedContent(
+                targetState = yearMonth,
+                transitionSpec = {
+                    NoveloMotion.directionalHorizontalTransition(targetState > initialState)
+                },
+                label = "calendarMonthGridTransition"
+            ) { targetYm ->
+                val firstOfMonth = targetYm.atDay(1)
+                val leadingEmptyCells = firstOfMonth.dayOfWeek.value - 1
+                val daysInMonth = targetYm.lengthOfMonth()
+                val totalCells = ((leadingEmptyCells + daysInMonth + 6) / 7) * 7
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (weekIdx in 0 until (totalCells / 7)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            for (dowIdx in 0..6) {
+                                val cellIndex = weekIdx * 7 + dowIdx
+                                val dayOfMonth = cellIndex - leadingEmptyCells + 1
+                                if (dayOfMonth in 1..daysInMonth) {
+                                    val date = targetYm.atDay(dayOfMonth)
+                                    val record = calendarData.daysByDate[date]
+                                    CalendarDayCell(
+                                        date = date,
+                                        record = record,
+                                        isSelected = date == selectedDate,
+                                        isToday = date == today,
+                                        onClick = { onSelectDate(date) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
+                                }
                             }
                         }
                     }
                 }
             }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            // Clean Status Legend
+            CalendarLegendRow()
         }
     }
 }
 
 @Composable
-private fun LegendItem(
-    symbol: String,
-    label: String,
-    color: Color
+private fun CalendarDayCell(
+    date: LocalDate,
+    record: DailyAdherenceRecord?,
+    isSelected: Boolean,
+    isToday: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val semantic = MaterialTheme.noveloColors
+    val (bgColor, textColor, dotColor, stateLabel) = when {
+        record == null || !record.hasAnyDoses ->
+            DayVisuals(
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                MaterialTheme.colorScheme.onSurfaceVariant,
+                Color.Transparent,
+                "No scheduled doses"
+            )
+        record.eligiblePastCount == 0 && record.pendingFutureCount > 0 ->
+            DayVisuals(
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                MaterialTheme.colorScheme.onPrimaryContainer,
+                MaterialTheme.colorScheme.primary,
+                "Scheduled upcoming doses"
+            )
+        record.confirmedCount + record.assumedCount == record.eligiblePastCount && record.assumedCount == 0 ->
+            DayVisuals(semantic.takenContainer, semantic.taken, semantic.taken, "All doses confirmed taken")
+        record.confirmedCount + record.assumedCount == record.eligiblePastCount ->
+            DayVisuals(semantic.assumedContainer, semantic.assumed, semantic.assumed, "All doses assumed or taken")
+        record.confirmedCount + record.assumedCount > 0 ->
+            DayVisuals(semantic.warningContainer, semantic.warning, semantic.warning, "Partial adherence")
+        else ->
+            DayVisuals(semantic.missedContainer, semantic.missed, semantic.missed, "Missed or skipped doses")
+    }
+
+    val borderStroke = when {
+        isSelected -> 2.dp to MaterialTheme.colorScheme.primary
+        isToday -> 1.5.dp to MaterialTheme.colorScheme.secondary
+        else -> 0.dp to Color.Transparent
+    }
+
+    val dateDesc = date.format(CELL_DATE_A11Y_FORMATTER)
+
+    Box(
+        modifier = modifier
+            .aspectRatio(0.95f)
+            .semantics {
+                contentDescription = "$dateDesc: $stateLabel" + if (isSelected) ", selected" else ""
+            }
+            .clip(RoundedCornerShape(10.dp))
+            .background(bgColor)
+            .then(
+                if (borderStroke.first > 0.dp) {
+                    Modifier.border(borderStroke.first, borderStroke.second, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(onClick = onClick, role = Role.Button),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isSelected || isToday) FontWeight.ExtraBold else FontWeight.SemiBold,
+                color = textColor
+            )
+            if (dotColor != Color.Transparent) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Box(
+                    modifier = Modifier
+                        .width(12.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(dotColor)
+                )
+            }
+        }
+    }
+}
+
+private data class DayVisuals(
+    val bgColor: Color,
+    val textColor: Color,
+    val dotColor: Color,
+    val a11yLabel: String
+)
+
+@Composable
+private fun CalendarLegendRow() {
+    val semantic = MaterialTheme.noveloColors
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LegendChip(color = semantic.takenContainer, dotColor = semantic.taken, label = "Taken")
+        LegendChip(color = semantic.assumedContainer, dotColor = semantic.assumed, label = "Assumed")
+        LegendChip(color = semantic.warningContainer, dotColor = semantic.warning, label = "Partial")
+        LegendChip(color = semantic.missedContainer, dotColor = semantic.missed, label = "Missed")
+        LegendChip(
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            dotColor = MaterialTheme.colorScheme.primary,
+            label = "Planned"
+        )
+    }
+}
+
+@Composable
+private fun LegendChip(
+    color: Color,
+    dotColor: Color,
+    label: String
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(
-            text = symbol,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color)
+                .border(1.dp, dotColor.copy(alpha = 0.6f), RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
@@ -604,119 +632,34 @@ private fun LegendItem(
 }
 
 @Composable
-private fun CalendarDayCell(
-    date: LocalDate,
-    record: DailyAdherenceRecord?,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val hasDoses = record != null && record.hasAnyDoses
-    // Build symbol string showing distinct outcomes on this day so mixed outcomes are never conflated
-    val symbols = buildString {
-        if (record != null) {
-            if (record.confirmedCount > 0) append("✓")
-            if (record.assumedCount > 0) append("~")
-            if (record.skippedCount > 0) append("×")
-            if (record.missedCount > 0) append("!")
-            if (isEmpty() && record.pendingFutureCount > 0) append("•")
-        }
-    }
-
-    val a11yDescription = buildString {
-        append("${date.dayOfMonth} ${date.month.name.lowercase()}: ")
-        if (!hasDoses) {
-            append("no scheduled doses")
-        } else {
-            val parts = mutableListOf<String>()
-            if (record!!.confirmedCount > 0) parts.add("${record.confirmedCount} confirmed")
-            if (record.assumedCount > 0) parts.add("${record.assumedCount} assumed")
-            if (record.skippedCount > 0) parts.add("${record.skippedCount} skipped")
-            if (record.missedCount > 0) parts.add("${record.missedCount} missed")
-            if (record.pendingFutureCount > 0) parts.add("${record.pendingFutureCount} upcoming")
-            append(parts.joinToString(", "))
-        }
-    }
-
-    val borderColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        Color.Transparent
-    }
-    val bgColor = when {
-        isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        hasDoses -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        else -> Color.Transparent
-    }
-
-    Column(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(bgColor)
-            .border(width = if (isSelected) 2.dp else 0.dp, color = borderColor, shape = RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = a11yDescription }
-            .padding(vertical = 4.dp, horizontal = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-
-        if (symbols.isNotEmpty()) {
-            Text(
-                text = symbols,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = when {
-                    record != null && record.confirmedCount > 0 && record.missedCount == 0 && record.skippedCount == 0 -> StatusTaken
-                    record != null && record.assumedCount > 0 && record.missedCount == 0 && record.skippedCount == 0 -> StatusAssumed
-                    record != null && (record.confirmedCount > 0 || record.assumedCount > 0) -> MaterialTheme.colorScheme.primary
-                    record != null && record.missedCount > 0 -> StatusMissed
-                    record != null && record.skippedCount > 0 -> StatusSkipped
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
-    }
-}
-
-@Composable
 private fun CalendarDayOccurrenceCard(
     resolved: ResolvedDoseOccurrence,
-    onClick: () -> Unit,
-    onTake: () -> Unit,
-    onSkip: () -> Unit
+    isToday: Boolean,
+    onTakeClick: () -> Unit,
+    onSkipClick: () -> Unit,
+    onOpenMedicationClick: () -> Unit
 ) {
     val occ = resolved.occurrence
-    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
-    val dateTimeFmt = DateTimeFormatter.ofPattern("d MMM, HH:mm")
-    val zone = ZoneId.systemDefault()
+    val scheduledTimeStr = Instant.ofEpochMilli(occ.scheduledEpochMs)
+        .atZone(ZoneId.systemDefault())
+        .format(TIME_ONLY_FORMATTER)
 
-    val scheduledStr = Instant.ofEpochMilli(occ.scheduledEpochMs).atZone(zone).format(timeFmt)
-    val recordedStr = occ.recordedEpochMs?.let {
-        Instant.ofEpochMilli(it).atZone(zone).format(dateTimeFmt)
-    }
-    val correctedStr = occ.correctedAtEpochMs?.let {
-        Instant.ofEpochMilli(it).atZone(zone).format(dateTimeFmt)
+    val recordedTimeStr = occ.recordedEpochMs?.let {
+        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(TIME_ONLY_FORMATTER)
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+            .clickable(onClick = onOpenMedicationClick, role = Role.Button),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -724,102 +667,122 @@ private fun CalendarDayOccurrenceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Medication,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = resolved.medicationName,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "${resolved.medicationStrength} · ${occ.doseQuantity.toDisplayString()} ${occ.unit.abbreviation}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "${resolved.medicationName} (${resolved.medicationStrength})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    val recSub = if (recordedTimeStr != null) " · Recorded $recordedTimeStr" else ""
+                    Text(
+                        text = "Scheduled $scheduledTimeStr · ${occ.doseQuantity.toDisplayString()} ${occ.unit.abbreviation}$recSub",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (resolved.isCorrected) {
-                        Text(
-                            text = "Corrected",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                    DoseStatusBadge(status = occ.status)
-                }
+                DoseStatusBadge(status = occ.status)
             }
 
+            if (isToday && occ.status == DoseStatus.PENDING) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onTakeClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 44.dp),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Take Dose", style = MaterialTheme.typography.labelMedium)
+                    }
+                    OutlinedButton(
+                        onClick = onSkipClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 44.dp),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Skip", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollapsibleMethodologyCard(
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = NoveloMotion.standardFloatSpring(),
+        label = "methodologyChevron"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle, role = Role.Button)
+                    .padding(14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "Scheduled time: $scheduledStr",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
                     )
-                    if (correctedStr != null) {
-                        Text(
-                            text = "Corrected at: $correctedStr${occ.correctionNotes?.let { " ($it)" } ?: ""}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else if (recordedStr != null) {
-                        Text(
-                            text = "Action recorded: $recordedStr",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "How Adherence is Calculated",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
+                Icon(
+                    imageVector = Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse explanation" else "Expand explanation",
+                    modifier = Modifier.rotate(chevronRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-                if (occ.status == DoseStatus.PENDING) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = onSkip,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = ButtonDefaults.TextButtonContentPadding
-                        ) {
-                            Text("Skip", style = MaterialTheme.typography.labelSmall)
-                        }
-                        Button(
-                            onClick = onTake,
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = ButtonDefaults.TextButtonContentPadding
-                        ) {
-                            Text("Take", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = NoveloMotion.sectionExpand(),
+                exit = NoveloMotion.sectionCollapse()
+            ) {
+                Text(
+                    text = "Adherence percentage = (Confirmed Taken + Auto-Assumed) ÷ Elapsed Scheduled Doses. Future upcoming doses are excluded until due. Manual CONFIRM doses require your explicit confirmation; AUTO_ASSUME schedules are visually distinguished as Assumed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)
+                )
             }
         }
     }

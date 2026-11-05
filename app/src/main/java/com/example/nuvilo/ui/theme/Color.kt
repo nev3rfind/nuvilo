@@ -1,51 +1,176 @@
 package com.example.nuvilo.ui.theme
 
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// Light Healthcare Palette (NHS-inspired blue and clean calm neutrals)
-val HealthcareBluePrimary = Color(0xFF005EB8)
-val HealthcareNavy = Color(0xFF003087)
-val HealthcareBlueContainer = Color(0xFFE8F1FC)
-val HealthcareBackground = Color(0xFFF8FAFC)
-val HealthcareSurface = Color(0xFFFFFFFF)
-val HealthcareSurfaceVariant = Color(0xFFEEF3F8)
-val HealthcareTextPrimary = Color(0xFF0F172A)
-val HealthcareTextSecondary = Color(0xFF475569)
-val HealthcareBorder = Color(0xFFE2E8F0)
+// NHS-Inspired Primary Brand Palette — Light Mode
+val NoveloBlue = Color(0xFF005EB8)
+val NoveloDarkBlue = Color(0xFF003087)
+val NoveloBrightBlue = Color(0xFF0072CE)
+val NoveloLightBlueContainer = Color(0xFFE1EFFF)
+val NoveloOnPrimaryContainer = Color(0xFF002B5B)
 
-// Dark Healthcare Palette (High-contrast dark surfaces with #121820 foundation)
-val DarkBluePrimary = Color(0xFF4DA3FF)
-val DarkBlueContainer = Color(0xFF162D4A)
-val DarkBackground = Color(0xFF0B0F15)
-val DarkSurface = Color(0xFF121820) // Dark-mode foundation as specified
-val DarkSurfaceVariant = Color(0xFF1A2330)
-val DarkTextPrimary = Color(0xFFF8FAFC)
-val DarkTextSecondary = Color(0xFF94A3B8)
-val DarkBorder = Color(0xFF273446)
+// Secondary Clinical Teal — Light Mode
+val NoveloTeal = Color(0xFF007F7B)
+val NoveloTealContainer = Color(0xFFDDF5F4)
+val NoveloOnTealContainer = Color(0xFF003735)
 
-// Semantic Status Colors (High contrast in Light & Dark modes, WCAG AA compliant >= 4.5:1)
-val StatusTaken = Color(0xFF007033) // NHS deep green (5.49:1 on container, 6.24:1 on white)
-val StatusTakenDark = Color(0xFF34D399) // 7.18:1 on dark container
+// Dark Mode Primary & Secondary Palette
+val NoveloBlueDark = Color(0xFF6EB4FF)
+val NoveloBlueContainerDark = Color(0xFF00448A)
+val NoveloOnPrimaryDark = Color(0xFF002F64)
+val NoveloOnPrimaryContainerDark = Color(0xFFD8E9FF)
+
+val NoveloTealDark = Color(0xFF5AD6D0)
+val NoveloTealContainerDark = Color(0xFF004F4D)
+val NoveloOnTealDark = Color(0xFF003735)
+val NoveloOnTealContainerDark = Color(0xFFC2F5F2)
+
+// Semantic Status Colors (Light Mode — WCAG AA >= 5.2:1 contrast)
+val StatusTaken = Color(0xFF0D6832)
 val StatusTakenContainer = Color(0xFFE6F4EA)
-val StatusTakenContainerDark = Color(0xFF113322)
+val StatusTakenBorder = Color(0xFFA7F3D0)
 
-val StatusAssumed = Color(0xFF00687A) // NHS deep teal/cyan (5.66:1 on container, 6.44:1 on white)
-val StatusAssumedDark = Color(0xFF38BDF8) // 6.16:1 on dark container
-val StatusAssumedContainer = Color(0xFFE0F4F7)
-val StatusAssumedContainerDark = Color(0xFF123440)
+val StatusAssumed = Color(0xFF005A8D)
+val StatusAssumedContainer = Color(0xFFE0F2FE)
+val StatusAssumedBorder = Color(0xFFBAE6FD)
 
-val StatusSkipped = Color(0xFF475569) // Slate 600 (6.92:1 on container, 7.58:1 on white)
-val StatusSkippedDark = Color(0xFF94A3B8) // 5.71:1 on dark container
+val StatusSkipped = Color(0xFF475569)
 val StatusSkippedContainer = Color(0xFFF1F5F9)
-val StatusSkippedContainerDark = Color(0xFF1E293B)
+val StatusSkippedBorder = Color(0xFFCBD5E1)
 
-val StatusMissed = Color(0xFFC8102E) // Crimson red (5.02:1 on container, 5.88:1 on white)
-val StatusMissedDark = Color(0xFFF87171) // 5.70:1 on dark container
-val StatusMissedContainer = Color(0xFFFDE8EC)
-val StatusMissedContainerDark = Color(0xFF3D161E)
+val StatusMissed = Color(0xFFB91C1C)
+val StatusMissedContainer = Color(0xFFFEE2E2)
+val StatusMissedBorder = Color(0xFFFECACA)
 
-val StatusWarning = Color(0xFF92400E) // Warm Amber 800 (6.37:1 on container, 7.09:1 on white)
-val StatusWarningDark = Color(0xFFFBBF24) // 8.25:1 on dark container
+val StatusWarning = Color(0xFF92400E)
 val StatusWarningContainer = Color(0xFFFEF3C7)
-val StatusWarningContainerDark = Color(0xFF3B2A10)
+val StatusWarningBorder = Color(0xFFFDE68A)
 
+// Semantic Status Colors (Dark Mode — WCAG AA >= 5.2:1 contrast)
+val StatusTakenDark = Color(0xFF6EE7B7)
+val StatusTakenContainerDark = Color(0xFF064E3B)
+val StatusTakenBorderDark = Color(0xFF047857)
+
+val StatusAssumedDark = Color(0xFF7DD3FC)
+val StatusAssumedContainerDark = Color(0xFF0C4A6E)
+val StatusAssumedBorderDark = Color(0xFF0369A1)
+
+val StatusSkippedDark = Color(0xFFCBD5E1)
+val StatusSkippedContainerDark = Color(0xFF1E293B)
+val StatusSkippedBorderDark = Color(0xFF334155)
+
+val StatusMissedDark = Color(0xFFFCA5A5)
+val StatusMissedContainerDark = Color(0xFF7F1D1D)
+val StatusMissedBorderDark = Color(0xFF991B1B)
+
+val StatusWarningDark = Color(0xFFFCD34D)
+val StatusWarningContainerDark = Color(0xFF78350F)
+val StatusWarningBorderDark = Color(0xFF92400E)
+
+// Neutral Surface & Text Hierarchy — Light Mode
+val NeutralBackgroundLight = Color(0xFFF6F8FB)
+val NeutralSurfaceLight = Color(0xFFFFFFFF)
+val NeutralSurfaceVariantLight = Color(0xFFEDF2F7)
+val NeutralTextPrimaryLight = Color(0xFF0F172A)
+val NeutralTextSecondaryLight = Color(0xFF475569)
+val NeutralOutlineLight = Color(0xFFCBD5E1)
+val NeutralOutlineVariantLight = Color(0xFFE2E8F0)
+
+// Neutral Surface & Text Hierarchy — Dark Mode
+val NeutralBackgroundDark = Color(0xFF0B111A)
+val NeutralSurfaceDark = Color(0xFF131C27)
+val NeutralSurfaceVariantDark = Color(0xFF1D2938)
+val NeutralTextPrimaryDark = Color(0xFFF1F5F9)
+val NeutralTextSecondaryDark = Color(0xFF94A3B8)
+val NeutralOutlineDark = Color(0xFF334155)
+val NeutralOutlineVariantDark = Color(0xFF1E293B)
+
+/**
+ * Curated medication accent tags for visual differentiation across schedules and cards.
+ */
+val MedicationAccentSwatches: List<Pair<String, String>> = listOf(
+    "#005EB8" to "Clinical Blue",
+    "#007F7B" to "Calm Teal",
+    "#4F46E5" to "Indigo",
+    "#0D6832" to "Emerald",
+    "#B45309" to "Warm Amber",
+    "#9333EA" to "Plum",
+    "#BE123C" to "Crimson"
+)
+
+/**
+ * Theme-aware semantic color tokens for clinical statuses and surface borders.
+ */
+@Immutable
+data class NoveloSemanticColors(
+    val taken: Color,
+    val takenContainer: Color,
+    val takenBorder: Color,
+    val assumed: Color,
+    val assumedContainer: Color,
+    val assumedBorder: Color,
+    val skipped: Color,
+    val skippedContainer: Color,
+    val skippedBorder: Color,
+    val missed: Color,
+    val missedContainer: Color,
+    val missedBorder: Color,
+    val warning: Color,
+    val warningContainer: Color,
+    val warningBorder: Color,
+    val cardBorder: Color,
+    val elevatedSurface: Color,
+    val heroGradientStart: Color,
+    val heroGradientEnd: Color,
+    val isDark: Boolean
+)
+
+val LightNoveloSemanticColors = NoveloSemanticColors(
+    taken = StatusTaken,
+    takenContainer = StatusTakenContainer,
+    takenBorder = StatusTakenBorder,
+    assumed = StatusAssumed,
+    assumedContainer = StatusAssumedContainer,
+    assumedBorder = StatusAssumedBorder,
+    skipped = StatusSkipped,
+    skippedContainer = StatusSkippedContainer,
+    skippedBorder = StatusSkippedBorder,
+    missed = StatusMissed,
+    missedContainer = StatusMissedContainer,
+    missedBorder = StatusMissedBorder,
+    warning = StatusWarning,
+    warningContainer = StatusWarningContainer,
+    warningBorder = StatusWarningBorder,
+    cardBorder = NeutralOutlineVariantLight,
+    elevatedSurface = NeutralSurfaceLight,
+    heroGradientStart = Color(0xFFE8F2FF),
+    heroGradientEnd = Color(0xFFD9EAFF),
+    isDark = false
+)
+
+val DarkNoveloSemanticColors = NoveloSemanticColors(
+    taken = StatusTakenDark,
+    takenContainer = StatusTakenContainerDark,
+    takenBorder = StatusTakenBorderDark,
+    assumed = StatusAssumedDark,
+    assumedContainer = StatusAssumedContainerDark,
+    assumedBorder = StatusAssumedBorderDark,
+    skipped = StatusSkippedDark,
+    skippedContainer = StatusSkippedContainerDark,
+    skippedBorder = StatusSkippedBorderDark,
+    missed = StatusMissedDark,
+    missedContainer = StatusMissedContainerDark,
+    missedBorder = StatusMissedBorderDark,
+    warning = StatusWarningDark,
+    warningContainer = StatusWarningContainerDark,
+    warningBorder = StatusWarningBorderDark,
+    cardBorder = NeutralOutlineVariantDark,
+    elevatedSurface = Color(0xFF172230),
+    heroGradientStart = Color(0xFF0E294B),
+    heroGradientEnd = Color(0xFF133764),
+    isDark = true
+)
+
+val LocalNoveloColors = staticCompositionLocalOf { LightNoveloSemanticColors }

@@ -71,6 +71,13 @@ class AlarmReceiver : BroadcastReceiver() {
                 val preferences = container.userPreferencesRepository.userPreferencesFlow.first()
                 val stockBalance = container.repository.observeStockBalance(medication).first()
 
+                val prescriptions = container.repository.observePrescriptionsForMedication(medicationId).first()
+                val todayEpochDay = java.time.LocalDate.now().toEpochDay()
+                val activeRx = prescriptions.firstOrNull { it.effectiveStatus(todayEpochDay) == com.example.nuvilo.domain.model.PrescriptionStatus.ACTIVE }
+                val hasPendingOrder = activeRx?.hasPendingRepeatRequest == true
+                val pendingOrderQuantity = if (hasPendingOrder) activeRx?.quantityPrescribed else null
+                val pendingOrderNotes = if (hasPendingOrder) activeRx?.notes else null
+
                 container.notificationHelper.showDoseReminderNotification(
                     occurrenceId = occurrenceId,
                     medicationId = medicationId,
@@ -80,7 +87,10 @@ class AlarmReceiver : BroadcastReceiver() {
                     doseQuantity = quantity,
                     unit = unit,
                     isPrivacyMasked = preferences.isNotificationPrivacyMasked,
-                    stockBalance = stockBalance
+                    stockBalance = stockBalance,
+                    hasPendingOrder = hasPendingOrder,
+                    pendingOrderQuantity = pendingOrderQuantity,
+                    pendingOrderNotes = pendingOrderNotes
                 )
             } finally {
                 pendingResult.finish()

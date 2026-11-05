@@ -7,13 +7,21 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -26,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -34,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.example.nuvilo.data.preferences.UserPreferencesRepository
+import com.example.nuvilo.data.preferences.ThemeMode
 import com.example.nuvilo.security.AppLockManager
 import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.security.BiometricAuthResult
@@ -47,6 +56,7 @@ import com.example.nuvilo.ui.screens.MedicationDetailScreen
 import com.example.nuvilo.ui.screens.MedicationDoseHistoryScreen
 import com.example.nuvilo.ui.screens.MedicationListScreen
 import com.example.nuvilo.ui.screens.SettingsScreen
+import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.NoveloTheme
 import com.example.nuvilo.ui.viewmodel.AdherenceCalendarViewModel
 import com.example.nuvilo.ui.viewmodel.DashboardViewModel
@@ -56,194 +66,105 @@ import com.example.nuvilo.ui.viewmodel.ViewModelFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-enum class Screen(val title: String, val icon: ImageVector) {
-    TODAY("Today", Icons.Default.Today),
-    HISTORY("Calendar", Icons.Default.CalendarToday),
-    MEDICATIONS("Medications", Icons.Default.Medication),
-    SETTINGS("Settings", Icons.Default.Settings)
+enum class Screen(
+    val title: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector
+) {
+    TODAY("Today", Icons.Filled.Today, Icons.Outlined.Today),
+    MEDICATIONS("Medications", Icons.Filled.Medication, Icons.Outlined.Medication),
+    CALENDAR("Adherence", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday),
+    SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 class MainActivity : FragmentActivity() {
 
-    private val selectedMedicationIdState = mutableStateOf<String?>(null)
-    private lateinit var appLockManager: AppLockManager
-    private lateinit var biometricAuthManager: BiometricAuthManager
-    private lateinit var userPreferencesRepository: UserPreferencesRepository
+    private val appContainer by lazy { (application as NoveloApplication).container }
+    private val viewModelFactory by lazy { ViewModelFactory(appContainer) }
+
+    private val dashboardViewModel: DashboardViewModel by viewModels { viewModelFactory }
+    private val medicationViewModel: MedicationViewModel by viewModels { viewModelFactory }
+    private val adherenceCalendarViewModel: AdherenceCalendarViewModel by viewModels { viewModelFactory }
+    private val settingsViewModel: SettingsViewModel by viewModels { viewModelFactory }
+
+    private val appLockManager: AppLockManager by lazy { appContainer.appLockManager }
+    private val biometricAuthManager: BiometricAuthManager by lazy { appContainer.biometricAuthManager }
+
+    private val intentMedicationIdState = mutableStateOf<String?>(null)
+    private val authErrorMessageState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val appContainer = (application as NoveloApplication).container
-        appLockManager = appContainer.appLockManager
-        biometricAuthManager = appContainer.biometricAuthManager
-        userPreferencesRepository = appContainer.userPreferencesRepository
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        handleIncomingIntent(intent)
 
         lifecycleScope.launch {
-            val prefs = userPreferencesRepository.userPreferencesFlow.first()
+            val prefs = appContainer.userPreferencesRepository.userPreferencesFlow.first()
             appLockManager.initialize(prefs.isBiometricLockEnabled)
         }
 
-        val initialMedId = intent.getStringExtra(NotificationHelper.EXTRA_SELECTED_MEDICATION_ID)
-        selectedMedicationIdState.value = initialMedId
-
-        val factory = ViewModelFactory(appContainer)
-
-        val dashboardViewModel: DashboardViewModel by viewModels { factory }
-        val calendarViewModel: AdherenceCalendarViewModel by viewModels { factory }
-        val medicationViewModel: MedicationViewModel by viewModels { factory }
-        val settingsViewModel: SettingsViewModel by viewModels { factory }
-
         setContent {
-            val userPrefs by settingsViewModel.userPreferences.collectAsStateWithLifecycle()
+            val prefs by settingsViewModel.userPreferences.collectAsStateWithLifecycle()
             val isLocked by appLockManager.isLocked.collectAsStateWithLifecycle()
 
-            // Window FLAG_SECURE management for recents preview masking and active lock
-            LaunchedEffect(userPrefs.isRecentsPreviewMasked, isLocked) {
-                if (userPrefs.isRecentsPreviewMasked || isLocked) {
-                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            val darkTheme = when (prefs.themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+
+            LaunchedEffect(prefs.isBiometricLockEnabled, prefs.isRecentsPreviewMasked, isLocked) {
+                val shouldSecure = isLocked || (prefs.isBiometricLockEnabled && prefs.isRecentsPreviewMasked)
+                if (shouldSecure) {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE
+                    )
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 }
             }
 
-            // Auto-trigger biometric prompt when locked
             LaunchedEffect(isLocked) {
-                val status = biometricAuthManager.checkBiometricStatus()
-                if (isLocked && (status == BiometricStatus.AVAILABLE || status == BiometricStatus.DEVICE_CREDENTIAL_ONLY)) {
-                    promptUnlock()
+                if (isLocked && prefs.isBiometricLockEnabled) {
+                    triggerBiometricPrompt()
                 }
             }
 
-            NoveloTheme(themeMode = userPrefs.themeMode) {
-                if (isLocked) {
-                    BackHandler {
-                        finish()
-                    }
+            NoveloTheme(darkTheme = darkTheme) {
+                if (prefs.isBiometricLockEnabled && isLocked) {
+                    val bioStatus = remember(isLocked) { biometricAuthManager.checkBiometricStatus() }
                     LockScreen(
-                        biometricStatus = biometricAuthManager.checkBiometricStatus(),
-                        errorMessage = null,
-                        onUnlockClick = { promptUnlock() },
-                        modifier = Modifier.fillMaxSize()
+                        biometricStatus = bioStatus,
+                        errorMessage = authErrorMessageState.value,
+                        onUnlockClick = { triggerBiometricPrompt() }
                     )
                 } else {
-                    var currentScreen by remember { mutableStateOf(Screen.TODAY) }
-                    val selectedMedicationId by selectedMedicationIdState
-                    var showMedicationDoseHistory by remember(selectedMedicationId) { mutableStateOf(false) }
-
-                    BackHandler(enabled = selectedMedicationId != null) {
-                        if (showMedicationDoseHistory) {
-                            showMedicationDoseHistory = false
-                        } else {
-                            selectedMedicationIdState.value = null
-                        }
-                    }
-
-                    if (selectedMedicationId != null) {
-                        val detailViewModel = remember(selectedMedicationId) {
-                            factory.createMedicationDetailViewModel(selectedMedicationId!!)
-                        }
-                        if (showMedicationDoseHistory) {
-                            MedicationDoseHistoryScreen(
-                                viewModel = detailViewModel,
-                                onNavigateBack = { showMedicationDoseHistory = false },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            MedicationDetailScreen(
-                                viewModel = detailViewModel,
-                                onNavigateBack = { selectedMedicationIdState.value = null },
-                                onNavigateToDoseHistory = { showMedicationDoseHistory = true },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    } else {
-                        Scaffold(
-                            modifier = Modifier.fillMaxSize(),
-                            bottomBar = {
-                                NavigationBar(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    contentColor = MaterialTheme.colorScheme.primary,
-                                    tonalElevation = 3.dp
-                                ) {
-                                    Screen.values().forEach { screen ->
-                                        val selected = currentScreen == screen
-                                        NavigationBarItem(
-                                            selected = selected,
-                                            onClick = { currentScreen = screen },
-                                            icon = {
-                                                Icon(
-                                                    imageVector = screen.icon,
-                                                    contentDescription = screen.title
-                                                )
-                                            },
-                                            label = {
-                                                Text(
-                                                    text = screen.title,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                                                )
-                                            },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        ) { innerPadding ->
-                            when (currentScreen) {
-                                Screen.TODAY -> DashboardScreen(
-                                    viewModel = dashboardViewModel,
-                                    onNavigateToMedications = { currentScreen = Screen.MEDICATIONS },
-                                    onNavigateToCalendar = { currentScreen = Screen.HISTORY },
-                                    onMedicationClick = { medId -> selectedMedicationIdState.value = medId },
-                                    modifier = Modifier.padding(innerPadding)
-                                )
-                                Screen.HISTORY -> AdherenceCalendarScreen(
-                                    viewModel = calendarViewModel,
-                                    onMedicationClick = { medId -> selectedMedicationIdState.value = medId },
-                                    modifier = Modifier.padding(innerPadding)
-                                )
-                                Screen.MEDICATIONS -> MedicationListScreen(
-                                    viewModel = medicationViewModel,
-                                    onMedicationClick = { medId -> selectedMedicationIdState.value = medId },
-                                    modifier = Modifier.padding(innerPadding)
-                                )
-                                Screen.SETTINGS -> SettingsScreen(
-                                    viewModel = settingsViewModel,
-                                    modifier = Modifier.padding(innerPadding)
-                                )
-                            }
-                        }
-                    }
+                    NoveloMainContent(
+                        dashboardViewModel = dashboardViewModel,
+                        medicationViewModel = medicationViewModel,
+                        adherenceCalendarViewModel = adherenceCalendarViewModel,
+                        settingsViewModel = settingsViewModel,
+                        viewModelFactory = viewModelFactory,
+                        intentMedicationId = intentMedicationIdState.value,
+                        onConsumeIntentMedicationId = { intentMedicationIdState.value = null }
+                    )
                 }
             }
         }
     }
 
-    private fun promptUnlock() {
-        appLockManager.setSystemDialogActive(true)
-        biometricAuthManager.authenticate(
-            activity = this,
-            onResult = { result ->
-                appLockManager.setSystemDialogActive(false)
-                if (result is BiometricAuthResult.Success) {
-                    appLockManager.unlock()
-                }
-            }
-        )
-    }
-
     override fun onStart() {
         super.onStart()
         lifecycleScope.launch {
-            val prefs = userPreferencesRepository.userPreferencesFlow.first()
-            appLockManager.onAppForegrounded(prefs.isBiometricLockEnabled, prefs.lockGracePeriod)
+            val prefs = appContainer.userPreferencesRepository.userPreferencesFlow.first()
+            appLockManager.onAppForegrounded(
+                lockEnabled = prefs.isBiometricLockEnabled,
+                gracePeriod = prefs.lockGracePeriod
+            )
         }
     }
 
@@ -254,11 +175,173 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private fun triggerBiometricPrompt() {
+        val status = biometricAuthManager.checkBiometricStatus()
+        if (status != BiometricStatus.AVAILABLE && status != BiometricStatus.DEVICE_CREDENTIAL_ONLY) {
+            return
+        }
+        authErrorMessageState.value = null
+        biometricAuthManager.authenticate(
+            activity = this,
+            onResult = { result ->
+                when (result) {
+                    is BiometricAuthResult.Success -> {
+                        authErrorMessageState.value = null
+                        appLockManager.unlock()
+                    }
+                    is BiometricAuthResult.Cancelled -> {
+                        authErrorMessageState.value = "Authentication cancelled. Tap Unlock to try again."
+                    }
+                    is BiometricAuthResult.Failed -> {
+                        authErrorMessageState.value = result.message
+                    }
+                    is BiometricAuthResult.Error -> {
+                        authErrorMessageState.value = result.errString.toString()
+                    }
+                }
+            }
+        )
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(NotificationHelper.EXTRA_SELECTED_MEDICATION_ID)?.let { medId ->
-            selectedMedicationIdState.value = medId
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        val medId = intent?.getStringExtra(NotificationHelper.EXTRA_SELECTED_MEDICATION_ID)
+        if (!medId.isNullOrBlank()) {
+            intentMedicationIdState.value = medId
+        }
+    }
+}
+
+@Composable
+private fun NoveloMainContent(
+    dashboardViewModel: DashboardViewModel,
+    medicationViewModel: MedicationViewModel,
+    adherenceCalendarViewModel: AdherenceCalendarViewModel,
+    settingsViewModel: SettingsViewModel,
+    viewModelFactory: ViewModelFactory,
+    intentMedicationId: String?,
+    onConsumeIntentMedicationId: () -> Unit
+) {
+    var currentScreenName by rememberSaveable { mutableStateOf(Screen.TODAY.name) }
+    var selectedMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showMedicationDoseHistory by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(intentMedicationId) {
+        if (!intentMedicationId.isNullOrBlank()) {
+            selectedMedicationId = intentMedicationId
+            showMedicationDoseHistory = false
+            onConsumeIntentMedicationId()
+        }
+    }
+
+    val currentScreen = runCatching { Screen.valueOf(currentScreenName) }.getOrDefault(Screen.TODAY)
+
+    if (selectedMedicationId != null) {
+        val medId = selectedMedicationId!!
+        val detailViewModel = remember(medId) {
+            viewModelFactory.createMedicationDetailViewModel(medId)
+        }
+
+        if (showMedicationDoseHistory) {
+            BackHandler { showMedicationDoseHistory = false }
+            MedicationDoseHistoryScreen(
+                viewModel = detailViewModel,
+                onNavigateBack = { showMedicationDoseHistory = false }
+            )
+        } else {
+            BackHandler { selectedMedicationId = null }
+            MedicationDetailScreen(
+                viewModel = detailViewModel,
+                onNavigateBack = { selectedMedicationId = null },
+                onNavigateToDoseHistory = { showMedicationDoseHistory = true }
+            )
+        }
+    } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp
+                    ) {
+                        Screen.entries.forEach { screen ->
+                            val isSelected = currentScreen == screen
+                            NavigationBarItem(
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
+                                        contentDescription = screen.title
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = screen.title,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
+                                selected = isSelected,
+                                onClick = { currentScreenName = screen.name },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            AnimatedContent(
+                targetState = currentScreen,
+                transitionSpec = { NoveloMotion.screenTransition() },
+                label = "mainTabTransition",
+                modifier = Modifier.padding(innerPadding)
+            ) { targetScreen ->
+                when (targetScreen) {
+                    Screen.TODAY -> DashboardScreen(
+                        viewModel = dashboardViewModel,
+                        onSelectMedication = {
+                            selectedMedicationId = it
+                            showMedicationDoseHistory = false
+                        },
+                        onNavigateToMedications = {
+                            currentScreenName = Screen.MEDICATIONS.name
+                        }
+                    )
+                    Screen.MEDICATIONS -> MedicationListScreen(
+                        viewModel = medicationViewModel,
+                        onSelectMedication = {
+                            selectedMedicationId = it
+                            showMedicationDoseHistory = false
+                        }
+                    )
+                    Screen.CALENDAR -> AdherenceCalendarScreen(
+                        viewModel = adherenceCalendarViewModel,
+                        onSelectMedication = {
+                            selectedMedicationId = it
+                            showMedicationDoseHistory = false
+                        }
+                    )
+                    Screen.SETTINGS -> SettingsScreen(
+                        viewModel = settingsViewModel
+                    )
+                }
+            }
         }
     }
 }

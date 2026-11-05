@@ -190,18 +190,48 @@ This plan organizes the implementation of Novelo into sequential, verifiable wor
 
 ---
 
-## Phase 7: Verification, Hardening & Final Release Polish
+## Phase 7: Verification, Hardening & Final Release Polish [COMPLETED]
 - **Goal**: Run static analysis, comprehensive automated test suites, performance benchmarks, and release readiness.
 - **Dependencies**: All prior phases.
 - **Work Packages**:
-  1. **Static Analysis & Lint**: Android Lint, detekt, dependency check.
-  2. **Automated Test Suite**:
+  1. [x] **Static Analysis & Lint**: Android Lint, detekt, dependency check.
+  2. [x] **Automated Test Suite**:
      - 100% unit test coverage on domain use cases and ledger calculations.
      - Compose UI tests for core flows (adding medication, taking dose).
-  3. **Performance Profiling**:
+  3. [x] **Performance Profiling**:
      - Verify zero frame drops on dashboard scrolling.
      - Memory leak checks on notification receivers and database observers.
+  4. [x] **Phase 7.1 CI, Evidence & Signed Release Validation**:
+     - GitHub Actions CI (`Android CI`) with `testDebugUnitTest`, `lintDebug`, `assembleDebug`, `assembleRelease`, and strict zero-network manifest verification.
+     - QA release signing configuration (`novelo-qa-release.jks`, APKSig v1/v2/v3 verified).
 - **Acceptance Criteria**:
-  - `.\gradlew.bat test` passes with zero failures.
-  - `.\gradlew.bat lint` reports zero errors.
-  - App runs smoothly on emulator and physical devices.
+  - [x] `.\gradlew.bat test` passes with zero failures.
+  - [x] `.\gradlew.bat lint` reports zero errors.
+  - [x] App runs smoothly on emulator and physical devices.
+
+---
+
+## Phase 8: Premium Product Experience & Complete UI/UX Overhaul [COMPLETED]
+- **Status**: Completed / Verified (Issue #3)
+- **Dependencies**: Phases 0–7.1.
+- **Goal**: Transform Novelo into a commercially competitive, distinctive, accessible, and effortless-to-use healthcare product through a comprehensive UI/UX audit, screen-by-screen redesign, workflow completion, and dark/light semantic token system.
+- **Work Packages**:
+  1. [x] **Complete UI/UX Audit & Design System Documentation (`docs/ui-ux-audit/`)**:
+     - Created `SCREEN_INVENTORY.md`, `ISSUES.md`, `DESIGN_SYSTEM.md`, `UX_DECISIONS.md`, `USER_JOURNEYS.md`, and `FINAL_AUDIT.md`.
+     - Captured 15 baseline screenshots in `docs/screenshots/phase8/before/` and comprehensive post-redesign screenshots in `docs/screenshots/phase8/after/`.
+  2. [x] **Semantic Theme & Motion Architecture (`ui/theme/`)**:
+     - Introduced `NoveloSemanticColors` (`CompositionLocal` via `MaterialTheme.noveloColors`) providing high-contrast light and dark status palettes for `taken`, `assumed`, `skipped`, `missed`, `warning`, and `heroGradient`.
+     - Added `Shape.kt` (`NoveloShapes`) and `Motion.kt` (`NoveloMotion` spring and directional transition specs).
+  3. [x] **Workflow Completion & Domain Calculation Enhancements**:
+     - Added `EditMedicationDialog` (`MedicationDetailViewModel.updateMedication`) to edit name, strength, dosage form, stock unit, low-stock threshold, recording mode, color accent, and notes without deleting history.
+     - Added `EditScheduleDialog` (`NoveloRepository.updateSchedule` & `MedicationDetailViewModel.saveSchedule`) supporting Daily and Specific Weekdays (`Mon`–`Sun`), preset/custom `HH:mm` dose times, dose quantity, and instructions.
+     - Upgraded `AddMedicationDialog` into a 3-step progressive disclosure wizard (`1. Identity`, `2. Schedule`, `3. Stock`) with smart `defaultStockUnitForForm` auto-selection and weekday support.
+     - Fixed `StockBalance.daysRemaining` calculation for `ScheduleType.SPECIFIC_WEEKDAYS` regimens by scaling `dailyConsumptionRaw` by `daysOfWeek.size / 7`.
+     - Added live before/after ledger impact previews to `RestockDialog`, `AdjustStockDialog`, and `CorrectDoseDialog`.
+  4. [x] **Screen-by-Screen Visual & Interaction Overhaul**:
+     - Redesigned `DashboardScreen`, `MedicationListScreen` (with search & low-stock filter chip), `MedicationDetailScreen`, `AdherenceCalendarScreen` (with directional animated month grid and collapsible calculation note), `MedicationDoseHistoryScreen` (with date-grouped sticky sections), `SettingsScreen` (with collapsible diagnostics and structured backup cards), and `LockScreen`.
+- **Acceptance Criteria**:
+  - [x] All 52 JVM unit tests pass (`testDebugUnitTest`).
+  - [x] All 29 connected Android instrumentation & accessibility tests pass (`connectedDebugAndroidTest`).
+  - [x] Android Lint reports 0 errors (`lintDebug`).
+  - [x] Both `assembleDebug` and `assembleRelease` succeed with zero network permissions.

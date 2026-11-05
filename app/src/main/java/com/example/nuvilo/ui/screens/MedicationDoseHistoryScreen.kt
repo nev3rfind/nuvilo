@@ -2,44 +2,42 @@ package com.example.nuvilo.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,20 +50,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nuvilo.domain.adherence.AdherenceSummary
 import com.example.nuvilo.domain.adherence.DoseOutcomeFilter
 import com.example.nuvilo.domain.adherence.HistoryDateFilter
 import com.example.nuvilo.domain.adherence.ResolvedDoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
+import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.ui.components.DoseStatusBadge
+import com.example.nuvilo.ui.components.EmptyStateCard
+import com.example.nuvilo.ui.components.SectionHeader
+import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.MedicationDetailViewModel
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val GROUP_DATE_HEADER_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")
+private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val RECORDED_TS_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MedicationDoseHistoryScreen(
     viewModel: MedicationDetailViewModel,
@@ -74,7 +81,7 @@ fun MedicationDoseHistoryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    var itemToCorrect by remember { mutableStateOf<ResolvedDoseOccurrence?>(null) }
+    var resolvedToCorrect by remember { mutableStateOf<ResolvedDoseOccurrence?>(null) }
 
     LaunchedEffect(uiState.actionSuccessMessage, uiState.errorMessage) {
         uiState.actionSuccessMessage?.let {
@@ -87,22 +94,32 @@ fun MedicationDoseHistoryScreen(
         }
     }
 
+    val med = uiState.medication
+    val today = LocalDate.now()
+    val groupedByDate = remember(uiState.fullDoseHistory) {
+        val zone = ZoneId.systemDefault()
+        uiState.fullDoseHistory.groupBy { resolved ->
+            Instant.ofEpochMilli(resolved.occurrence.scheduledEpochMs).atZone(zone).toLocalDate()
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            text = "Dose History",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = med?.let { "${it.name} Dose History" } ?: "Dose History",
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
-                        uiState.medication?.let { med ->
+                        if (med != null) {
                             Text(
-                                text = "${med.name} · ${med.strength}",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "${med.strength} · ${med.recordingMode.displayName}",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -117,177 +134,242 @@ fun MedicationDoseHistoryScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Adherence Summary Card for this Medication
-            item {
-                uiState.medicationAdherenceSummary?.let { summary ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+        when {
+            uiState.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            med == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(uiState.errorMessage ?: "Medication not found")
+                }
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp)
+                ) {
+                    // 1. 30-Day Adherence Summary Banner
+                    val summary = uiState.medicationAdherenceSummary
+                    if (summary != null) {
+                        item(key = "med_adherence_banner", contentType = "adherence_banner") {
+                            MedicationAdherenceSummaryBanner(summary = summary)
+                        }
+                    }
+
+                    // 2. Date & Outcome Filter Card
+                    item(key = "filter_controls", contentType = "filter_card") {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
-                            Text(
-                                text = "30-Day Adherence: ${summary.adherencePercentage?.let { "$it%" } ?: "—"}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "${summary.confirmedCount} Confirmed · ${summary.assumedCount} Assumed · ${summary.skippedCount} Skipped · ${summary.missedCount} Missed",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Date Range Filter Chips
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Filter by Date Range",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        HistoryDateFilter.values().forEach { filter ->
-                            FilterChip(
-                                selected = uiState.historyDateFilter == filter,
-                                onClick = { viewModel.setHistoryDateFilter(filter) },
-                                label = { Text(filter.displayName) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Outcome Filter Chips
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Filter by Outcome",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        DoseOutcomeFilter.values().forEach { filter ->
-                            FilterChip(
-                                selected = uiState.historyOutcomeFilter == filter,
-                                onClick = { viewModel.setHistoryOutcomeFilter(filter) },
-                                label = { Text(filter.displayName) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (uiState.fullDoseHistory.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Text(
-                                text = "No Matching Dose Records",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = if (uiState.historyDateFilter != HistoryDateFilter.ALL_TIME ||
-                                    uiState.historyOutcomeFilter != DoseOutcomeFilter.ALL
-                                ) {
-                                    "No doses match the selected date range and outcome filters."
-                                } else {
-                                    "No past scheduled or recorded doses exist for this medication yet."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            if (uiState.historyDateFilter != HistoryDateFilter.ALL_TIME ||
-                                uiState.historyOutcomeFilter != DoseOutcomeFilter.ALL
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.setHistoryDateFilter(HistoryDateFilter.ALL_TIME)
-                                        viewModel.setHistoryOutcomeFilter(DoseOutcomeFilter.ALL)
-                                    }
+                                Text(
+                                    text = "Date Range",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text("Reset Filters")
+                                    HistoryDateFilter.entries.forEach { df ->
+                                        FilterChip(
+                                            selected = uiState.historyDateFilter == df,
+                                            onClick = { viewModel.setHistoryDateFilter(df) },
+                                            label = { Text(df.displayName) }
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Outcome Status",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    DoseOutcomeFilter.entries.forEach { of ->
+                                        FilterChip(
+                                            selected = uiState.historyOutcomeFilter == of,
+                                            onClick = { viewModel.setHistoryOutcomeFilter(of) },
+                                            label = { Text(of.displayName) }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            } else {
-                items(uiState.fullDoseHistory, key = { it.occurrence.occurrenceId }) { resolved ->
-                    DetailedHistoryItemCard(
-                        resolved = resolved,
-                        onCorrectClick = { itemToCorrect = resolved }
-                    )
+
+                    // 3. Grouped Chronological History List
+                    if (uiState.fullDoseHistory.isEmpty()) {
+                        item(key = "empty_history", contentType = "empty_state") {
+                            EmptyStateCard(
+                                icon = Icons.Default.History,
+                                title = "No Matching Dose Occurrences",
+                                description = "No scheduled or recorded doses match the selected date range and outcome filter."
+                            )
+                        }
+                    } else {
+                        groupedByDate.forEach { (date, itemsForDate) ->
+                            val dateTitle = when (date) {
+                                today -> "Today · ${date.format(GROUP_DATE_HEADER_FORMATTER)}"
+                                today.minusDays(1) -> "Yesterday · ${date.format(GROUP_DATE_HEADER_FORMATTER)}"
+                                else -> date.format(GROUP_DATE_HEADER_FORMATTER)
+                            }
+                            item(
+                                key = "header_${date.toEpochDay()}",
+                                contentType = "date_group_header"
+                            ) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                SectionHeader(
+                                    title = dateTitle,
+                                    subtitle = "${itemsForDate.size} scheduled occurrence(s)"
+                                )
+                            }
+
+                            items(
+                                items = itemsForDate,
+                                key = { it.occurrence.occurrenceId },
+                                contentType = { "history_item_card" }
+                            ) { item ->
+                                DetailedHistoryItemCard(
+                                    resolved = item,
+                                    onCorrectClick = { resolvedToCorrect = item }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (itemToCorrect != null) {
-        val target = itemToCorrect!!
-        HistoryCorrectDoseDialog(
-            resolved = target,
-            onDismiss = { itemToCorrect = null },
+    val currentTarget = resolvedToCorrect
+    if (currentTarget != null && med != null) {
+        CorrectDoseDialog(
+            dose = currentTarget.occurrence,
+            medicationName = med.name,
+            onDismiss = { resolvedToCorrect = null },
             onConfirm = { newStatus, reason ->
                 viewModel.correctDose(
-                    occurrenceId = target.occurrence.occurrenceId,
+                    occurrenceId = currentTarget.occurrence.occurrenceId,
                     targetStatus = newStatus,
                     reason = reason,
-                    fallbackOccurrence = target.occurrence
+                    fallbackOccurrence = currentTarget.occurrence
                 )
-                itemToCorrect = null
+                resolvedToCorrect = null
             }
+        )
+    }
+}
+
+@Composable
+private fun MedicationAdherenceSummaryBanner(summary: AdherenceSummary) {
+    val semantic = MaterialTheme.noveloColors
+    val pctText = summary.adherencePercentage?.let { "$it%" } ?: "—"
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = "${summary.periodLabel} Adherence",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${summary.adherentCount} of ${summary.eligibleOccurrencesCount} due doses fulfilled",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Text(
+                    text = pctText,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                StatPill(label = "Confirmed", count = summary.confirmedCount, color = semantic.taken)
+                StatPill(label = "Assumed", count = summary.assumedCount, color = semantic.assumed)
+                StatPill(label = "Skipped", count = summary.skippedCount, color = semantic.skipped)
+                StatPill(label = "Missed", count = summary.missedCount, color = semantic.missed)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatPill(
+    label: String,
+    count: Int,
+    color: androidx.compose.ui.graphics.Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = color
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -299,26 +381,21 @@ private fun DetailedHistoryItemCard(
 ) {
     val occ = resolved.occurrence
     val zone = ZoneId.systemDefault()
-    val scheduledFmt = DateTimeFormatter.ofPattern("EEE, d MMM yyyy · HH:mm")
-    val actionFmt = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm:ss")
-
-    val scheduledStr = Instant.ofEpochMilli(occ.scheduledEpochMs).atZone(zone).format(scheduledFmt)
+    val scheduledStr = Instant.ofEpochMilli(occ.scheduledEpochMs).atZone(zone).format(TIME_FORMATTER)
     val recordedStr = occ.recordedEpochMs?.let {
-        Instant.ofEpochMilli(it).atZone(zone).format(actionFmt)
-    }
-    val correctedStr = occ.correctedAtEpochMs?.let {
-        Instant.ofEpochMilli(it).atZone(zone).format(actionFmt)
+        Instant.ofEpochMilli(it).atZone(zone).format(RECORDED_TS_FORMATTER)
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -326,85 +403,106 @@ private fun DetailedHistoryItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "Scheduled $scheduledStr",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "${occ.doseQuantity.toDisplayString()} ${occ.unit.abbreviation}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
                     Text(
-                        text = "Scheduled: $scheduledStr",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Dose: ${occ.doseQuantity.toDisplayString()} ${occ.unit.abbreviation}",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = when {
+                            recordedStr != null -> "Recorded at: $recordedStr"
+                            occ.status == DoseStatus.ASSUMED ->
+                                "Auto-assumed per schedule"
+                            occ.status == DoseStatus.MISSED && occ.recordedEpochMs == null ->
+                                "Unrecorded past dose (evaluated as Missed)"
+                            else -> "Not yet recorded"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (resolved.isCorrected) {
-                        Text(
-                            text = "Corrected",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                     DoseStatusBadge(status = occ.status)
-                    IconButton(onClick = onCorrectClick) {
+
+                    OutlinedButton(
+                        onClick = onCorrectClick,
+                        shape = MaterialTheme.shapes.extraSmall,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.heightIn(min = 34.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Correct dose record",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
+                            contentDescription = "Revise dose outcome",
+                            modifier = Modifier.size(12.dp)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Correct", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
 
-            // Explicit distinction between Scheduled Time and Action / Recording Time
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            if (!occ.notes.isNullOrBlank()) {
                 Text(
-                    text = if (recordedStr != null) {
-                        "Action recorded time: $recordedStr"
-                    } else {
-                        "Action recorded time: Not recorded (determined from past schedule)"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Note: ${occ.notes}",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
 
-                if (correctedStr != null) {
-                    Text(
-                        text = "Corrected at: $correctedStr",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary
+            if (occ.correctionNotes != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
                     )
-                }
-
-                if (!occ.correctionNotes.isNullOrBlank()) {
                     Text(
-                        text = "Correction audit note: ${occ.correctionNotes}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else if (!occ.notes.isNullOrBlank()) {
-                    Text(
-                        text = "Note: ${occ.notes}",
+                        text = "Audit Revision: ${occ.correctionNotes}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -412,90 +510,4 @@ private fun DetailedHistoryItemCard(
             }
         }
     }
-}
-
-@Composable
-private fun HistoryCorrectDoseDialog(
-    resolved: ResolvedDoseOccurrence,
-    onDismiss: () -> Unit,
-    onConfirm: (DoseStatus, String) -> Unit
-) {
-    val selectableStatuses = listOf(
-        DoseStatus.TAKEN,
-        DoseStatus.ASSUMED,
-        DoseStatus.SKIPPED,
-        DoseStatus.MISSED
-    )
-    var selectedStatus by remember { mutableStateOf(resolved.occurrence.status) }
-    var reasonText by remember { mutableStateOf("") }
-    var errorText by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.imePadding(),
-        title = { Text("Correct Historical Dose") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Historical records are preserved auditably. Stock ledger movements will automatically compensate if changing between Taken/Assumed and Skipped/Missed.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                selectableStatuses.forEach { status ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        RadioButton(
-                            selected = selectedStatus == status,
-                            onClick = { selectedStatus = status }
-                        )
-                        Text(
-                            text = status.displayName,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-
-                OutlinedTextField(
-                    value = reasonText,
-                    onValueChange = {
-                        reasonText = it
-                        errorText = null
-                    },
-                    label = { Text("Reason for correction (Required)") },
-                    singleLine = false,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (errorText != null) {
-                    Text(
-                        text = errorText!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val trimmed = reasonText.trim()
-                    if (trimmed.isEmpty()) {
-                        errorText = "Please enter an audit reason for this correction."
-                    } else {
-                        onConfirm(selectedStatus, trimmed)
-                    }
-                }
-            ) {
-                Text("Save Correction")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }

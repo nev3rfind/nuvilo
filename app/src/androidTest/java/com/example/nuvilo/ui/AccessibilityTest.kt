@@ -18,6 +18,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.nuvilo.domain.model.DoseOccurrence
@@ -36,7 +37,10 @@ import com.example.nuvilo.ui.components.HeroDoseCard
 import com.example.nuvilo.ui.components.MedicationItemCard
 import com.example.nuvilo.ui.components.SectionHeader
 import com.example.nuvilo.ui.components.TimelineDoseItem
+import com.example.nuvilo.ui.screens.AddMedicationDialog
+import com.example.nuvilo.ui.screens.EditMedicationDialog
 import com.example.nuvilo.ui.screens.LockScreen
+import com.example.nuvilo.ui.screens.RestockDialog
 import com.example.nuvilo.ui.theme.NoveloTheme
 import org.junit.Rule
 import org.junit.Test
@@ -317,5 +321,65 @@ class AccessibilityTest {
             .onNodeWithContentDescription("Amoxicillin is running low. Restock")
             .assertIsDisplayed()
             .assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun addMedicationWizard_supportsStepProgression_andDisplaysScheduleAndStockControls() {
+        composeTestRule.setContent {
+            NoveloTheme(darkTheme = true) {
+                AddMedicationDialog(
+                    onDismiss = {},
+                    onConfirm = { _, _, _, _, _, _, _, _, _, _, _, _, _ -> }
+                )
+            }
+        }
+
+        // Step 1 visible initially
+        composeTestRule.onNodeWithText("Step 1 of 3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1. Identity").assertIsDisplayed()
+
+        // Navigate to Step 2 (Schedule)
+        composeTestRule.onNodeWithText("Next Step").performClick()
+        composeTestRule.onNodeWithText("Step 2 of 3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Specific Weekdays").assertIsDisplayed()
+
+        // Navigate to Step 3 (Stock)
+        composeTestRule.onNodeWithText("Next Step").performClick()
+        composeTestRule.onNodeWithText("Step 3 of 3").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Regimen Summary").assertIsDisplayed()
+    }
+
+    @Test
+    fun restockDialog_displaysLiveLedgerImpactPreview() {
+        composeTestRule.setContent {
+            NoveloTheme {
+                RestockDialog(
+                    medication = sampleMedication,
+                    currentBalance = ScaledQuantity.ofWhole(10),
+                    onDismiss = {},
+                    onConfirm = { _, _, _, _ -> }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Ledger Impact Preview (+RESTOCK)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confirm Restock").assertIsDisplayed()
+    }
+
+    @Test
+    fun editMedicationDialog_populatesExistingMedicationFields() {
+        composeTestRule.setContent {
+            NoveloTheme {
+                EditMedicationDialog(
+                    medication = sampleMedication,
+                    onDismiss = {},
+                    onConfirm = { _, _, _, _, _, _, _, _ -> }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Edit Medication Details").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Amoxicillin").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Save Changes").assertIsDisplayed()
     }
 }

@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - 'release/**'
+      - 'feat/**'
       - chore/1-phase-07-release-hardening
   pull_request:
     branches:
       - main
+      - chore/1-phase-07-release-hardening
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

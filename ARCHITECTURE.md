@@ -253,26 +253,26 @@ graph LR
 
 ---
 
-## 7. UI/UX Architecture & Design System Tokens
+## 7. UI/UX Architecture & Design System Tokens (Phase 8 Overhaul)
 
-### 7.1 Design Tokens & Theming (`ui/theme/`)
-- **Primary Brand Color**: NHS-inspired blue (`#005EB8`), calm and authoritative without affiliation.
-- **Dark Mode Foundation**: Slate navy surfaces with base container `#121820`, surface `#171F2B`, and background `#0C1015`.
-- **Status Contrast Matrix**: High-contrast text/container pairs tested for WCAG AA compliance:
-  - `StatusTaken` (`#007A3D`) / `StatusTakenContainer` (`#D8F3E5`)
-  - `StatusAssumed` (`#005EB8`) / `StatusAssumedContainer` (`#D9EFFF`)
-  - `StatusSkipped` (`#5C6B73`) / `StatusSkippedContainer` (`#E6ECEF`)
-  - `StatusMissed` (`#BA1A1A`) / `StatusMissedContainer` (`#FFDAD6`)
-  - `StatusWarning` (`#C05600`) / `StatusWarningContainer` (`#FFE7D6`)
+### 7.1 Design Tokens, Semantic Colors & Motion (`ui/theme/`)
+- **Primary Brand Color**: NHS-inspired blue (`#005EB8` in Light mode, `#66B2FF` in Dark mode), calm and authoritative without affiliation.
+- **Dark Mode Foundation**: Slate navy surfaces with base background `#0B1017`, card surface `#131B26`, elevated container `#1C2636`, and outline `#283548`.
+- **Theme-Aware Semantic Color System (`LocalNoveloColors` / `MaterialTheme.noveloColors`)**:
+  - Replaces static status colors with adaptive `LightNoveloSemanticColors` and `DarkNoveloSemanticColors` (`taken`, `takenContainer`, `takenBorder`, `assumed`, `assumedContainer`, `assumedBorder`, `skipped`, `skippedContainer`, `skippedBorder`, `missed`, `missedContainer`, `missedBorder`, `warning`, `warningContainer`, `warningBorder`, `heroGradientStart`, `heroGradientEnd`).
+- **Shape & Motion System (`Shape.kt`, `Motion.kt`)**:
+  - `NoveloShapes`: `8dp` (`extraSmall`), `12dp` (`small`), `16dp` (`medium`), `22dp` (`large`), `28dp` (`extraLarge`).
+  - `NoveloMotion`: Spring-damped transitions for tab switching, directional horizontal calendar/wizard transitions, and expandable disclosure cards.
 
 ### 7.2 Central Component Architecture (`ui/components/NoveloComponents.kt`)
-- `HeroDoseCard`: Prominent, accessible callout for the next actionable dose today, with integrated Take, Skip, and Snooze (+15m) actions and minimum 48x48dp touch targets.
-- `TimelineDoseItem`: Chronological schedule item with vertical track connector, status badge, scheduled time, and quick actions.
-- `CompletedDayCard`: Reassuring state card displayed when all scheduled doses for the day have been completed.
-- `AlertBanner`: High-visibility notification card for low-stock warnings and expiring prescriptions.
-- `DoseStatusBadge`: Accessible badge pairing high-contrast semantic colors with distinct symbols (`✓`, `~`, `×`, `!`) to never convey status solely through color.
-- `StockBadge`: Inventory health badge with threshold coloring (Normal, Low Stock, Depleted).
-- `EmptyStateCard`: Educational placeholder for empty lists and schedules with contextual action buttons.
+- `HeroDoseCard`: Prominent editorial gradient callout for the next actionable dose today, with primary `Confirm Dose Taken` CTA (`52dp` min height) and secondary `Snooze 15m` / `Skip Dose` actions (`48dp` min height).
+- `TimelineDoseItem`: Chronological schedule row with a left-hand `HH:mm` time column, vertical timeline indicator bar, status badge, and quick actions.
+- `CompletedDayCard`: Reassuring completion banner when all scheduled doses for the day have been resolved.
+- `AlertBanner`: Theme-aware warning card for low-stock and expiring prescription alerts.
+- `DoseStatusBadge`: Accessible badge pairing high-contrast semantic colors with distinct symbols (`✓`, `~`, `×`, `!`, `•`) so status is never conveyed by color alone.
+- `StockBadge`: Inventory health badge with exact vs `EST.` (estimated consumption) labeling and runway days remaining.
+- `ScheduleConfigurationContent`: Shared schedule builder supporting Daily and Specific Weekdays (`Mon`–`Sun`), preset time chips, custom `HH:mm` time entry, dose quantity, and instructions.
+- `EmptyStateCard` & `SectionHeader`: Standardized structural components with semantic heading support.
 
 ### 7.3 Edge-to-Edge & Accessibility Guidelines
 - Window insets: Managed via Material 3 `Scaffold` safe drawing insets, avoiding double `statusBarsPadding()`.

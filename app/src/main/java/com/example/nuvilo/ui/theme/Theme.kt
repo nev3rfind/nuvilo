@@ -1,72 +1,98 @@
 package com.example.nuvilo.ui.theme
 
-import android.os.Build
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import com.example.nuvilo.data.preferences.ThemeMode
-
-private val DarkColorScheme = darkColorScheme(
-    primary = DarkBluePrimary,
-    onPrimary = Color(0xFF002B55),
-    primaryContainer = DarkBlueContainer,
-    onPrimaryContainer = Color(0xFFD0E4FF),
-    secondary = DarkBluePrimary,
-    onSecondary = Color(0xFF002B55),
-    secondaryContainer = DarkSurfaceVariant,
-    onSecondaryContainer = DarkTextPrimary,
-    background = DarkBackground,
-    onBackground = DarkTextPrimary,
-    surface = DarkSurface,
-    onSurface = DarkTextPrimary,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = DarkTextSecondary,
-    outline = DarkBorder,
-    outlineVariant = Color(0xFF1F2B3A),
-    error = StatusMissedDark,
-    onError = Color(0xFF450A0A)
-)
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = HealthcareBluePrimary,
-    onPrimary = Color.White,
-    primaryContainer = HealthcareBlueContainer,
-    onPrimaryContainer = HealthcareNavy,
-    secondary = HealthcareNavy,
-    onSecondary = Color.White,
-    secondaryContainer = HealthcareSurfaceVariant,
-    onSecondaryContainer = HealthcareTextPrimary,
-    background = HealthcareBackground,
-    onBackground = HealthcareTextPrimary,
-    surface = HealthcareSurface,
-    onSurface = HealthcareTextPrimary,
-    surfaceVariant = HealthcareSurfaceVariant,
-    onSurfaceVariant = HealthcareTextSecondary,
-    outline = HealthcareBorder,
-    outlineVariant = Color(0xFFF1F5F9),
+    primary = NoveloBlue,
+    onPrimary = NeutralSurfaceLight,
+    primaryContainer = NoveloLightBlueContainer,
+    onPrimaryContainer = NoveloOnPrimaryContainer,
+    secondary = NoveloTeal,
+    onSecondary = NeutralSurfaceLight,
+    secondaryContainer = NoveloTealContainer,
+    onSecondaryContainer = NoveloOnTealContainer,
+    tertiary = NoveloBrightBlue,
+    onTertiary = NeutralSurfaceLight,
+    background = NeutralBackgroundLight,
+    onBackground = NeutralTextPrimaryLight,
+    surface = NeutralSurfaceLight,
+    onSurface = NeutralTextPrimaryLight,
+    surfaceVariant = NeutralSurfaceVariantLight,
+    onSurfaceVariant = NeutralTextSecondaryLight,
+    outline = NeutralOutlineLight,
+    outlineVariant = NeutralOutlineVariantLight,
     error = StatusMissed,
-    onError = Color.White
+    onError = NeutralSurfaceLight,
+    errorContainer = StatusMissedContainer,
+    onErrorContainer = StatusMissed
 )
+
+private val DarkColorScheme = darkColorScheme(
+    primary = NoveloBlueDark,
+    onPrimary = NoveloOnPrimaryDark,
+    primaryContainer = NoveloBlueContainerDark,
+    onPrimaryContainer = NoveloOnPrimaryContainerDark,
+    secondary = NoveloTealDark,
+    onSecondary = NoveloOnTealDark,
+    secondaryContainer = NoveloTealContainerDark,
+    onSecondaryContainer = NoveloOnTealContainerDark,
+    tertiary = NoveloBrightBlue,
+    onTertiary = NeutralSurfaceLight,
+    background = NeutralBackgroundDark,
+    onBackground = NeutralTextPrimaryDark,
+    surface = NeutralSurfaceDark,
+    onSurface = NeutralTextPrimaryDark,
+    surfaceVariant = NeutralSurfaceVariantDark,
+    onSurfaceVariant = NeutralTextSecondaryDark,
+    outline = NeutralOutlineDark,
+    outlineVariant = NeutralOutlineVariantDark,
+    error = StatusMissedDark,
+    onError = NeutralBackgroundDark,
+    errorContainer = StatusMissedContainerDark,
+    onErrorContainer = StatusMissedDark
+)
+
+val MaterialTheme.noveloColors: NoveloSemanticColors
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalNoveloColors.current
 
 @Composable
 fun NoveloTheme(
-    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val darkTheme = when (themeMode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val semanticColors = if (darkTheme) DarkNoveloSemanticColors else LightNoveloSemanticColors
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
     }
 
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalNoveloColors provides semanticColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = NoveloShapes,
+            content = content
+        )
+    }
 }
