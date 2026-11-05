@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -39,11 +40,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.nuvilo.R
 import com.example.nuvilo.security.BiometricStatus
 
 /**
@@ -82,18 +85,20 @@ fun LockScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(84.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CircleShape),
+                    modifier = Modifier.size(92.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
+                    Image(
+                        painter = painterResource(R.drawable.ic_novelo_logo),
+                        contentDescription = "Novelo Logo",
+                        modifier = Modifier
+                            .size(86.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .border(
+                                width = 1.5.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(22.dp)
+                            )
                     )
                 }
 

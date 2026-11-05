@@ -13,3 +13,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# UI/UX Pro Max local skill directories (re-generable via `uipro init`, excluded due to upstream license discrepancy)
+.agents/skills/banner-design/
+.agents/skills/brand/
+.agents/skills/design/
+.agents/skills/design-system/
+.agents/skills/slides/
+.agents/skills/ui-styling/
+.agents/skills/ui-ux-pro-max/
+

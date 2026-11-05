@@ -56,6 +56,7 @@ import com.example.nuvilo.ui.screens.MedicationDetailScreen
 import com.example.nuvilo.ui.screens.MedicationDoseHistoryScreen
 import com.example.nuvilo.ui.screens.MedicationListScreen
 import com.example.nuvilo.ui.screens.SettingsScreen
+import com.example.nuvilo.ui.screens.SplashScreen
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.NoveloTheme
 import com.example.nuvilo.ui.viewmodel.AdherenceCalendarViewModel
@@ -110,14 +111,18 @@ class MainActivity : FragmentActivity() {
             val prefs by settingsViewModel.userPreferences.collectAsStateWithLifecycle()
             val isLocked by appLockManager.isLocked.collectAsStateWithLifecycle()
 
+            var showSplashScreen by rememberSaveable {
+                mutableStateOf(intentMedicationIdState.value == null)
+            }
+
             val darkTheme = when (prefs.themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
                 ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
             }
 
-            LaunchedEffect(prefs.isBiometricLockEnabled, prefs.isRecentsPreviewMasked, isLocked) {
-                val shouldSecure = isLocked || (prefs.isBiometricLockEnabled && prefs.isRecentsPreviewMasked)
+            LaunchedEffect(prefs.isBiometricLockEnabled, prefs.isRecentsPreviewMasked, isLocked, showSplashScreen) {
+                val shouldSecure = (!showSplashScreen && isLocked) || (prefs.isBiometricLockEnabled && prefs.isRecentsPreviewMasked)
                 if (shouldSecure) {
                     window.setFlags(
                         WindowManager.LayoutParams.FLAG_SECURE,
@@ -128,30 +133,40 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            LaunchedEffect(isLocked) {
-                if (isLocked && prefs.isBiometricLockEnabled) {
+            LaunchedEffect(isLocked, showSplashScreen) {
+                if (!showSplashScreen && isLocked && prefs.isBiometricLockEnabled) {
                     triggerBiometricPrompt()
                 }
             }
 
             NoveloTheme(darkTheme = darkTheme) {
-                if (prefs.isBiometricLockEnabled && isLocked) {
-                    val bioStatus = remember(isLocked) { biometricAuthManager.checkBiometricStatus() }
-                    LockScreen(
-                        biometricStatus = bioStatus,
-                        errorMessage = authErrorMessageState.value,
-                        onUnlockClick = { triggerBiometricPrompt() }
-                    )
-                } else {
-                    NoveloMainContent(
-                        dashboardViewModel = dashboardViewModel,
-                        medicationViewModel = medicationViewModel,
-                        adherenceCalendarViewModel = adherenceCalendarViewModel,
-                        settingsViewModel = settingsViewModel,
-                        viewModelFactory = viewModelFactory,
-                        intentMedicationId = intentMedicationIdState.value,
-                        onConsumeIntentMedicationId = { intentMedicationIdState.value = null }
-                    )
+                AnimatedContent(
+                    targetState = showSplashScreen,
+                    transitionSpec = { NoveloMotion.screenTransition() },
+                    label = "splashAppTransition"
+                ) { isSplash ->
+                    if (isSplash) {
+                        SplashScreen(
+                            onSplashComplete = { showSplashScreen = false }
+                        )
+                    } else if (prefs.isBiometricLockEnabled && isLocked) {
+                        val bioStatus = remember(isLocked) { biometricAuthManager.checkBiometricStatus() }
+                        LockScreen(
+                            biometricStatus = bioStatus,
+                            errorMessage = authErrorMessageState.value,
+                            onUnlockClick = { triggerBiometricPrompt() }
+                        )
+                    } else {
+                        NoveloMainContent(
+                            dashboardViewModel = dashboardViewModel,
+                            medicationViewModel = medicationViewModel,
+                            adherenceCalendarViewModel = adherenceCalendarViewModel,
+                            settingsViewModel = settingsViewModel,
+                            viewModelFactory = viewModelFactory,
+                            intentMedicationId = intentMedicationIdState.value,
+                            onConsumeIntentMedicationId = { intentMedicationIdState.value = null }
+                        )
+                    }
                 }
             }
         }
