@@ -3,7 +3,10 @@
 **Date:** 2026-11-05  
 **Product:** Novelo – *Medication, made manageable.*  
 **Device:** Android Emulator (`emulator-5554`), Android 16 (API 37), 1080x2400 420dpi.  
-**Git Branch:** `feat/6-uiux-pro-max-implementation`.
+**Git Branch:** `feat/6-uiux-pro-max-implementation`.  
+**Tracking Issue:** [Issue #5](https://github.com/nev3rfind/nuvilo/issues/5)  
+**Pull Request:** [Draft PR #6](https://github.com/nev3rfind/nuvilo/pull/6)  
+**Device QA Report:** `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_QA.md`.
 
 ---
 

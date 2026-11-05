@@ -4,7 +4,10 @@
 **Product:** Novelo – *Medication, made manageable.*  
 **Environment:** Android Native, API 24–37, Kotlin 2.2, Jetpack Compose, Material 3, Room v3.  
 **Git Topic Branch:** `feat/6-uiux-pro-max-implementation` (stacked on `chore/5-uiux-pro-max-foundation`).  
-**Reference Design System:** `design-system/novelo/MASTER.md` & `docs/ui-ux-audit/PRO_MAX_RESEARCH.md`.
+**Tracking Issue:** [Issue #5](https://github.com/nev3rfind/nuvilo/issues/5)  
+**Pull Request:** [Draft PR #6](https://github.com/nev3rfind/nuvilo/pull/6)  
+**Reference Design System:** `design-system/novelo/MASTER.md` & `docs/ui-ux-audit/PRO_MAX_RESEARCH.md`.  
+**Device QA Report:** `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_QA.md`.
 
 ---
 

@@ -8,7 +8,7 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- **Stage 2: UI/UX Pro Max Implementation & Design System Rollout**:
+- **Stage 2: UI/UX Pro Max Implementation & Design System Rollout (Refs #5)**:
   - Implemented `fontFeatureSettings = "tnum"` tabular numbers (`NoveloNumericTypography` & `.tabular` extension) in `Type.kt` for jitter-free counters, timestamps, stock balances, and adherence stats.
   - Added layered color tokens in `Color.kt` and `Theme.kt`: `NoveloInteractionBlue` (`#0284C7`), `NoveloCyanAccent` (`#0891B2`), `NoveloLightContainer` (`#E0F2FE`), `NoveloDarkContainer` (`#1E293B`), and `NoveloBulletBenchmark`.
   - Added expressive silhouettes in `Shape.kt`: `NoveloPillShape` (`RoundedCornerShape(999.dp)`) and `NoveloCardShape` (`RoundedCornerShape(18.dp)`).
