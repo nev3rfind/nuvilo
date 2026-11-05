@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -40,9 +41,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
@@ -69,6 +72,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -148,6 +152,8 @@ fun MedicationDetailScreen(
     var showPrescriptionFormDialog by rememberSaveable { mutableStateOf(false) }
     var prescriptionToEdit by remember { mutableStateOf<Prescription?>(null) }
     var showPrescriptionHistoryDialog by rememberSaveable { mutableStateOf(false) }
+    var rxForRepeatRequest by remember { mutableStateOf<Prescription?>(null) }
+    var rxForCollection by remember { mutableStateOf<Prescription?>(null) }
 
     var lotsExpanded by rememberSaveable { mutableStateOf(false) }
     var ledgerExpanded by rememberSaveable { mutableStateOf(false) }
@@ -258,13 +264,26 @@ fun MedicationDetailScreen(
                 ) {
                     // 1. Unified Hero Medication & Stock Runway Card
                     item(key = "hero_stock_card", contentType = "hero_card") {
+                        val todayEpochDay = LocalDate.now().toEpochDay()
+                        val activeRx = uiState.prescriptions.firstOrNull {
+                            it.effectiveStatus(todayEpochDay) == PrescriptionStatus.ACTIVE
+                        } ?: uiState.prescriptions.firstOrNull()
                         MedicationHeroAndStockCard(
                             medication = med,
                             balance = uiState.stockBalance,
                             adherenceSummary = uiState.medicationAdherenceSummary,
+                            primaryPrescription = activeRx,
                             onEditMedicationClick = { showEditMedicationDialog = true },
                             onRestockClick = { showRestockDialog = true },
-                            onAdjustClick = { showAdjustDialog = true }
+                            onAdjustClick = { showAdjustDialog = true },
+                            onRequestRepeatClick = if (activeRx != null && activeRx.canRequestRepeat(todayEpochDay)) {
+                                { rxForRepeatRequest = activeRx }
+                            } else if (activeRx == null) {
+                                {
+                                    prescriptionToEdit = null
+                                    showPrescriptionFormDialog = true
+                                }
+                            } else null
                         )
                     }
 
@@ -291,10 +310,10 @@ fun MedicationDetailScreen(
                                 showPrescriptionFormDialog = true
                             },
                             onRequestRepeatClick = { rx ->
-                                viewModel.requestPrescriptionRepeat(rx.id)
+                                rxForRepeatRequest = rx
                             },
                             onCollectRepeatClick = { rx ->
-                                viewModel.collectPrescriptionRepeat(rx.id)
+                                rxForCollection = rx
                             },
                             onArchivePrescriptionClick = { rx ->
                                 viewModel.archivePrescription(rx.id)
@@ -450,6 +469,40 @@ fun MedicationDetailScreen(
             onDismiss = { showPrescriptionHistoryDialog = false }
         )
     }
+
+    rxForRepeatRequest?.let { rx ->
+        if (med != null) {
+            RequestRepeatDialog(
+                prescription = rx,
+                medication = med,
+                onDismiss = { rxForRepeatRequest = null },
+                onConfirm = { requestedQty, notes ->
+                    viewModel.requestPrescriptionRepeat(rx.id, requestedQty, notes)
+                    rxForRepeatRequest = null
+                }
+            )
+        }
+    }
+
+    rxForCollection?.let { rx ->
+        if (med != null) {
+            CollectRepeatDialog(
+                prescription = rx,
+                medication = med,
+                onDismiss = { rxForCollection = null },
+                onConfirm = { notes, autoRestockQty, lotNumber, expiryEpoch ->
+                    viewModel.collectPrescriptionRepeat(
+                        prescriptionId = rx.id,
+                        notes = notes,
+                        autoRestockQuantity = autoRestockQty,
+                        lotNumber = lotNumber,
+                        expiryDateEpochMs = expiryEpoch
+                    )
+                    rxForCollection = null
+                }
+            )
+        }
+    }
 }
 
 @Composable
@@ -457,9 +510,11 @@ private fun MedicationHeroAndStockCard(
     medication: Medication,
     balance: StockBalance?,
     adherenceSummary: AdherenceSummary?,
+    primaryPrescription: Prescription? = null,
     onEditMedicationClick: () -> Unit,
     onRestockClick: () -> Unit,
-    onAdjustClick: () -> Unit
+    onAdjustClick: () -> Unit,
+    onRequestRepeatClick: (() -> Unit)? = null
 ) {
     val semantic = MaterialTheme.noveloColors
     val accentColor = parseAccentColor(medication.colorTagHex, MaterialTheme.colorScheme.primary)
@@ -725,6 +780,101 @@ private fun MedicationHeroAndStockCard(
                                     fontWeight = FontWeight.Medium,
                                     color = semantic.warning
                                 )
+                            }
+                        }
+                    }
+
+                    if (primaryPrescription?.hasPendingRepeatRequest == true) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = semantic.assumedContainer,
+                            border = BorderStroke(1.dp, semantic.assumedBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.HourglassTop,
+                                    contentDescription = "GP Repeat Order Pending",
+                                    tint = semantic.assumed,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "GP Repeat Order Pending",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = semantic.assumed
+                                    )
+                                    val qtyText = primaryPrescription.quantityPrescribed?.let { "${it.toDisplayString()} ${medication.stockUnit.abbreviation} requested · " } ?: ""
+                                    Text(
+                                        text = "${qtyText}Order submitted to surgery. Awaiting GP authorisation & pharmacy preparation.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = semantic.assumed.copy(alpha = 0.9f)
+                                    )
+                                }
+                            }
+                        }
+                    } else if (balance.isLowStock || (balance.daysRemaining != null && balance.daysRemaining <= 7)) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = semantic.warningContainer,
+                            border = BorderStroke(1.dp, semantic.warningBorder)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.NotificationsActive,
+                                        contentDescription = null,
+                                        tint = semantic.warning,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "GP Reorder Recommended",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = semantic.warning
+                                    )
+                                }
+                                val daysText = balance.daysRemaining?.let { "Only ~$it day(s) supply remaining. " } ?: ""
+                                Text(
+                                    text = "${daysText}GP surgeries and pharmacies typically need 2–3 working days to authorise and prepare repeat prescriptions. Request your next repeat now to avoid running out.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = semantic.warning
+                                )
+                                if (onRequestRepeatClick != null) {
+                                    Button(
+                                        onClick = onRequestRepeatClick,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = semantic.warning,
+                                            contentColor = Color.White
+                                        ),
+                                        shape = MaterialTheme.shapes.small,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 42.dp)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (primaryPrescription != null) "Order Repeat from GP" else "Add Prescription & Order",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1656,11 +1806,28 @@ fun RestockDialog(
     ) -> Unit
 ) {
     val semantic = MaterialTheme.noveloColors
-    var quantityStr by rememberSaveable { mutableStateOf("28") }
+    val defaultInitialQty = when (medication.stockUnit) {
+        StockUnit.DROPS -> "30"
+        StockUnit.ML -> "100"
+        StockUnit.PUFFS -> "120"
+        StockUnit.BOTTLES -> "1"
+        StockUnit.PATCHES -> "7"
+        else -> "28"
+    }
+    var quantityStr by rememberSaveable { mutableStateOf(defaultInitialQty) }
     var lotNumber by rememberSaveable { mutableStateOf("") }
     var expiryDaysAheadStr by rememberSaveable { mutableStateOf("365") }
     var notes by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val presets = when (medication.stockUnit) {
+        StockUnit.DROPS -> listOf("15", "30", "60")
+        StockUnit.ML -> listOf("50", "100", "150", "200")
+        StockUnit.PUFFS -> listOf("60", "120", "200")
+        StockUnit.BOTTLES -> listOf("1", "2", "3")
+        StockUnit.PATCHES -> listOf("5", "7", "14", "28")
+        else -> listOf("7", "14", "28", "56", "84")
+    }
 
     val parsedQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }.getOrNull()
     val isValid = parsedQty != null && parsedQty.isPositive()
@@ -1726,6 +1893,19 @@ fun RestockDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    presets.forEach { preset ->
+                        FilterChip(
+                            selected = quantityStr == preset,
+                            onClick = { quantityStr = preset },
+                            label = { Text("+$preset ${medication.stockUnit.abbreviation}") }
+                        )
+                    }
+                }
 
                 OutlinedTextField(
                     value = lotNumber,
@@ -2738,6 +2918,309 @@ private fun PrescriptionHistoryDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun RequestRepeatDialog(
+    prescription: Prescription,
+    medication: Medication,
+    onDismiss: () -> Unit,
+    onConfirm: (requestedQuantity: ScaledQuantity?, notes: String?) -> Unit
+) {
+    val initialQty = prescription.quantityPrescribed?.toDisplayString()
+        ?: when (medication.stockUnit) {
+            StockUnit.DROPS -> "30"
+            StockUnit.ML -> "100"
+            StockUnit.PUFFS -> "120"
+            StockUnit.BOTTLES -> "1"
+            StockUnit.PATCHES -> "7"
+            else -> "28"
+        }
+    var quantityStr by rememberSaveable { mutableStateOf(initialQty) }
+    var notes by rememberSaveable { mutableStateOf(prescription.notes ?: "") }
+    var selectedChannel by rememberSaveable { mutableStateOf("NHS App / Online") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val parsedQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }.getOrNull()
+    val isValid = parsedQty != null && parsedQty.isPositive()
+
+    val presets = when (medication.stockUnit) {
+        StockUnit.DROPS -> listOf("15", "30", "60")
+        StockUnit.ML -> listOf("50", "100", "150", "200")
+        StockUnit.PUFFS -> listOf("60", "120", "200")
+        StockUnit.BOTTLES -> listOf("1", "2", "3")
+        StockUnit.PATCHES -> listOf("5", "7", "14", "28")
+        else -> listOf("14", "28", "56", "84")
+    }
+
+    val channels = listOf("NHS App / Online", "Phone call to GP", "In-person at reception", "Pharmacy managed")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = { Text("Request Repeat from GP", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Record an order submitted to your GP surgery for ${medication.name} (${medication.strength}). Novelo will track this pending order in reminders and stock forecasts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = quantityStr,
+                    onValueChange = { quantityStr = it },
+                    label = { Text("Quantity Requested (${medication.stockUnit.displayName}) *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    presets.forEach { preset ->
+                        FilterChip(
+                            selected = quantityStr == preset,
+                            onClick = { quantityStr = preset },
+                            label = { Text("$preset ${medication.stockUnit.abbreviation}") }
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Request Channel / Method:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    channels.forEach { ch ->
+                        FilterChip(
+                            selected = selectedChannel == ch,
+                            onClick = { selectedChannel = ch },
+                            label = { Text(ch) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (Optional)") },
+                    placeholder = { Text("e.g. Requested via Dr. Smith surgery portal") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isValid && !isSubmitting) {
+                        isSubmitting = true
+                        val combinedNotes = buildString {
+                            append("Requested via $selectedChannel")
+                            if (notes.isNotBlank() && notes.trim() != prescription.notes?.trim()) {
+                                append(" · ").append(notes.trim())
+                            }
+                        }
+                        onConfirm(parsedQty, combinedNotes)
+                    }
+                },
+                enabled = isValid && !isSubmitting
+            ) {
+                Text("Confirm Repeat Order")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CollectRepeatDialog(
+    prescription: Prescription,
+    medication: Medication,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        notes: String?,
+        autoRestockQuantity: ScaledQuantity?,
+        lotNumber: String?,
+        expiryDateEpochMs: Long?
+    ) -> Unit
+) {
+    val semantic = MaterialTheme.noveloColors
+    val initialQty = prescription.quantityPrescribed?.toDisplayString()
+        ?: when (medication.stockUnit) {
+            StockUnit.DROPS -> "30"
+            StockUnit.ML -> "100"
+            StockUnit.PUFFS -> "120"
+            StockUnit.BOTTLES -> "1"
+            StockUnit.PATCHES -> "7"
+            else -> "28"
+        }
+    var autoRestock by rememberSaveable { mutableStateOf(true) }
+    var quantityStr by rememberSaveable { mutableStateOf(initialQty) }
+    var lotNumber by rememberSaveable { mutableStateOf("") }
+    var expiryDaysAheadStr by rememberSaveable { mutableStateOf("365") }
+    var notes by rememberSaveable { mutableStateOf("") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val parsedQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }.getOrNull()
+    val isValid = !autoRestock || (parsedQty != null && parsedQty.isPositive())
+    val daysAhead = expiryDaysAheadStr.toLongOrNull() ?: 365L
+    val computedExpiryDateStr = LocalDate.now().plusDays(daysAhead.coerceAtLeast(1L)).format(DATE_FORMATTER)
+
+    val presets = when (medication.stockUnit) {
+        StockUnit.DROPS -> listOf("15", "30", "60")
+        StockUnit.ML -> listOf("50", "100", "150", "200")
+        StockUnit.PUFFS -> listOf("60", "120", "200")
+        StockUnit.BOTTLES -> listOf("1", "2", "3")
+        StockUnit.PATCHES -> listOf("5", "7", "14", "28")
+        else -> listOf("14", "28", "56", "84")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = { Text("Collect Repeat Prescription", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Confirm receipt of repeat prescription from pharmacy for ${medication.name}. This decrements authorized repeats remaining from ${prescription.repeatsRemaining} to ${prescription.repeatsRemaining - 1} and marks the order as fulfilled.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = if (autoRestock) semantic.takenContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, if (autoRestock) semantic.takenBorder else MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { autoRestock = !autoRestock }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Restock Inventory Automatically",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (autoRestock) semantic.taken else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Adds the collected medication straight to your current stock ledger",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoRestock,
+                            onCheckedChange = { autoRestock = it }
+                        )
+                    }
+                }
+
+                if (autoRestock) {
+                    OutlinedTextField(
+                        value = quantityStr,
+                        onValueChange = { quantityStr = it },
+                        label = { Text("Quantity Received (${medication.stockUnit.displayName}) *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        presets.forEach { preset ->
+                            FilterChip(
+                                selected = quantityStr == preset,
+                                onClick = { quantityStr = preset },
+                                label = { Text("$preset ${medication.stockUnit.abbreviation}") }
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = lotNumber,
+                        onValueChange = { lotNumber = it },
+                        label = { Text("Batch / Lot Number (Optional)") },
+                        placeholder = { Text("e.g. LOT-2026-X") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = expiryDaysAheadStr,
+                        onValueChange = { expiryDaysAheadStr = it },
+                        label = { Text("Expiry (Days Ahead — $computedExpiryDateStr)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (Optional)") },
+                    placeholder = { Text("e.g. Collected from Boots High Street") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isValid && !isSubmitting) {
+                        isSubmitting = true
+                        val expiryEpoch = if (autoRestock) System.currentTimeMillis() + (daysAhead * 24 * 60 * 60 * 1000) else null
+                        onConfirm(
+                            notes.takeIf { it.isNotBlank() },
+                            if (autoRestock) parsedQty else null,
+                            lotNumber.takeIf { it.isNotBlank() },
+                            expiryEpoch
+                        )
+                    }
+                },
+                enabled = isValid && !isSubmitting
+            ) {
+                Text(if (autoRestock) "Collect & Restock" else "Confirm Collected")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
     )

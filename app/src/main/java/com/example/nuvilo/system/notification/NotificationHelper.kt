@@ -69,7 +69,10 @@ class NotificationHelper(private val context: Context) {
         doseQuantity: ScaledQuantity,
         unit: StockUnit,
         isPrivacyMasked: Boolean,
-        stockBalance: StockBalance?
+        stockBalance: StockBalance?,
+        hasPendingOrder: Boolean = false,
+        pendingOrderQuantity: ScaledQuantity? = null,
+        pendingOrderNotes: String? = null
     ) {
         if (!areNotificationsEnabled()) return
 
@@ -146,19 +149,22 @@ class NotificationHelper(private val context: Context) {
         val title = if (isPrivacyMasked) {
             "Medication Reminder"
         } else {
-            "Time for $medicationName"
+            "Time for $medicationName ($medicationStrength)"
         }
 
-        val text = if (isPrivacyMasked) {
+        val shortText = if (isPrivacyMasked) {
             "Time for your scheduled medication dose"
         } else {
-            "Take ${doseQuantity.toDisplayString()} ${unit.abbreviation} ($medicationStrength) · Scheduled for $scheduledTimeStr"
+            val remainingPart = if (stockBalance != null) {
+                " · Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
+            } else ""
+            "Take ${doseQuantity.toDisplayString()} ${unit.abbreviation}$remainingPart"
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
-            .setContentText(text)
+            .setContentText(shortText)
             .setContentIntent(contentPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -168,8 +174,25 @@ class NotificationHelper(private val context: Context) {
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Skip", skipPendingIntent)
             .addAction(android.R.drawable.ic_popup_sync, "Snooze (15m)", snoozePendingIntent)
 
-        if (!isPrivacyMasked && stockBalance != null) {
-            builder.setSubText("${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} remaining")
+        if (!isPrivacyMasked) {
+            val subText = NotificationTextBuilder.buildSubText(
+                stockBalance = stockBalance,
+                unit = unit,
+                hasPendingOrder = hasPendingOrder
+            )
+            subText?.let { builder.setSubText(it) }
+
+            val bigText = NotificationTextBuilder.buildBigText(
+                doseQuantity = doseQuantity,
+                unit = unit,
+                medicationStrength = medicationStrength,
+                scheduledTimeStr = scheduledTimeStr,
+                stockBalance = stockBalance,
+                hasPendingOrder = hasPendingOrder,
+                pendingOrderQuantity = pendingOrderQuantity,
+                pendingOrderNotes = pendingOrderNotes
+            )
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
 
         notificationManager.notify(notificationId, builder.build())
@@ -180,7 +203,9 @@ class NotificationHelper(private val context: Context) {
         medicationName: String,
         currentBalance: ScaledQuantity,
         unit: StockUnit,
-        daysRemaining: Int?
+        daysRemaining: Int?,
+        hasPendingOrder: Boolean = false,
+        pendingOrderQuantity: ScaledQuantity? = null
     ) {
         if (!areNotificationsEnabled()) return
 
@@ -198,12 +223,24 @@ class NotificationHelper(private val context: Context) {
         )
 
         val daysText = if (daysRemaining != null) " (approx. $daysRemaining days left)" else ""
-        val text = "Only ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText. Tap to record a restock."
+        val title = "Low Stock: $medicationName"
+        val contentText = "Only ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText."
+
+        val bigText = buildString {
+            append("Supply for $medicationName is running low: only ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText.")
+            if (hasPendingOrder) {
+                val qtyStr = pendingOrderQuantity?.let { "for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
+                append("\n📋 A repeat order $qtyStr is currently pending with your GP/pharmacy. Tap to review or record restock upon collection.")
+            } else {
+                append("\n⚠️ Recommendation: Contact your GP surgery or submit a repeat prescription order now. Repeat requests typically take 2-3 working days to dispense.")
+            }
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_LOW_STOCK_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("Low Stock: $medicationName")
-            .setContentText(text)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setContentIntent(contentPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
@@ -238,5 +275,53 @@ class NotificationHelper(private val context: Context) {
 
     fun cancelNotification(notificationId: Int) {
         notificationManager.cancel(notificationId)
+    }
+}
+
+object NotificationTextBuilder {
+    fun buildSubText(
+        stockBalance: StockBalance?,
+        unit: StockUnit,
+        hasPendingOrder: Boolean
+    ): String? {
+        return when {
+            hasPendingOrder -> "GP Order Pending · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
+            stockBalance != null -> "${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
+            else -> null
+        }
+    }
+
+    fun buildBigText(
+        doseQuantity: ScaledQuantity,
+        unit: StockUnit,
+        medicationStrength: String,
+        scheduledTimeStr: String,
+        stockBalance: StockBalance?,
+        hasPendingOrder: Boolean = false,
+        pendingOrderQuantity: ScaledQuantity? = null,
+        pendingOrderNotes: String? = null
+    ): String {
+        return buildString {
+            append("Take ${doseQuantity.toDisplayString()} ${unit.abbreviation} ($medicationStrength) · Scheduled for $scheduledTimeStr")
+            if (stockBalance != null) {
+                val runwayText = stockBalance.daysRemaining?.let { "approx. $it days runway" } ?: "supply unmetered"
+                append("\n📦 Remaining Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} ($runwayText)")
+
+                if (hasPendingOrder) {
+                    val qtyStr = pendingOrderQuantity?.let { "${it.toDisplayString()} ${unit.abbreviation}" } ?: "Repeat"
+                    val noteStr = if (!pendingOrderNotes.isNullOrBlank()) " ($pendingOrderNotes)" else ""
+                    append("\n📋 GP Order Pending: $qtyStr requested$noteStr — in progress with surgery/pharmacy")
+                } else if (stockBalance.isLowStock || (stockBalance.daysRemaining != null && stockBalance.daysRemaining <= 7)) {
+                    val daysRemaining = stockBalance.daysRemaining ?: 7
+                    val urgency = if (daysRemaining <= 3) "Urgent: " else ""
+                    append("\n⚠️ ${urgency}GP Recommendation: Approx. $daysRemaining days supply left. Order repeat prescription now (takes 2-3 working days).")
+                } else {
+                    val days = stockBalance.daysRemaining
+                    if (days != null) {
+                        append("\n✅ Supply Healthy: ~$days days runway remaining before next GP reorder.")
+                    }
+                }
+            }
+        }
     }
 }

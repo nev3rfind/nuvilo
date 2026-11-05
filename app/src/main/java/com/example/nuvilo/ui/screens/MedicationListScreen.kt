@@ -54,6 +54,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,6 +63,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,8 +79,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.RecordingMode
+import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.MedicationItemCard
@@ -88,6 +94,7 @@ import com.example.nuvilo.ui.theme.MedicationAccentSwatches
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.MedicationViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun MedicationListScreen(
@@ -96,10 +103,13 @@ fun MedicationListScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var filterLowStockOnly by rememberSaveable { mutableStateOf(false) }
+    var medicationToRestock by remember { mutableStateOf<Pair<Medication, ScaledQuantity>?>(null) }
 
     val rawList = if (selectedTabIndex == 0) uiState.activeMedications else uiState.archivedMedications
     val filteredList = rawList.filter { item ->
@@ -116,6 +126,7 @@ fun MedicationListScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showAddDialog = true },
@@ -272,11 +283,15 @@ fun MedicationListScreen(
                                 medication = item.medication,
                                 stockBalance = item.stockBalance,
                                 schedules = item.schedules,
+                                pendingPrescription = item.pendingPrescription,
                                 onArchiveToggle = {
                                     viewModel.setArchived(item.medication.id, !item.medication.isArchived)
                                 },
                                 onCardClick = {
                                     onSelectMedication(item.medication.id)
+                                },
+                                onRestockClick = {
+                                    medicationToRestock = item.medication to (item.stockBalance?.currentBalance ?: ScaledQuantity.ZERO)
                                 }
                             )
                         }
@@ -306,6 +321,28 @@ fun MedicationListScreen(
                     instructions = instructions
                 )
                 showAddDialog = false
+            }
+        )
+    }
+
+    medicationToRestock?.let { (med, curBal) ->
+        RestockDialog(
+            medication = med,
+            currentBalance = curBal,
+            onDismiss = { medicationToRestock = null },
+            onConfirm = { qty, lotNumber, expiryEpochMs, notes ->
+                viewModel.restockMedication(
+                    medicationId = med.id,
+                    quantity = qty,
+                    unit = med.stockUnit,
+                    lotNumber = lotNumber,
+                    expiryDateEpochMs = expiryEpochMs,
+                    notes = notes
+                )
+                medicationToRestock = null
+                scope.launch {
+                    snackbarHostState.showSnackbar("Restocked ${qty.toDisplayString()} ${med.stockUnit.abbreviation} for ${med.name}")
+                }
             }
         )
     }

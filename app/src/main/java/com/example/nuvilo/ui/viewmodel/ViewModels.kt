@@ -240,7 +240,8 @@ class DashboardViewModel(
 data class MedicationListItem(
     val medication: Medication,
     val stockBalance: StockBalance?,
-    val schedules: List<ScheduleDefinition> = emptyList()
+    val schedules: List<ScheduleDefinition> = emptyList(),
+    val pendingPrescription: Prescription? = null
 )
 
 data class MedicationListUiState(
@@ -252,6 +253,7 @@ data class MedicationListUiState(
 class MedicationViewModel(
     private val medicationRepository: MedicationRepository,
     private val stockRepository: StockRepository,
+    private val prescriptionRepository: PrescriptionRepository? = null,
     private val alarmScheduler: AlarmScheduler? = null,
     private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator()
 ) : ViewModel() {
@@ -259,10 +261,13 @@ class MedicationViewModel(
     val uiState: StateFlow<MedicationListUiState> = combine(
         medicationRepository.observeAllMedications(),
         medicationRepository.observeAllSchedules(),
-        stockRepository.observeAllMovements()
-    ) { allMeds, allSchedules, movements ->
+        stockRepository.observeAllMovements(),
+        prescriptionRepository?.observeAllPrescriptions() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    ) { allMeds, allSchedules, movements, allPrescriptions ->
         val movementsByMed = movements.groupBy { it.medicationId }
         val schedulesByMed = allSchedules.groupBy { it.medicationId }
+        val prescriptionsByMed = allPrescriptions.groupBy { it.medicationId }
+        val todayEpochDay = LocalDate.now().toEpochDay()
 
         fun buildItem(med: Medication): MedicationListItem {
             val medMovements = movementsByMed[med.id].orEmpty()
@@ -294,10 +299,15 @@ class MedicationViewModel(
                 dailyConsumptionRate = dailyRate,
                 isEstimatedConsumption = med.form.isEstimatedConsumption
             )
+            val medRxs = prescriptionsByMed[med.id].orEmpty()
+            val pendingRx = medRxs.firstOrNull {
+                it.effectiveStatus(todayEpochDay) == PrescriptionStatus.ACTIVE && it.hasPendingRepeatRequest
+            }
             return MedicationListItem(
                 medication = med,
                 stockBalance = balance,
-                schedules = medSchedules
+                schedules = medSchedules,
+                pendingPrescription = pendingRx
             )
         }
 
@@ -369,6 +379,26 @@ class MedicationViewModel(
         viewModelScope.launch {
             medicationRepository.setArchived(medicationId, archived)
             alarmScheduler?.reconcileUpcomingReminders()
+        }
+    }
+
+    fun restockMedication(
+        medicationId: String,
+        quantity: ScaledQuantity,
+        unit: StockUnit,
+        lotNumber: String? = null,
+        expiryDateEpochMs: Long? = null,
+        notes: String? = null
+    ) {
+        viewModelScope.launch {
+            stockRepository.restockWithLot(
+                medicationId = medicationId,
+                quantity = quantity,
+                unit = unit,
+                lotNumber = lotNumber,
+                expiryDateEpochMs = expiryDateEpochMs,
+                notes = notes
+            )
         }
     }
 }
@@ -676,24 +706,40 @@ class MedicationDetailViewModel(
         }
     }
 
-    fun requestPrescriptionRepeat(prescriptionId: String, notes: String? = null) {
+    fun requestPrescriptionRepeat(
+        prescriptionId: String,
+        requestedQuantity: ScaledQuantity? = null,
+        notes: String? = null
+    ) {
         viewModelScope.launch {
             val repo = prescriptionRepository ?: return@launch
             val todayEpochDay = LocalDate.now(zoneId).toEpochDay()
+            if (requestedQuantity != null && requestedQuantity.isPositive()) {
+                val currentRx = uiState.value.prescriptions.firstOrNull { it.id == prescriptionId }
+                if (currentRx != null && currentRx.quantityPrescribed != requestedQuantity) {
+                    repo.updatePrescription(currentRx.copy(quantityPrescribed = requestedQuantity))
+                }
+            }
             val result = repo.requestPrescriptionRepeat(
                 prescriptionId = prescriptionId,
                 currentDateEpochDay = todayEpochDay,
                 notes = notes
             )
             if (result.isSuccess) {
-                _actionSuccessMessage.value = "Repeat request recorded (repeats remaining unchanged until collected)"
+                _actionSuccessMessage.value = "Repeat request recorded — order marked as pending with GP"
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to record repeat request"
             }
         }
     }
 
-    fun collectPrescriptionRepeat(prescriptionId: String, notes: String? = null) {
+    fun collectPrescriptionRepeat(
+        prescriptionId: String,
+        notes: String? = null,
+        autoRestockQuantity: ScaledQuantity? = null,
+        lotNumber: String? = null,
+        expiryDateEpochMs: Long? = null
+    ) {
         viewModelScope.launch {
             val repo = prescriptionRepository ?: return@launch
             val todayEpochDay = LocalDate.now(zoneId).toEpochDay()
@@ -703,7 +749,20 @@ class MedicationDetailViewModel(
                 notes = notes
             )
             if (result.isSuccess) {
-                _actionSuccessMessage.value = "Repeat recorded as collected"
+                val med = uiState.value.medication
+                if (autoRestockQuantity != null && autoRestockQuantity.isPositive() && med != null) {
+                    stockRepository.restockWithLot(
+                        medicationId = med.id,
+                        quantity = autoRestockQuantity,
+                        unit = med.stockUnit,
+                        lotNumber = lotNumber,
+                        expiryDateEpochMs = expiryDateEpochMs,
+                        notes = notes ?: "Restock from collected repeat prescription"
+                    )
+                    _actionSuccessMessage.value = "Repeat collected and ${autoRestockQuantity.toDisplayString()} ${med.stockUnit.abbreviation} added to stock"
+                } else {
+                    _actionSuccessMessage.value = "Repeat recorded as collected"
+                }
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to collect repeat"
             }
@@ -1197,6 +1256,7 @@ class ViewModelFactory(
                 MedicationViewModel(
                     medicationRepository = appContainer.repository,
                     stockRepository = appContainer.repository,
+                    prescriptionRepository = appContainer.repository,
                     alarmScheduler = appContainer.alarmScheduler,
                     stockCalculator = appContainer.stockCalculator
                 ) as T

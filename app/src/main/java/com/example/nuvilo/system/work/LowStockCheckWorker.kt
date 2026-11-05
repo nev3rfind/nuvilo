@@ -28,12 +28,20 @@ class LowStockCheckWorker(
                 val balance = container.repository.observeStockBalance(med).first()
                 if (balance.isLowStock) {
                     if (!alreadyNotifiedIds.contains(med.id)) {
+                        val prescriptions = container.repository.observePrescriptionsForMedication(med.id).first()
+                        val todayEpochDay = java.time.LocalDate.now().toEpochDay()
+                        val activeRx = prescriptions.firstOrNull { it.effectiveStatus(todayEpochDay) == com.example.nuvilo.domain.model.PrescriptionStatus.ACTIVE }
+                        val hasPendingOrder = activeRx?.hasPendingRepeatRequest == true
+                        val pendingQuantity = if (hasPendingOrder) activeRx?.quantityPrescribed else null
+
                         container.notificationHelper.showLowStockNotification(
                             medicationId = med.id,
                             medicationName = med.name,
                             currentBalance = balance.currentBalance,
                             unit = balance.unit,
-                            daysRemaining = balance.daysRemaining
+                            daysRemaining = balance.daysRemaining,
+                            hasPendingOrder = hasPendingOrder,
+                            pendingOrderQuantity = pendingQuantity
                         )
                         container.userPreferencesRepository.markLowStockNotified(med.id)
                     }

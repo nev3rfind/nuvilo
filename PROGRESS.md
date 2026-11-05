@@ -50,6 +50,12 @@ Status designations: `NOT STARTED` | `IN PROGRESS` | `BLOCKED` | `VERIFIED`
 ---
 
 ## Latest Verification Evidence Log
+- **2026-11-05 14:15**: Comprehensive Clinical Stock Management & Notification Advisory Overhaul:
+  - Dosage Form & Stock Parity: Complete support across tablets, capsules, liquids (ml), eye/ear drops, inhaler puffs, topical creams, and patches with natural counting units and automatic `ESTIMATED` balance tagging.
+  - Quick Replenishment: Direct `+ Stock` outlined button on directory cards and smart dosage-form-aware defaults with 1-tap preset chips (`+7`, `+14`, `+28`, `+56`, `+84` for tablets/capsules; `+50`, `+100`, `+150`, `+200` for liquids; `+15`, `+30`, `+60` for drops; `+60`, `+120`, `+200` for inhaler puffs).
+  - Rich Dose Reminders: Notifications display exact remaining supply, days of runway, clinical GP reorder guidance when runway $\le 7$ days (or at low-stock threshold), and pending repeat prescription details (`NotificationTextBuilder`). Preserves notification privacy mode lockscreen masking.
+  - End-to-End GP Repeat Prescription Flow: `RequestRepeatDialog` with order channels and notes, pending order tracking on dashboard hero cards, medication cards, and notifications, and `CollectRepeatDialog` with 1-tap automatic inventory restocking.
+  - Verification: `testDebugUnitTest` (56/56 PASSED across all suites including `NotificationTextBuilderTest` and `StockLedgerCalculatorTest`), `lintDebug` (0 errors), `assembleDebug` (BUILD SUCCESSFUL), and `assembleRelease` (BUILD SUCCESSFUL with R8 shrinking and zero network permissions verified).
 - **2026-11-03 16:57**: Phase 8 PR-Triggered CI Verification (Run `41678460519` on PR [#4](https://github.com/nev3rfind/nuvilo/pull/4)):
   - Base branch: `chore/1-phase-07-release-hardening` (stacked on PR #2).
   - Head branch: `feat/3-premium-ui-ux-overhaul` (`462ae62`).

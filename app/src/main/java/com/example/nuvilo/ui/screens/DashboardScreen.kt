@@ -105,7 +105,8 @@ fun DashboardScreen(
                             item(key = "alerts_banner", contentType = "alert_banner") {
                                 AlertBanner(
                                     lowStockCount = uiState.lowStockCount,
-                                    expiringRxCount = uiState.expiringPrescriptionsCount
+                                    expiringRxCount = uiState.expiringPrescriptionsCount,
+                                    onActionClick = onNavigateToMedications
                                 )
                             }
                         }
@@ -130,7 +131,8 @@ fun DashboardScreen(
                             item(key = "alerts_banner", contentType = "alert_banner") {
                                 AlertBanner(
                                     lowStockCount = uiState.lowStockCount,
-                                    expiringRxCount = uiState.expiringPrescriptionsCount
+                                    expiringRxCount = uiState.expiringPrescriptionsCount,
+                                    onActionClick = onNavigateToMedications
                                 )
                             }
                         }

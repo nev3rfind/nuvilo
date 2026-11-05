@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -323,6 +324,54 @@ fun HeroDoseCard(
                     }
                 }
 
+                if (stockBalance != null) {
+                    val runwayStr = stockBalance.daysRemaining?.let { "~$it days supply left" }
+                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation} left"
+                    val isReorderNeeded = stockBalance.isLowStock || (stockBalance.daysRemaining != null && stockBalance.daysRemaining <= 7)
+
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
+                                    contentDescription = null,
+                                    tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = if (isReorderNeeded) "Low Supply: $runwayStr · Reorder from GP soon" else "Supply Runway: $runwayStr",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
                 if (medication.notes.isNotBlank()) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
@@ -518,6 +567,7 @@ fun CompletedDayCard(
 fun AlertBanner(
     lowStockCount: Int,
     expiringRxCount: Int,
+    onActionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (lowStockCount <= 0 && expiringRxCount <= 0) return
@@ -535,7 +585,16 @@ fun AlertBanner(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
+            .heightIn(min = 48.dp)
+            .then(
+                if (onActionClick != null) {
+                    Modifier.clickable(
+                        onClick = onActionClick,
+                        role = Role.Button,
+                        onClickLabel = "View medications needing attention"
+                    )
+                } else Modifier
+            ),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = semantic.warningContainer),
         border = BorderStroke(1.dp, semantic.warningBorder),
@@ -574,6 +633,14 @@ fun AlertBanner(
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     color = semantic.warning.copy(alpha = 0.92f)
+                )
+            }
+            if (onActionClick != null) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = semantic.warning,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -767,8 +834,21 @@ fun TimelineDoseItem(
                     }
                 }
 
-                if (stockBalance != null && stockBalance.isLowStock) {
-                    StockBadge(balance = stockBalance)
+                if (stockBalance != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StockBadge(balance = stockBalance)
+                        if (stockBalance.daysRemaining != null) {
+                            Text(
+                                text = "~${stockBalance.daysRemaining}d supply runway",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
                 if (isPending) {
@@ -1039,9 +1119,12 @@ fun MedicationItemCard(
     stockBalance: StockBalance?,
     onArchiveToggle: () -> Unit,
     onCardClick: () -> Unit = {},
+    onRestockClick: (() -> Unit)? = null,
+    pendingPrescription: com.example.nuvilo.domain.model.Prescription? = null,
     modifier: Modifier = Modifier,
     schedules: List<ScheduleDefinition> = emptyList()
 ) {
+    val semantic = MaterialTheme.noveloColors
     val accentColor = parseAccentColor(medication.colorTagHex, MaterialTheme.colorScheme.primary)
     val scheduleSummary = formatScheduleSummaryPill(schedules)
 
@@ -1132,9 +1215,38 @@ fun MedicationItemCard(
                 }
             }
 
+            if (pendingPrescription != null) {
+                Surface(
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = semantic.warningContainer,
+                    border = BorderStroke(1.dp, semantic.warningBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.HourglassTop,
+                            contentDescription = "Pending GP repeat prescription order",
+                            tint = semantic.warning,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        val qtyText = pendingPrescription.quantityPrescribed?.let { " (${it.toDisplayString()} ${medication.stockUnit.abbreviation})" } ?: ""
+                        Text(
+                            text = "GP Order Pending$qtyText · Awaiting Collection",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = semantic.warning
+                        )
+                    }
+                }
+            }
+
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
-            // Bottom Metadata Row: Schedule Pill + Recording Mode + Stock Badge
+            // Bottom Metadata Row: Schedule Pill + Recording Mode + Restock Action + Stock Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1196,9 +1308,37 @@ fun MedicationItemCard(
                     }
                 }
 
-                if (stockBalance != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    StockBadge(balance = stockBalance)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (onRestockClick != null) {
+                        OutlinedButton(
+                            onClick = onRestockClick,
+                            modifier = Modifier.heightIn(min = 36.dp),
+                            shape = MaterialTheme.shapes.extraSmall,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "+ Stock",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    if (stockBalance != null) {
+                        StockBadge(balance = stockBalance)
+                    }
                 }
             }
         }

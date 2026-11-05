@@ -361,4 +361,49 @@ class StockLedgerCalculatorTest {
         // 25 / 2 = 12 days remaining
         assertEquals(12, balance.daysRemaining)
     }
+
+    @Test
+    fun liquidAndDropsAndPuffs_calculateBalancesAndRunwayAccurately() {
+        // Drops: 60 drops total, 6 drops/day -> 10 days
+        val dropsBalance = calculator.calculateBalance(
+            openingStock = ScaledQuantity.ofWhole(60),
+            openingUnit = StockUnit.DROPS,
+            movements = emptyList(),
+            lowStockThreshold = ScaledQuantity.ofWhole(15),
+            dailyConsumptionRate = ScaledQuantity.ofWhole(6),
+            isEstimatedConsumption = true
+        )
+        assertEquals("60", dropsBalance.currentBalance.toDisplayString())
+        assertEquals(10, dropsBalance.daysRemaining)
+        assertTrue(dropsBalance.isEstimate)
+        assertFalse(dropsBalance.isLowStock)
+
+        // Liquid ML: 140 ml total, 20 ml/day -> 7 days runway (GP repeat reorder window!)
+        val liquidBalance = calculator.calculateBalance(
+            openingStock = ScaledQuantity.ofWhole(140),
+            openingUnit = StockUnit.ML,
+            movements = emptyList(),
+            lowStockThreshold = ScaledQuantity.ofWhole(50),
+            dailyConsumptionRate = ScaledQuantity.ofWhole(20),
+            isEstimatedConsumption = true
+        )
+        assertEquals("140", liquidBalance.currentBalance.toDisplayString())
+        assertEquals(7, liquidBalance.daysRemaining)
+        assertTrue(liquidBalance.isEstimate)
+        assertTrue(liquidBalance.daysRemaining != null && liquidBalance.daysRemaining!! <= 7)
+
+        // Inhaler puffs: 200 puffs total, 4 puffs/day -> 50 days
+        val puffsBalance = calculator.calculateBalance(
+            openingStock = ScaledQuantity.ofWhole(200),
+            openingUnit = StockUnit.PUFFS,
+            movements = emptyList(),
+            lowStockThreshold = ScaledQuantity.ofWhole(40),
+            dailyConsumptionRate = ScaledQuantity.ofWhole(4),
+            isEstimatedConsumption = true
+        )
+        assertEquals("200", puffsBalance.currentBalance.toDisplayString())
+        assertEquals(50, puffsBalance.daysRemaining)
+        assertTrue(puffsBalance.isEstimate)
+        assertFalse(puffsBalance.isLowStock)
+    }
 }
