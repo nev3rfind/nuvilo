@@ -50,6 +50,12 @@ Status designations: `NOT STARTED` | `IN PROGRESS` | `BLOCKED` | `VERIFIED`
 ---
 
 ## Latest Verification Evidence Log
+- **2026-11-05 15:25**: Brand Identity & Animated Startup Splash Screen Implementation:
+  - Official 3D Brand Logo Integration: Replaced generic default Android icons with the official Novelo 3D brand logo (white/cyan `N` ribbon with half-blue/half-white capsule, glowing orbit halo, and verified badge).
+  - Complete Android Icon Suite: Generated multi-density launcher icons across all standard buckets (`mipmap-mdpi`, `mipmap-hdpi`, `mipmap-xhdpi`, `mipmap-xxhdpi`, `mipmap-xxxhdpi`), circular legacy icons (`ic_launcher_round.png`), and adaptive icon foregrounds (`drawable-*/ic_launcher_foreground.png`) with an NHS deep blue linear gradient background (`ic_launcher_background.xml`).
+  - Animated Startup Splash Experience: Created `SplashScreen.kt` featuring a spring-scale logo entrance, pulsing ambient glow aura, "Novelo" title and "Medication, made manageable." tagline, and an animated progressive progress bar (0% to 100%) with live health vault status updates. Includes instant tap-to-skip support and seamless crossfade transition into the app or biometric lock.
+  - In-App Brand Touchpoints: Elevated primary brand surfaces with the official logo in `LockScreen.kt` (security hero header), `SettingsScreen.kt` (About Novelo footer), and `DashboardScreen.kt` (top dashboard header).
+  - Build Verification: `.\gradlew.bat test` (BUILD SUCCESSFUL, 26 tasks executed/cached, 0 errors) and `.\gradlew.bat assembleDebug` (BUILD SUCCESSFUL, 38 tasks, debug APK generated).
 - **2026-11-05 14:15**: Comprehensive Clinical Stock Management & Notification Advisory Overhaul:
   - Dosage Form & Stock Parity: Complete support across tablets, capsules, liquids (ml), eye/ear drops, inhaler puffs, topical creams, and patches with natural counting units and automatic `ESTIMATED` balance tagging.
   - Quick Replenishment: Direct `+ Stock` outlined button on directory cards and smart dosage-form-aware defaults with 1-tap preset chips (`+7`, `+14`, `+28`, `+56`, `+84` for tablets/capsules; `+50`, `+100`, `+150`, `+200` for liquids; `+15`, `+30`, `+60` for drops; `+60`, `+120`, `+200` for inhaler puffs).
