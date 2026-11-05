@@ -6,11 +6,13 @@ on:
       - main
       - 'release/**'
       - 'feat/**'
-      - chore/1-phase-07-release-hardening
+      - 'chore/**'
   pull_request:
     branches:
       - main
-      - chore/1-phase-07-release-hardening
+      - 'release/**'
+      - 'feat/**'
+      - 'chore/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
