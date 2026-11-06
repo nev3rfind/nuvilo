@@ -19,11 +19,13 @@
   - Supporting Clinical Teal: **`#007F7B`** / **`#DDF5F4`** (Dedicated strictly to dosage form pills and schedule tags; contrast 5.10:1 to 9.85:1).
   - Master Design System (`design-system/novelo/MASTER.md`): Updated to reflect `#005EB8` primary and pill button specs; raw CLI `#DC2626` red CTA removed.
 - **CI Workflow Modernization (`.github/workflows/ci.yml`)**:
-  - Upgraded action steps to official `v5` suites (`actions/checkout@v5`, `actions/setup-java@v5`, `gradle/actions/setup-gradle@v5`, `actions/upload-artifact@v5`).
-  - Resolves Node.js 20 deprecation and `setup-java@v4` deprecation warnings while strictly maintaining open-source MIT terms.
-- **Physical Device QA Protocol**:
-  - Complete manual checklist created in `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md`.
-  - Step-by-step instructions for user validation on physical hardware with data preservation commands.
+  - Pinned all workflow jobs (`unit-tests`, `lint`, `release-build-and-audit`) to `ubuntu-24.04` to guarantee predictable, reproducible builds during the ongoing GitHub platform migration to Ubuntu 26.04.
+  - Upgraded artifact uploads to verified `actions/upload-artifact@v7.0.2` running natively under Node 24 (`node24`), eliminating deprecation warnings.
+  - Excluded R8/ProGuard mapping files (`mapping.txt`, `seeds.txt`) from public pull request CI artifacts, preserving internal obfuscation symbols from external disclosure.
+- **Physical Device QA & Safe Data Protocol**:
+  - Completely replaced unsafe raw SQLite/WAL file copying recommendations with Novelo's application-level encrypted JSON backup (PBKDF2/AES-256-GCM) via the Storage Access Framework (SAF) and transactional restoration (`NoveloDatabase.withTransaction`).
+  - Restructured `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md` into 14 distinct sections with explicit tier designations (`[AUTOMATED]`, `[EMULATOR]`, `[PHYSICAL]`), strictly reserving physical hardware checks for human testers.
+  - Documented QA certificate mismatch guidance (`CN=Novelo QA` vs `CN=Android Debug`), prohibiting destructive uninstallation or data wiping and directing testing onto disposable test environments.
 
 ---
 

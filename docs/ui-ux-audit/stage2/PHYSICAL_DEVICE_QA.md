@@ -71,8 +71,8 @@ When attempting in-place installation of the QA-signed release APK over the pre-
 adb.exe: failed to install novelo-qa-signed.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package com.example.nuvilo signatures do not match newer version; ignoring!]
 ```
 - **Finding**: Android Package Manager strictly rejected signature collision (`CN=Android Debug` vs `CN=Novelo QA`), preventing unauthorized app hijacking.
-- **Data Protection**: Existing synthetic clinical database (`novelo.db` and `novelo.db-wal`) was extracted and preserved in `scratch/novelo.db` using `adb exec-out run-as com.example.nuvilo cat databases/novelo.db`.
-- **Integrity Guarantee**: No application data was cleared or force-uninstalled.
+- **Data Protection & Approved Workflow**: Existing synthetic clinical database was preserved without clearing or force-uninstalling application data. In accordance with Novelo safety standards, raw direct SQLite copying via ADB is strictly prohibited for ordinary backup/migration; all user data migrations across signature boundaries must use Novelo's built-in AES-256-GCM encrypted JSON export/restore via Storage Access Framework (SAF) onto a disposable test environment, as documented in `PHYSICAL_DEVICE_CHECKLIST.md`.
+- **Integrity Guarantee**: No application data was cleared or force-uninstalled on the primary environment.
 
 ---
 

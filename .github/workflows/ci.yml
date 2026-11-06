@@ -24,7 +24,8 @@ permissions:
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 for deterministic and reproducible builds during the GitHub Actions Ubuntu 26.04 rollout
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -42,7 +43,7 @@ jobs:
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
       - name: Publish Test Results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: unit-test-results
@@ -51,7 +52,8 @@ jobs:
 
   lint:
     name: Android Lint Check
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 for deterministic and reproducible builds during the GitHub Actions Ubuntu 26.04 rollout
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -69,7 +71,7 @@ jobs:
         run: ./gradlew lintDebug --no-daemon --stacktrace
 
       - name: Upload Lint Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: lint-report
@@ -78,7 +80,8 @@ jobs:
 
   release-build-and-audit:
     name: Release Build & Security Audit
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 for deterministic and reproducible builds during the GitHub Actions Ubuntu 26.04 rollout
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -111,11 +114,9 @@ jobs:
             echo "Zero network permissions verified: INTERNET and ACCESS_NETWORK_STATE are absent."
           fi
 
-      - name: Upload Release APK & Mapping Artifacts
-        uses: actions/upload-artifact@v5
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: novelo-release-unsigned
-          path: |
-            app/build/outputs/apk/release/app-release-unsigned.apk
-            app/build/outputs/mapping/release/mapping.txt
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 14

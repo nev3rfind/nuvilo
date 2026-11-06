@@ -8,6 +8,12 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Final CI Modernisation & Safe Backup/Restore Documentation (Refs #5)**:
+  - Pinned all CI workflow jobs in `.github/workflows/ci.yml` (`unit-tests`, `lint`, `release-build-and-audit`) to `ubuntu-24.04` for predictable, reproducible builds during the platform migration to Ubuntu 26.04.
+  - Upgraded artifact uploads to verified `actions/upload-artifact@v7.0.2` executing natively under Node 24 (`node24`), eliminating runner deprecation warnings.
+  - Excluded R8 mapping files (`mapping.txt`, `seeds.txt`) from public pull-request CI artifacts to protect internal architecture and symbols while keeping local mapping generation intact.
+  - Replaced unsafe raw SQLite and WAL file copying instructions with Novelo's built-in application-level encrypted JSON export/restore via Storage Access Framework (SAF) in `PHYSICAL_DEVICE_CHECKLIST.md`.
+  - Structured physical hardware verification checklist into 14 distinct sections with explicit tier designations (`[AUTOMATED]`, `[EMULATOR]`, `[PHYSICAL]`).
 - **Stage 2: UI/UX Pro Max Implementation & Design System Rollout (Refs #5)**:
   - Implemented `fontFeatureSettings = "tnum"` tabular numbers (`NoveloNumericTypography` & `.tabular` extension) in `Type.kt` for jitter-free counters, timestamps, stock balances, and adherence stats.
   - Added layered color tokens in `Color.kt` and `Theme.kt`: `NoveloInteractionBlue` (`#0284C7`), `NoveloCyanAccent` (`#0891B2`), `NoveloLightContainer` (`#E0F2FE`), `NoveloDarkContainer` (`#1E293B`), and `NoveloBulletBenchmark`.

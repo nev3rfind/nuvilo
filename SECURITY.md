@@ -103,6 +103,13 @@ To prevent sensitive medication records from leaking into unencrypted cloud back
   - `BackupValidator` checks schema versions, primary key uniqueness, and foreign key integrity before any database mutation.
   - Restore runs inside `NoveloDatabase.withTransaction` with 100% rollback guarantee if any constraint or deserialization failure occurs.
 
+### Data Migration Policy vs Direct SQLite Copying
+- **Prohibition of Direct SQLite / WAL Copying**: Directly copying SQLite database files (`novelo.db`, `novelo.db-wal`, `novelo.db-shm`) via ADB (`run-as` or filesystem access) is strictly prohibited as a normal backup or migration method. Copying active database files while Room SQLite connections are live causes race conditions with SQLite's write-ahead log, resulting in database corruption, missing recent transactions, and broken referential integrity upon restoration.
+- **Approved Migration Workflow**: All data migrations (including testing across signature boundaries) must be executed at the application layer using Novelo's encrypted JSON backup via the Storage Access Framework (SAF) and restored inside the app on a clean/disposable environment.
+- **CI Artifact & Build Security**:
+  - R8 obfuscation mapping files (`mapping.txt`, `seeds.txt`) are excluded from public pull-request CI artifacts to prevent symbol and architectural exposure. Mapping files are restricted to secure release environments.
+  - No signing keystores, passwords, or credentials are ever checked into source control or uploaded to CI artifacts.
+
 ---
 
 ## 6. Logging & Telemetry Rules

@@ -382,3 +382,16 @@ No task or phase shall be marked complete without providing direct terminal exec
 - **Unit Tests**: `PASS` in 2m 50s (ID `127372415732`).
 - **Android Lint Check**: `PASS` in 3m 38s (ID `127372415682`).
 - **Release Build & Security Audit**: `PASS` in 5m 3s (ID `127372415495`, 0 network permissions confirmed).
+
+---
+
+## 13. CI Modernization & Safe Backup/Restore QA Protocol
+
+### CI Runner & Artifact Configuration
+- **GitHub Runner Image**: Explicitly pinned to `ubuntu-24.04` across all workflow jobs (`unit-tests`, `lint`, `release-build-and-audit`) for deterministic, reproducible Android SDK/JDK 21/Gradle builds during the ongoing GitHub Actions migration to Ubuntu 26.04.
+- **Artifact Upload Action**: Upgraded all artifact uploads to `actions/upload-artifact@v7.0.2` executing natively on Node 24 (`node24`), completely resolving runtime deprecation warnings.
+- **R8 Mapping Security**: ProGuard/R8 obfuscation mappings (`mapping.txt`, `seeds.txt`) are excluded from public pull-request CI artifacts, preventing proprietary symbol leakage while preserving local mapping generation in release builds.
+
+### Safe Application Data Testing Protocol
+- **Prohibition of Direct SQLite Copying**: Copying raw SQLite database files (`novelo.db` / `novelo.db-wal`) via ADB while Room is running is strictly prohibited due to race conditions with live WAL buffers and database corruption risks.
+- **Encrypted Application Backup & Restoration**: All data migration and test validation across certificate boundaries (e.g. `CN=Android Debug` vs `CN=Novelo QA`) must be performed using Novelo's built-in AES-256-GCM encrypted JSON export/restore via the Storage Access Framework (SAF) onto a disposable test environment, as detailed in `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md`.
