@@ -99,7 +99,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     }
                 }
             } finally {
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }
