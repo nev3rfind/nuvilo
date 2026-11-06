@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -579,6 +580,12 @@ class MedicationDetailViewModel(
         _historyOutcomeFilter.value = filter
     }
 
+    private suspend fun awaitLoadedState(): MedicationDetailUiState {
+        val current = uiState.value
+        if (!current.isLoading && current.medication != null) return current
+        return uiState.first { !it.isLoading }
+    }
+
     fun restock(
         quantity: ScaledQuantity,
         lotNumber: String?,
@@ -586,7 +593,8 @@ class MedicationDetailViewModel(
         notes: String?
     ) {
         viewModelScope.launch {
-            val unit = uiState.value.medication?.stockUnit ?: StockUnit.TABLETS
+            val state = awaitLoadedState()
+            val unit = state.medication?.stockUnit ?: StockUnit.TABLETS
             val result = stockRepository.restockWithLot(
                 medicationId = medicationId,
                 quantity = quantity,
@@ -609,8 +617,13 @@ class MedicationDetailViewModel(
         targetLotId: String? = null
     ) {
         viewModelScope.launch {
-            val current = uiState.value.stockBalance?.currentBalance ?: ScaledQuantity.ZERO
-            val unit = uiState.value.medication?.stockUnit ?: StockUnit.TABLETS
+            val state = awaitLoadedState()
+            if (state.errorMessage != null && state.medication == null) {
+                _errorMessage.value = state.errorMessage
+                return@launch
+            }
+            val current = state.stockBalance?.currentBalance ?: ScaledQuantity.ZERO
+            val unit = state.medication?.stockUnit ?: StockUnit.TABLETS
             val result = stockRepository.adjustStockToTarget(
                 medicationId = medicationId,
                 currentBalance = current,

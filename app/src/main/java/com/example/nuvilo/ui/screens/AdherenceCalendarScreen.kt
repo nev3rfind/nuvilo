@@ -73,9 +73,11 @@ import com.example.nuvilo.domain.adherence.ResolvedDoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.ui.components.DoseStatusBadge
 import com.example.nuvilo.ui.components.EmptyStateCard
+import com.example.nuvilo.ui.components.NoveloBulletKpiCard
 import com.example.nuvilo.ui.components.SectionHeader
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.AdherenceCalendarViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -260,6 +262,15 @@ private fun AdherenceOverviewStrip(
     onSelectPeriodDays: (Int) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (periodSummary != null && periodSummary.eligibleOccurrencesCount > 0) {
+            NoveloBulletKpiCard(
+                adherencePercentage = periodSummary.adherencePercentage,
+                eligibleCount = periodSummary.eligibleOccurrencesCount,
+                adherentCount = periodSummary.adherentCount,
+                periodLabel = "Last $selectedPeriodDays Days"
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -345,13 +356,13 @@ private fun MetricSummaryCard(
             )
             Text(
                 text = pctText,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall.tabular,
                 fontWeight = FontWeight.ExtraBold,
                 color = pctColor
             )
             Text(
                 text = detailText,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.tabular,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
             )
@@ -694,8 +705,8 @@ private fun CalendarDayOccurrenceCard(
                         onClick = onTakeClick,
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 44.dp),
-                        shape = MaterialTheme.shapes.small
+                            .heightIn(min = 48.dp),
+                        shape = com.example.nuvilo.ui.theme.NoveloPillShape
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -705,8 +716,8 @@ private fun CalendarDayOccurrenceCard(
                         onClick = onSkipClick,
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 44.dp),
-                        shape = MaterialTheme.shapes.small
+                            .heightIn(min = 48.dp),
+                        shape = com.example.nuvilo.ui.theme.NoveloPillShape
                     ) {
                         Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))

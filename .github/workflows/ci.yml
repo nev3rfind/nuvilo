@@ -6,11 +6,13 @@ on:
       - main
       - 'release/**'
       - 'feat/**'
-      - chore/1-phase-07-release-hardening
+      - 'chore/**'
   pull_request:
     branches:
       - main
-      - chore/1-phase-07-release-hardening
+      - 'release/**'
+      - 'feat/**'
+      - 'chore/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,25 +24,26 @@ permissions:
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 for deterministic and reproducible builds during the GitHub Actions Ubuntu 26.04 rollout
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
       - name: Publish Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: unit-test-results
@@ -49,25 +52,26 @@ jobs:
 
   lint:
     name: Android Lint Check
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 for deterministic and reproducible builds during the GitHub Actions Ubuntu 26.04 rollout
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Run Android Lint
         run: ./gradlew lintDebug --no-daemon --stacktrace
 
       - name: Upload Lint Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: lint-report
@@ -76,19 +80,20 @@ jobs:
 
   release-build-and-audit:
     name: Release Build & Security Audit
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 for deterministic and reproducible builds during the GitHub Actions Ubuntu 26.04 rollout
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon --stacktrace
@@ -109,11 +114,9 @@ jobs:
             echo "Zero network permissions verified: INTERNET and ACCESS_NETWORK_STATE are absent."
           fi
 
-      - name: Upload Release APK & Mapping Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: novelo-release-unsigned
-          path: |
-            app/build/outputs/apk/release/app-release-unsigned.apk
-            app/build/outputs/mapping/release/mapping.txt
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 14

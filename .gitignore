@@ -23,3 +23,6 @@ local.properties
 .agents/skills/ui-styling/
 .agents/skills/ui-ux-pro-max/
 
+# Temporary scratch scripts
+scratch/
+

@@ -93,7 +93,7 @@ class AlarmReceiver : BroadcastReceiver() {
                     pendingOrderNotes = pendingOrderNotes
                 )
             } finally {
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }

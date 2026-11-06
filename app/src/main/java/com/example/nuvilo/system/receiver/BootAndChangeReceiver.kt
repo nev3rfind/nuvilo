@@ -33,7 +33,7 @@ class BootAndChangeReceiver : BroadcastReceiver() {
                 // Re-enqueue deferrable background maintenance
                 container.enqueuePeriodicMaintenance()
             } finally {
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }

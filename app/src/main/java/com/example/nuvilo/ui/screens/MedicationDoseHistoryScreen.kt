@@ -61,7 +61,9 @@ import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.ui.components.DoseStatusBadge
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.SectionHeader
+import com.example.nuvilo.ui.theme.NoveloPillShape
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.MedicationDetailViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -362,7 +364,7 @@ private fun StatPill(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = count.toString(),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.tabular,
             fontWeight = FontWeight.ExtraBold,
             color = color
         )
@@ -409,11 +411,11 @@ private fun DetailedHistoryItemCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
+                            shape = NoveloPillShape,
                             color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -425,7 +427,7 @@ private fun DetailedHistoryItemCard(
                                 )
                                 Text(
                                     text = "Scheduled $scheduledStr",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelSmall.tabular,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -434,7 +436,7 @@ private fun DetailedHistoryItemCard(
 
                         Text(
                             text = "${occ.doseQuantity.toDisplayString()} ${occ.unit.abbreviation}",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium.tabular,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -449,7 +451,7 @@ private fun DetailedHistoryItemCard(
                                 "Unrecorded past dose (evaluated as Missed)"
                             else -> "Not yet recorded"
                         },
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -462,14 +464,14 @@ private fun DetailedHistoryItemCard(
 
                     OutlinedButton(
                         onClick = onCorrectClick,
-                        shape = MaterialTheme.shapes.extraSmall,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.heightIn(min = 34.dp)
+                        shape = NoveloPillShape,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.heightIn(min = 48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Revise dose outcome",
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Correct", style = MaterialTheme.typography.labelSmall)

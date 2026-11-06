@@ -94,9 +94,12 @@ import com.example.nuvilo.domain.model.ScheduleDefinition
 import com.example.nuvilo.domain.model.ScheduleType
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
+import com.example.nuvilo.ui.theme.NoveloPillShape
 import com.example.nuvilo.ui.theme.NoveloTheme
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -330,7 +333,7 @@ fun HeroDoseCard(
                     val isReorderNeeded = stockBalance.isLowStock || (stockBalance.daysRemaining != null && stockBalance.daysRemaining <= 7)
 
                     Surface(
-                        shape = MaterialTheme.shapes.small,
+                        shape = NoveloPillShape,
                         color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         border = BorderStroke(
                             1.dp,
@@ -364,7 +367,7 @@ fun HeroDoseCard(
                             }
                             Text(
                                 text = "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.tabular,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
                             )
@@ -399,7 +402,7 @@ fun HeroDoseCard(
                             .semantics {
                                 contentDescription = "Record ${medication.name} as taken"
                             },
-                        shape = MaterialTheme.shapes.small,
+                        shape = NoveloPillShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary
@@ -431,7 +434,7 @@ fun HeroDoseCard(
                                 .semantics {
                                     contentDescription = "Snooze ${medication.name} reminder"
                                 },
-                            shape = MaterialTheme.shapes.small
+                            shape = NoveloPillShape
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Snooze,
@@ -453,7 +456,7 @@ fun HeroDoseCard(
                                 .semantics {
                                     contentDescription = "Skip ${medication.name} dose"
                                 },
-                            shape = MaterialTheme.shapes.small,
+                            shape = NoveloPillShape,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                         ) {
                             Icon(
@@ -543,7 +546,7 @@ fun CompletedDayCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp),
-                    shape = MaterialTheme.shapes.small,
+                    shape = NoveloPillShape,
                     border = BorderStroke(1.dp, semantic.taken.copy(alpha = 0.5f)),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = semantic.taken)
                 ) {
@@ -868,7 +871,7 @@ fun TimelineDoseItem(
                                 .semantics {
                                     contentDescription = "Take ${medication.name} dose"
                                 },
-                            shape = MaterialTheme.shapes.small,
+                            shape = NoveloPillShape,
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Icon(
@@ -888,7 +891,7 @@ fun TimelineDoseItem(
                                 .semantics {
                                     contentDescription = "Snooze ${medication.name} reminder"
                                 },
-                            shape = MaterialTheme.shapes.small,
+                            shape = NoveloPillShape,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
                             Icon(
@@ -908,7 +911,7 @@ fun TimelineDoseItem(
                                 .semantics {
                                     contentDescription = "Skip ${medication.name} dose"
                                 },
-                            shape = MaterialTheme.shapes.small,
+                            shape = NoveloPillShape,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                         ) {
                             Icon(
@@ -1035,10 +1038,10 @@ fun DoseStatusBadge(
             .semantics(mergeDescendants = true) {
                 contentDescription = "Dose status: ${status.displayName}"
             }
-            .clip(MaterialTheme.shapes.extraSmall)
+            .clip(NoveloPillShape)
             .background(bgColor)
-            .border(1.dp, borderColor, MaterialTheme.shapes.extraSmall)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .border(1.dp, borderColor, NoveloPillShape)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -1050,7 +1053,7 @@ fun DoseStatusBadge(
         )
         Text(
             text = status.displayName,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.tabular,
             color = textColor,
             fontWeight = FontWeight.Bold
         )
@@ -1087,10 +1090,10 @@ fun StockBadge(
             .semantics(mergeDescendants = true) {
                 contentDescription = stateDesc
             }
-            .clip(MaterialTheme.shapes.extraSmall)
+            .clip(NoveloPillShape)
             .background(bgColor)
-            .border(1.dp, borderColor, MaterialTheme.shapes.extraSmall)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .border(1.dp, borderColor, NoveloPillShape)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -1102,7 +1105,7 @@ fun StockBadge(
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.tabular,
             color = textColor,
             fontWeight = FontWeight.SemiBold
         )
@@ -1217,7 +1220,7 @@ fun MedicationItemCard(
 
             if (pendingPrescription != null) {
                 Surface(
-                    shape = MaterialTheme.shapes.extraSmall,
+                    shape = NoveloPillShape,
                     color = semantic.warningContainer,
                     border = BorderStroke(1.dp, semantic.warningBorder),
                     modifier = Modifier.fillMaxWidth()
@@ -1236,7 +1239,7 @@ fun MedicationItemCard(
                         val qtyText = pendingPrescription.quantityPrescribed?.let { " (${it.toDisplayString()} ${medication.stockUnit.abbreviation})" } ?: ""
                         Text(
                             text = "GP Order Pending$qtyText · Awaiting Collection",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.tabular,
                             fontWeight = FontWeight.Bold,
                             color = semantic.warning
                         )
@@ -1260,7 +1263,7 @@ fun MedicationItemCard(
                     // Schedule summary pill
                     Row(
                         modifier = Modifier
-                            .clip(MaterialTheme.shapes.extraSmall)
+                            .clip(NoveloPillShape)
                             .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f))
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1284,7 +1287,7 @@ fun MedicationItemCard(
                     // Recording Mode Pill
                     Row(
                         modifier = Modifier
-                            .clip(MaterialTheme.shapes.extraSmall)
+                            .clip(NoveloPillShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(horizontal = 7.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1316,7 +1319,7 @@ fun MedicationItemCard(
                         OutlinedButton(
                             onClick = onRestockClick,
                             modifier = Modifier.heightIn(min = 36.dp),
-                            shape = MaterialTheme.shapes.extraSmall,
+                            shape = NoveloPillShape,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                         ) {
@@ -1689,6 +1692,206 @@ fun SectionHeader(
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {
                 Text(actionText, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+/**
+ * UI/UX Pro Max Bullet KPI Card for clinical adherence benchmarking.
+ * Compares actual adherence percentage against the established 80% clinical threshold.
+ */
+@Composable
+fun NoveloBulletKpiCard(
+    adherencePercentage: Int?,
+    eligibleCount: Int,
+    adherentCount: Int,
+    periodLabel: String,
+    modifier: Modifier = Modifier,
+    targetBenchmark: Int = 80
+) {
+    val semantic = MaterialTheme.noveloColors
+    val isTargetMet = (adherencePercentage ?: 0) >= targetBenchmark
+    val progressFraction = (adherencePercentage ?: 0).coerceIn(0, 100) / 100f
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = NoveloCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = "$periodLabel Clinical Adherence",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "$adherentCount of $eligibleCount scheduled doses taken",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Text(
+                    text = adherencePercentage?.let { "$it%" } ?: "—",
+                    style = MaterialTheme.typography.headlineMedium.tabular,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (isTargetMet) semantic.taken else semantic.warning
+                )
+            }
+
+            // Bullet Chart Track
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .clip(NoveloPillShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                // Actual Adherence Bar
+                if (progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction = progressFraction)
+                            .fillMaxHeight()
+                            .clip(NoveloPillShape)
+                            .background(
+                                if (isTargetMet) {
+                                    Brush.horizontalGradient(listOf(semantic.taken, semantic.accentCyan))
+                                } else {
+                                    Brush.horizontalGradient(listOf(semantic.warning, semantic.warning.copy(alpha = 0.7f)))
+                                }
+                            )
+                    )
+                }
+            }
+
+            // Benchmark Legend Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isTargetMet) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (isTargetMet) semantic.taken else semantic.warning,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = if (isTargetMet) {
+                            "✓ Therapeutic Target Met (≥$targetBenchmark%)"
+                        } else {
+                            "! Below Clinical Target ($targetBenchmark%)"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isTargetMet) semantic.taken else semantic.warning
+                    )
+                }
+
+                Text(
+                    text = "Goal: $targetBenchmark%",
+                    style = MaterialTheme.typography.labelSmall.tabular,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * UI/UX Pro Max 3-Tier Data Row for dense clinical data (Dose History, Ledger Movements, Lot allocations).
+ * Tier 1: Bold Primary Title (Top Left)
+ * Tier 2: Muted Supporting Subtitle (Bottom Left)
+ * Tier 3: Right-aligned Tabular Numeric Value with semantic styling
+ */
+@Composable
+fun NoveloDataRow(
+    primaryTitle: String,
+    secondarySubtitle: String,
+    numericMetric: String,
+    modifier: Modifier = Modifier,
+    metricColor: Color = MaterialTheme.colorScheme.onSurface,
+    metricContainerColor: Color? = null,
+    leadingIcon: @Composable (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else Modifier
+            ),
+        shape = NoveloCardShape,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                if (leadingIcon != null) {
+                    leadingIcon()
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = primaryTitle,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = secondarySubtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Surface(
+                shape = NoveloPillShape,
+                color = metricContainerColor ?: MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text(
+                    text = numericMetric,
+                    style = MaterialTheme.typography.labelMedium.tabular,
+                    fontWeight = FontWeight.Bold,
+                    color = metricColor,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                )
             }
         }
     }

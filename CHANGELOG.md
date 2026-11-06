@@ -8,6 +8,22 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Final CI Modernisation & Safe Backup/Restore Documentation (Refs #5)**:
+  - Pinned all CI workflow jobs in `.github/workflows/ci.yml` (`unit-tests`, `lint`, `release-build-and-audit`) to `ubuntu-24.04` for predictable, reproducible builds during the platform migration to Ubuntu 26.04.
+  - Upgraded artifact uploads to verified `actions/upload-artifact@v7.0.2` executing natively under Node 24 (`node24`), eliminating runner deprecation warnings.
+  - Excluded R8 mapping files (`mapping.txt`, `seeds.txt`) from public pull-request CI artifacts to protect internal architecture and symbols while keeping local mapping generation intact.
+  - Replaced unsafe raw SQLite and WAL file copying instructions with Novelo's built-in application-level encrypted JSON export/restore via Storage Access Framework (SAF) in `PHYSICAL_DEVICE_CHECKLIST.md`.
+  - Structured physical hardware verification checklist into 14 distinct sections with explicit tier designations (`[AUTOMATED]`, `[EMULATOR]`, `[PHYSICAL]`).
+- **Stage 2: UI/UX Pro Max Implementation & Design System Rollout (Refs #5)**:
+  - Implemented `fontFeatureSettings = "tnum"` tabular numbers (`NoveloNumericTypography` & `.tabular` extension) in `Type.kt` for jitter-free counters, timestamps, stock balances, and adherence stats.
+  - Added layered color tokens in `Color.kt` and `Theme.kt`: `NoveloInteractionBlue` (`#0284C7`), `NoveloCyanAccent` (`#0891B2`), `NoveloLightContainer` (`#E0F2FE`), `NoveloDarkContainer` (`#1E293B`), and `NoveloBulletBenchmark`.
+  - Added expressive silhouettes in `Shape.kt`: `NoveloPillShape` (`RoundedCornerShape(999.dp)`) and `NoveloCardShape` (`RoundedCornerShape(18.dp)`).
+  - Built `NoveloBulletKpiCard` displaying clinical adherence against an 80% benchmark target with WCAG AA non-color status indicators.
+  - Rolled out 3-tier mobile data row pattern (`NoveloDataRow`) across stock ledger and chronological dose history.
+  - Refactored medication search bar and segmented Active/Archived switcher to `NoveloPillShape`.
+  - Upgraded bottom navigation tab switching with directional horizontal spatial transitions (`NoveloMotion.directionalHorizontalTransition`).
+  - Added official Novelo 3D brand asset, multi-density launcher icon suite, and animated `SplashScreen` with progress bar and radiant glow.
+  - Documented complete visual verification and captured 11 paired before/after screenshots in `docs/screenshots/stage2/` and `docs/ui-ux-audit/stage2/`.
 - **Phase 8: Premium Product Experience & Complete UI/UX Overhaul (Refs #3)**:
   - Added theme-aware semantic status color system (`NoveloSemanticColors`, `LocalNoveloColors`, `MaterialTheme.noveloColors`) in `Color.kt` and `Theme.kt` so all status badges, alert banners, stock pills, and calendar cells automatically resolve dark-mode or light-mode palettes with $\ge 5.2:1$ WCAG AA contrast.
   - Added centralized shape (`Shape.kt`) and motion (`Motion.kt` / `NoveloMotion`) systems providing spring-based progress animations, screen transitions, Hero Dose -> Completed Day transitions, and collapsible section animations.
