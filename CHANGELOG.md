@@ -8,6 +8,18 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Pre-Merge Comprehensive Testing, 200+ Regression Suite & Main Integration (Refs #6)**:
+  - Added 202 new automated regression tests (T001–T200, T130b, T148b) expanding the total test suite to 287 automated tests (136 JVM unit tests, 151 connected on-device instrumentation tests on API 37) with 100% pass rate.
+  - Implemented exact mathematical boundary verification for `ScaledQuantity` and `StockLedgerCalculator` (zero balances, non-negative invariants, fractional doses, FEFO multi-lot allocations, discard wastage, and physical recount reconciliations).
+  - Implemented full-lifecycle regression tests for schedule occurrences, deterministic `occurrenceId` generation, recurring dose windows, missed-dose safety (no double-dosing guardrail), refill thresholds, and auto-archival.
+  - Implemented Room database invariant verification: foreign key cascade deletes, transaction atomicity and rollbacks, unique constraints, and schema v1 to v2 data preservation.
+  - Implemented cryptographic and privacy regression tests: AES-256-GCM + Argon2id encryption roundtrips, corrupted payload rejections, tamper resistance, manifest privacy audit, and strict zero-network constraint (`android.permission.INTERNET` check).
+  - Implemented system events and worker regression tests: exact alarm scheduling, idempotent notification action processing, duplicate intent filtering, and `LowStockCheckWorker` periodic maintenance.
+  - Implemented ViewModel and Compose UI regression tests covering all primary user journeys and WCAG AA accessibility.
+  - Fixed BUG-001: Added null safety on `pendingResult?.finish()` across `BootAndChangeReceiver`, `AlarmReceiver`, and `NotificationActionReceiver`.
+  - Fixed BUG-002: Added `awaitLoadedState()` in `MedicationDetailViewModel` preventing race conditions during physical stock recount adjustments.
+  - Fast-forward merged all 22 linear commits across Phase 7, Phase 8, UI/UX Pro Max, Bug Fixes, and Regression Tests to `main` (`origin/main`).
+  - Documented complete QA audit artifacts in `docs/testing/pre-merge/` (`TEST_RESULTS.md`, `TEST_CASE_CATALOG.md`, `TEST_COVERAGE.md`, `BUGS_FOUND.md`, `BASELINE.md`).
 - **Final CI Modernisation & Safe Backup/Restore Documentation (Refs #5)**:
   - Pinned all CI workflow jobs in `.github/workflows/ci.yml` (`unit-tests`, `lint`, `release-build-and-audit`) to `ubuntu-24.04` for predictable, reproducible builds during the platform migration to Ubuntu 26.04.
   - Upgraded artifact uploads to verified `actions/upload-artifact@v7.0.2` executing natively under Node 24 (`node24`), eliminating runner deprecation warnings.

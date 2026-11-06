@@ -50,7 +50,24 @@ Status designations: `NOT STARTED` | `IN PROGRESS` | `BLOCKED` | `VERIFIED`
 
 ---
 
+| **Integration & QA** | Pre-Merge 200+ Regression Suite, Defect Remediation & Full Main Merge | `VERIFIED` | 287 automated tests passing (136 JVM + 151 Connected on AVD API 37) with 100% pass rate. BUG-001 (receiver null safety) and BUG-002 (stock recount race condition) remediated with regression tests `t130b` and `t148b`. `lintDebug` 0 errors, `assembleRelease` successful. All 22 stacked commits fast-forward merged and pushed to `origin/main` (`cd0e43f`). | None | **Fully Integrated on Main** |
+
+---
+
 ## Latest Verification Evidence Log
+- **2026-11-06 19:55**: Pre-Merge Comprehensive Testing (200+ Regression Cases), Bug Remediation & Main Branch Integration:
+  - Automated Regression Test Suite: Added 202 new automated regression tests (T001–T200, T130b, T148b) across 7 critical domains (Exact Scaled Quantity & Stock Ledger Accounting, Scheduling & Adherence Lifecycle, Room Database Invariants & Migrations, Encrypted SAF Backup Security, System Events & Notification Actions, ViewModels & State Transitions, Compose UI & WCAG AA Accessibility, and Full Application Journeys).
+  - Bug Discovery & Remediation:
+    - `BUG-001` (P2 Reliability): Added null safety on `pendingResult?.finish()` across `BootAndChangeReceiver`, `AlarmReceiver`, and `NotificationActionReceiver` to prevent uncaught NPE when `goAsync()` returns null. Verified via test `t130b`.
+    - `BUG-002` (P2 Stock Accounting): Added `awaitLoadedState()` in `MedicationDetailViewModel` guaranteeing that physical stock recounts and restocks await Room database emission, preventing balance compounding from zero. Verified via test `t148b`.
+  - Comprehensive Verification on `main`:
+    - `testDebugUnitTest`: 136/136 PASSED (100% JVM unit tests passing).
+    - `connectedDebugAndroidTest`: 151/151 PASSED on `emulator-5554` (API 37) with 0 failures and 0 skipped.
+    - Grand Total Automated Tests: **287 / 287 PASSED (100% pass rate)**.
+    - `lintDebug`: BUILD SUCCESSFUL (0 errors, 0 fatal issues).
+    - `assembleRelease`: BUILD SUCCESSFUL (R8 minification, ProGuard rules, and zero network permissions verified).
+  - Full Git Integration: Fast-forward merged the linear 22-commit development history (`chore/1-phase-07-release-hardening` + `feat/3-premium-ui-ux-overhaul` + `chore/5-uiux-pro-max-foundation` + `feat/6-uiux-pro-max-implementation` + `test/8-pre-merge-regression-200`) into `main` and pushed to `origin/main` (`0b87379..cd0e43f`). All branches are 100% merged into `main`.
+  - QA Deliverables: Published `docs/testing/pre-merge/` artifacts (`TEST_RESULTS.md`, `TEST_CASE_CATALOG.md`, `TEST_COVERAGE.md`, `BUGS_FOUND.md`, and `BASELINE.md`).
 - **2026-11-06 11:15**: Final CI Modernisation & Safe Backup/Restore Documentation:
   - CI Workflow Modernisation: Explicitly pinned all CI jobs (`unit-tests`, `lint`, `release-build-and-audit`) to `ubuntu-24.04` for predictable, reproducible builds during the platform migration to Ubuntu 26.04. Upgraded artifact uploads to `actions/upload-artifact@v7.0.2` running natively under Node 24 (`node24`), eliminating deprecation warnings.
   - R8 Mapping Security: Excluded ProGuard/R8 obfuscation mappings (`mapping.txt`, `seeds.txt`) from public pull-request CI artifacts to protect internal architecture and symbols while keeping local mapping generation intact.

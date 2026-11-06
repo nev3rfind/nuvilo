@@ -36,7 +36,7 @@ Designed with healthcare-grade rigor, Novelo focuses on mathematical stock integ
 
 ## 🚦 Project Status
 
-**Current Phase: Phase 8 Complete (Premium Product Experience & Complete UI/UX Overhaul)**
+**Current Phase: All Phases Integrated & Verified on `main` (Phases 0–8 + UI/UX Pro Max + 200+ Regression Suite)**
 - [x] **Phase 0**: Environment, architecture standards, design specifications, and agent skills configured.
 - [x] **Phase 1**: Database schema, append-only stock ledger engine (`ScaledQuantity`), deterministic occurrence calculations.
 - [x] **Phase 2**: Medication details, FEFO stock lot tracking, auditable adjustments, historical dose corrections (`DOSE_REVERSAL`).
@@ -45,7 +45,8 @@ Designed with healthcare-grade rigor, Novelo focuses on mathematical stock integ
 - [x] **Phase 5**: NHS-inspired healthcare aesthetic (`#005EB8`), `#121820` slate dark theme, Hero Dose + Timeline hybrid layout, reusable components.
 - [x] **Phase 6**: Biometric app lock (`BiometricPrompt` + device credentials), window `FLAG_SECURE` recents masking, PBKDF2/AES-256-GCM encrypted local SAF backup, RFC 4180 CSV ZIP export, atomic transactional restore.
 - [x] **Phase 7 & 7.1**: Release hardening, GitHub Actions CI, R8 minification, QA release signing, WCAG AA compliance audit ($\ge 48\text{dp}$ touch targets), lifecycle flow collections (`collectAsStateWithLifecycle`).
-- [x] **Phase 8**: Comprehensive UI/UX overhaul (`docs/ui-ux-audit/`), theme-aware semantic color system (`MaterialTheme.noveloColors`), 3-step progressive Add Medication wizard, Edit Medication & Edit Schedule flows, weekday schedule runway calculation fix, live ledger impact previews on Restock/Adjust/Correct dialogs, and 52/52 JVM unit tests + 29/29 on-device instrumentation tests passing.
+- [x] **Phase 8 & UI/UX Pro Max**: Complete UI/UX overhaul, Master design system (`design-system/novelo/MASTER.md`), tabular numerics (`fontFeatureSettings = "tnum"`), expressive pill silhouettes (`NoveloPillShape`), 3-tier mobile data rows (`NoveloDataRow`), Bullet KPI adherence card (80% benchmark), official 3D logo and animated splash screen.
+- [x] **Pre-Merge Regression & Quality Audit**: 202 new automated regression tests (T001–T200, T130b, T148b), BUG-001 (receiver null safety) and BUG-002 (stock recount race condition) remediated, 287/287 tests passing with 100% pass rate, and all branches merged into `main`.
 
 ---
 
@@ -58,12 +59,12 @@ Novelo requires Java 25 or a compatible modern JDK (such as the bundled Android 
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ```
 
-### Run Unit Tests (52 tests across 10 test classes)
+### Run Unit Tests (136 tests across 20 test classes)
 ```powershell
 .\gradlew.bat testDebugUnitTest
 ```
 
-### Run On-Device Instrumented & Accessibility Tests (29 tests on connected device/emulator)
+### Run On-Device Instrumented & Accessibility Tests (151 tests on connected device/emulator)
 ```powershell
 .\gradlew.bat connectedDebugAndroidTest
 ```
