@@ -1,76 +1,179 @@
-# Novelo Session Handoff
+# Novelo Engineering Handover Document (HANDOFF.md)
 
-## 1. Current State Summary
-- **Current Phase**: **All Phases Integrated, Regression Verified (287/287 Tests Passing), and Merged to Main** — **COMPLETED & VERIFIED**.
-- **Active Branch**: `main` (Fully up to date with `origin/main` at commit `cd0e43f`; working tree clean).
-- **Integrated Lineage**:
-  - All 22 stacked commits across Phase 7 Release Hardening (`6561dcd`), Phase 8 Premium Overhaul (`8d642f1`), Stage 1 Foundation & Branding (`2a05360`), Stage 2 Implementation (`aaed023`), Bug Fixes (`4cd7a2c`), and 200+ Regression Tests (`cd0e43f`) are permanently fast-forward merged to `main`.
-  - All branches (`chore/1-phase-07-release-hardening`, `feat/3-premium-ui-ux-overhaul`, `chore/5-uiux-pro-max-foundation`, `feat/6-uiux-pro-max-implementation`, `test/8-pre-merge-regression-200`) are 100% merged into `main`.
-- **Test Suite Verification Status**:
-  - JVM Unit Tests: **136 / 136 PASSED** (`testDebugUnitTest`).
-  - Connected On-Device Tests: **151 / 151 PASSED** on `emulator-5554` API 37 (`connectedDebugAndroidTest`).
-  - Total Automated Tests: **287 / 287 PASSED (100% pass rate)**.
-  - Android Lint: **0 errors, 0 fatal issues** (`lintDebug`).
-  - Release Compilation: **BUILD SUCCESSFUL** with R8 minification and zero network permissions (`assembleRelease`).
-- **Remediated Defects**:
-  - `BUG-001` (P2 Reliability): Null safety applied on `pendingResult?.finish()` in `BootAndChangeReceiver`, `AlarmReceiver`, and `NotificationActionReceiver`.
-  - `BUG-002` (P2 Stock Accounting): `awaitLoadedState()` added in `MedicationDetailViewModel` preventing race conditions during physical stock recount adjustments.
-- **Project Name**: Novelo ("Medication, made manageable.") | Package: `com.example.nuvilo`.
-- **Repository**: `https://github.com/nev3rfind/nuvilo.git`
-- **Tracking Issue**: [#5: Stage 2: UI/UX Pro Max Implementation & Design System Rollout](https://github.com/nev3rfind/nuvilo/issues/5) (`OPEN`).
-- **Feature Branch**: `feat/6-uiux-pro-max-implementation` (Pushed to origin; clean).
-- **PR Stack & Ancestry Architecture**:
-  1. **PR #6**: [Draft PR #6](https://github.com/nev3rfind/nuvilo/pull/6) (`feat/6-uiux-pro-max-implementation` -> `chore/5-uiux-pro-max-foundation`)
-  2. **PR #7**: [Draft PR #7](https://github.com/nev3rfind/nuvilo/pull/7) (`chore/5-uiux-pro-max-foundation` -> `feat/3-premium-ui-ux-overhaul`)
-  3. **PR #4**: [Draft PR #4](https://github.com/nev3rfind/nuvilo/pull/4) (`feat/3-premium-ui-ux-overhaul` -> `chore/1-phase-07-release-hardening`)
-  4. **PR #2**: [Draft PR #2](https://github.com/nev3rfind/nuvilo/pull/2) (`chore/1-phase-07-release-hardening` -> `main`)
-- **Verified Integration Order**: PR #6 -> PR #7 -> PR #4 -> PR #2 -> `main`. All PRs kept in Draft status.
-- **Brand Architecture Reconciled**:
-  - Primary Brand Anchor: **Novelo Clinical Blue (`#005EB8`)** in Light Mode, **`#6EB4FF`** in Dark Mode.
-  - Interaction Blue: **`#0284C7`** / **`#38BDF8`** (Buttons, active rings, focused strokes).
-  - Cyan Accent: **`#0891B2`** / **`#22D3EE`** (Progress bars, radiant aura glow, active indicators).
-  - Supporting Clinical Teal: **`#007F7B`** / **`#DDF5F4`** (Dedicated strictly to dosage form pills and schedule tags; contrast 5.10:1 to 9.85:1).
-  - Master Design System (`design-system/novelo/MASTER.md`): Updated to reflect `#005EB8` primary and pill button specs; raw CLI `#DC2626` red CTA removed.
-- **CI Workflow Modernization (`.github/workflows/ci.yml`)**:
-  - Pinned all workflow jobs (`unit-tests`, `lint`, `release-build-and-audit`) to `ubuntu-24.04` to guarantee predictable, reproducible builds during the ongoing GitHub platform migration to Ubuntu 26.04.
-  - Upgraded artifact uploads to verified `actions/upload-artifact@v7.0.2` running natively under Node 24 (`node24`), eliminating deprecation warnings.
-  - Excluded R8/ProGuard mapping files (`mapping.txt`, `seeds.txt`) from public pull request CI artifacts, preserving internal obfuscation symbols from external disclosure.
-- **Physical Device QA & Safe Data Protocol**:
-  - Completely replaced unsafe raw SQLite/WAL file copying recommendations with Novelo's application-level encrypted JSON backup (PBKDF2/AES-256-GCM) via the Storage Access Framework (SAF) and transactional restoration (`NoveloDatabase.withTransaction`).
-  - Restructured `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md` into 14 distinct sections with explicit tier designations (`[AUTOMATED]`, `[EMULATOR]`, `[PHYSICAL]`), strictly reserving physical hardware checks for human testers.
-  - Documented QA certificate mismatch guidance (`CN=Novelo QA` vs `CN=Android Debug`), prohibiting destructive uninstallation or data wiping and directing testing onto disposable test environments.
+> **Product**: Novelo — *"Medication, made manageable."*  
+> **Package**: `com.example.nuvilo`  
+> **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
+> **Active Branch**: `main` (Single source of truth; clean and in sync with `origin/main`)  
+> **Latest Verified Commit**: `5a1ef35`  
+> **Date**: 2026-11-09  
 
 ---
 
-## 2. Completed Work in Stage 2
+## 1. Executive Summary & Repository State
 
-### 1. Typography & Tabular Numerics (`Type.kt`)
-- Integrated `fontFeatureSettings = "tnum"` via `NoveloNumericTypography` and extension property `.tabular`.
-- Deployed monospaced digits to stock counts (`"26 tab left"`), adherence rates (`"100%"`), timestamps (`"08:00"`), batch expiry dates, and dosage quantities to eliminate horizontal jitter.
+Novelo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. All development phases (**Phases 0 through 8**, **UI/UX Pro Max Stages 1 & 2**, **Bug Remediation**, and the **Pre-Merge 200+ Regression Suite**) have been completed, verified on physical/emulated Android 17 (API 37), and fast-forward merged directly into `main`.
 
-### 2. Layered Brand Palette & Expressive Silhouettes (`Color.kt`, `Theme.kt`, `Shape.kt`)
-- Added `NoveloInteractionBlue` (`#0284C7`), `NoveloCyanAccent` (`#0891B2`), `NoveloLightContainer` (`#E0F2FE`), `NoveloDarkContainer` (`#1E293B`), and `NoveloBulletBenchmark`.
-- Added `NoveloPillShape` (`RoundedCornerShape(999.dp)`) for chips, badges, tabs, and action buttons.
-- Added `NoveloCardShape` (`RoundedCornerShape(18.dp)`) for content cards and dialogs.
+### Active Branch & Git Cleanliness
+- **Branch**: `main`
+- **Working Tree**: Clean (`git status` reports 0 untracked / 0 unstaged files).
+- **Remote Synchronization**: Fully synchronized with `origin/main`.
+- **Merged Branches**: All topic branches (`chore/1-phase-07-release-hardening`, `feat/3-premium-ui-ux-overhaul`, `chore/5-uiux-pro-max-foundation`, `feat/6-uiux-pro-max-implementation`, `test/8-pre-merge-regression-200`) are 100% merged into `main`.
 
-### 3. Component Architecture & Mobile Data Presentation
-- Built `NoveloBulletKpiCard` comparing adherence against the 80% clinical benchmark target with WCAG AA non-color status icons.
-- Built 3-tier mobile data row (`NoveloDataRow`) for stock movement ledger and chronological dose history.
-- Upgraded `DoseStatusBadge`, `StockBadge`, `HeroDoseCard`, and `MedicationItemCard` with pill silhouettes and $\ge 48\text{dp}$ touch target compliance.
+---
 
-### 4. Screen-by-Screen Rollout
-- **Dashboard (`DashboardScreen.kt`)**: Tabular adherence count, `NoveloCardShape` container, pill actions.
-- **Medications (`MedicationListScreen.kt`)**: Pill search bar, pill segmented control (Active/Archived), pill wizard steps.
-- **Medication Detail (`MedicationDetailScreen.kt`)**: 3-tier ledger rows with green/red delta pills, `✓ Active FEFO Lot` pill badge.
-- **Adherence Calendar (`AdherenceCalendarScreen.kt`)**: Bullet KPI card integration, tabular summary metrics, pill day dose buttons.
-- **Navigation (`MainActivity.kt`)**: Directional horizontal spatial slide navigation for bottom tab switching.
-- **Brand Identity & Splash (`SplashScreen.kt`)**: Official 3D Novelo logo, radiant breathing glow aura, spring entrance, and progressive status bar.
+## 2. Test Suite & Quality Status (287 Automated Tests, 100% Passing)
 
-### 5. Documentation & Verification Assets
-- `docs/ui-ux-audit/stage2/IMPLEMENTATION_BASELINE.md`
-- `docs/ui-ux-audit/stage2/IMPLEMENTATION_REPORT.md`
-- `docs/ui-ux-audit/stage2/ISSUES.md`
-- `docs/ui-ux-audit/stage2/VISUAL_VERIFICATION.md`
-- `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_QA.md`
-- `docs/screenshots/stage2/before/` (11 screenshots)
-- `docs/screenshots/stage2/after/` (11 screenshots)
+Before any PR, branch, or release claim, all quality gates must pass. As of commit `5a1ef35`, the suite is 100% green:
+
+| Quality Gate | Gradle Task | Target / Environment | Count / Result | Pass Rate | Status |
+| :--- | :--- | :--- | :---: | :---: | :---: |
+| **JVM Unit Tests** | `.\gradlew.bat testDebugUnitTest` | OpenJDK 21 (Android Studio JBR) | **136 / 136** | 100.0% | **PASSED** |
+| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest` | `emulator-5554` (Android 17 / API 37) | **151 / 151** | 100.0% | **PASSED** |
+| **Grand Total Automated Tests** | — | **JVM + Android Instrumentation** | **287 / 287** | **100.0%** | **PASSED** |
+| **Static Analysis / Lint** | `.\gradlew.bat lintDebug` | 119 active checks | **0 Errors** | 100.0% | **PASSED** |
+| **Release Build & Shrinking** | `.\gradlew.bat assembleRelease` | R8 Minification + ProGuard | APK Generated | Zero Issues | **PASSED** |
+
+---
+
+## 3. Mandatory Safety & Domain Invariants
+
+Any agent modifying medication tracking, stock management, or database logic **MUST** uphold these non-negotiable invariants (consult `.agents/skills/novelo-medication-safety/SKILL.md`):
+
+1. **Zero Network Access**:
+   * `android.permission.INTERNET` must **never** be declared or merged.
+   * `android.permission.ACCESS_NETWORK_STATE` is explicitly removed via `tools:node="remove"`.
+   * Absolutely zero third-party remote SDKs (no Firebase, Sentry, Mixpanel, Crashlytics, Google Analytics, or external AI APIs).
+2. **Exact Scaled Integer Arithmetic (No Floating-Point Math)**:
+   * **Never use `Float` or `Double`** for medication inventory balances, doses, or ledger transactions.
+   * All quantities use `ScaledQuantity` with integer micro-units (`rawScaledValue`) or exact decimal scaling.
+3. **Immutable Append-Only Stock Ledger**:
+   * Balances are **never** stored as unbacked mutable integers that can drift.
+   * Stock is deterministically computed from:  
+     $$\text{Current Stock} = \text{Opening Balance} + \sum(\text{Restocks}) - \sum(\text{Deductions}) \pm \sum(\text{Adjustments})$$
+   * Manual recounts insert an `ADJUSTMENT_IN` or `ADJUSTMENT_OUT` ledger entry with the exact delta.
+   * Retrospective dose corrections log compensating `DOSE_REVERSAL` movements.
+4. **Dose Recording Preferences**:
+   * `CONFIRM`: Requires explicit confirmation before recording a dose as taken.
+   * `AUTO_ASSUME`: Records assumed adherence according to schedule; clearly distinguished from verified ingestion in adherence reports.
+   * **Occurrence Identity**: Deterministic `occurrenceId` ensures repeated clicks or alarms never duplicate dose events or stock deductions.
+   * **Medical Safety Guardrail**: Never recommend double doses or catch-up doses after a missed dose.
+5. **Scheduler Architecture**:
+   * Time-critical dose notifications use `AlarmManager` with exact alarms (`setExactAndAllowWhileIdle()`).
+   * `WorkManager` is strictly reserved for deferrable maintenance (e.g., periodic low-stock evaluation via `LowStockCheckWorker`).
+
+---
+
+## 4. Key Architectural Map
+
+The codebase strictly follows Clean Architecture / MVVM with Unidirectional Data Flow (UDF):
+
+```
+app/src/main/java/com/example/nuvilo/
+├── data/
+│   ├── backup/            # PBKDF2/AES-256-GCM encrypted SAF JSON & RFC 4180 CSV ZIP export/restore
+│   ├── local/             # Room Database (NoveloDatabase), DAOs, Entities, Migrations (1->2, 2->3)
+│   ├── mapper/            # Entity <-> Domain Model mapping extensions
+│   ├── preferences/       # Jetpack DataStore (UserPreferencesRepository, ThemeMode, PrivacyMode)
+│   └── repository/        # Repository implementations (NoveloRepositoryImpl, MedicationRepository, etc.)
+├── domain/
+│   ├── adherence/         # AdherenceCalculator, MonthlyCalendarData, DoseOutcomeFilter
+│   ├── model/             # Domain entities (Medication, ScaledQuantity, DoseOccurrence, StockLot, etc.)
+│   ├── prescription/      # PrescriptionManager, PrescriptionStatus, repeat authorisation logic
+│   ├── schedule/          # ScheduleOccurrenceCalculator, schedule horizons, deterministic occurrenceId
+│   └── stock/             # StockLedgerCalculator, FEFO multi-lot allocation engine
+├── security/              # BiometricAuthManager (BiometricPrompt), AppLockManager (grace periods, FLAG_SECURE)
+├── system/
+│   ├── alarm/             # AlarmSchedulerImpl, AlarmReceiver (exact dose alarms)
+│   ├── notification/      # NotificationHelper, NotificationActionReceiver (Take, Skip, Snooze)
+│   ├── receiver/          # BootAndChangeReceiver (BOOT_COMPLETED, TIMEZONE_CHANGED reconciliation)
+│   └── work/              # LowStockCheckWorker (periodic low-stock evaluation)
+└── ui/
+    ├── components/        # Reusable Compose design components (NoveloDataRow, NoveloBulletKpiCard, badges, pills)
+    ├── screens/           # DashboardScreen, MedicationListScreen, MedicationDetailScreen,
+    │                      # AdherenceCalendarScreen, SettingsScreen, SplashScreen, LockScreen
+    ├── theme/             # Material 3 Theme.kt, Color.kt (NHS #005EB8), Shape.kt (Pill, Card), Type.kt (tnum)
+    └── viewmodel/         # ViewModels.kt (Dashboard, Medication, MedicationDetail, Calendar, Settings)
+```
+
+---
+
+## 5. Critical Code Patches & Caveats
+
+When working on ViewModels, Receivers, or Compose UI, be aware of recent architectural fixes:
+
+1. **Receiver Null Safety (`BUG-001`)**:
+   * In `BootAndChangeReceiver.kt`, `AlarmReceiver.kt`, and `NotificationActionReceiver.kt`, always call `pendingResult?.finish()` with null safety. Outside active system broadcast dispatch (such as unit/instrumentation test invocation), `goAsync()` returns `null`.
+2. **ViewModel State Loading (`BUG-002`)**:
+   * In `MedicationDetailViewModel`, always use `awaitLoadedState()` before calculating inventory adjustments or restocks. Never read `uiState.value.stockBalance?.currentBalance ?: ScaledQuantity.ZERO` without checking `isLoading`, otherwise balance adjusts against zero and compounds.
+3. **Tabular Numerics for Healthcare Data**:
+   * When displaying numbers, stock balances, counters, or timestamps, always apply `.tabular` or `NoveloNumericTypography` in `Type.kt` (`fontFeatureSettings = "tnum"`) to eliminate horizontal layout jitter.
+4. **Touch Targets & Accessibility**:
+   * Interactive UI elements must meet the $\ge 48\times 48\text{dp}$ touch target requirement (`heightIn(min = 48.dp)` or `minimumInteractiveComponentSize`).
+   * Color contrast must meet WCAG AA ($\ge 4.5:1$). Status must never be conveyed solely by color (pair with clear text and icons).
+
+---
+
+## 6. How the Next Agent Should Work
+
+### 1. Environment Configuration (PowerShell)
+Novelo compiles against Android SDK 37 using Java 21/25 (bundled Android Studio JBR):
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+```
+
+### 2. Standard Quality Verification Commands
+Run before claiming any task is complete or creating commits:
+```powershell
+# 1. Run JVM Unit Tests (136 tests)
+.\gradlew.bat testDebugUnitTest
+
+# 2. Run Connected Tests (151 tests on emulator-5554 or connected device)
+.\gradlew.bat connectedDebugAndroidTest
+
+# 3. Run Android Lint (Must have 0 errors)
+.\gradlew.bat lintDebug
+
+# 4. Assemble Release APK (Verifies R8 shrinking and ProGuard rules)
+.\gradlew.bat assembleRelease
+```
+
+### 3. Git & Branching Workflow
+- Always branch off `main`:
+  ```powershell
+  git checkout main
+  git pull origin main
+  git checkout -b <type>/<issue-number>-<short-description>
+  ```
+- Follow conventional commits (`feat:`, `fix:`, `chore:`, `test:`, `docs:`).
+- Never run force-push (`git push --force`).
+- Never discard unstaged user modifications without explicit authorization.
+
+---
+
+## 7. Open Backlog & Suggested Next Tasks
+
+If tasked with continuing work, the following areas represent natural high-value initiatives:
+
+1. **Physical Device QA Walkthrough**:
+   * Complete the human-tester checklist in [`docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md`](docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md) on physical Android hardware (testing punch-hole/notch insets, 60/120Hz refresh rates, physical haptic vibrations, and hardware fingerprint/face authentication).
+2. **Production Keystore Configuration (Optional for Google Play Distribution)**:
+   * Current release builds compile cleanly under R8 with an unsigned/QA certificate. When ready for Google Play distribution, configure production signing credentials via environment variables in `app/build.gradle.kts`.
+3. **Accessibility & Multi-Language Localization**:
+   * Extract hardcoded English strings into `res/values/strings.xml` for internationalization.
+   * Add dynamic font scaling tests ($\ge 200\%$ system font scale) to verify non-clipping text layouts.
+
+---
+
+## 8. Index of Source-of-Truth Documents
+
+| Document | Description |
+| :--- | :--- |
+| [`AGENTS.md`](AGENTS.md) | Agent behavioral rules, safety invariants, and quality guidelines. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Comprehensive system architecture, data models, and database schema. |
+| [`PROGRESS.md`](PROGRESS.md) | Full historical log of all completed phases and verification evidence. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Structured changelog following Keep a Changelog format. |
+| [`SECURITY.md`](SECURITY.md) | Security model, zero-network boundary audit, and encryption specs. |
+| [`TESTING.md`](TESTING.md) | Testing strategy, instrumentation guides, and test execution commands. |
+| [`docs/testing/pre-merge/`](docs/testing/pre-merge/) | Pre-merge QA deliverables (`TEST_RESULTS.md`, `TEST_CASE_CATALOG.md`, `BUGS_FOUND.md`, `TEST_COVERAGE.md`). |
+| [`docs/ui-ux-audit/`](docs/ui-ux-audit/) | Complete Phase 8 & Stage 2 UI/UX audit, design system specs, and before/after screenshots. |
+| [`design-system/novelo/MASTER.md`](design-system/novelo/MASTER.md) | Master design system tokens, typography scales, and component specifications. |
