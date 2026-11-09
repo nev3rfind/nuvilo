@@ -26,3 +26,12 @@ local.properties
 # Temporary scratch scripts
 scratch/
 
+
+# Store Assets & Screenshot Editor
+node_modules/
+.next/
+store-assets/**/node_modules/
+store-assets/**/.next/
+store-assets/**/out/
+store-assets/**/.turbo/
+store-assets/**/*.log
