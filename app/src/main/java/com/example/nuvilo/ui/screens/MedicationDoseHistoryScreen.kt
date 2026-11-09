@@ -405,51 +405,41 @@ private fun DetailedHistoryItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Surface(
+                        shape = NoveloPillShape,
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
-                        Surface(
-                            shape = NoveloPillShape,
-                            color = MaterialTheme.colorScheme.primaryContainer
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Schedule,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = "Scheduled $scheduledStr",
-                                    style = MaterialTheme.typography.labelSmall.tabular,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "Scheduled $scheduledStr",
+                                style = MaterialTheme.typography.labelSmall.tabular,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1
+                            )
                         }
-
-                        Text(
-                            text = "${occ.doseQuantity.toDisplayString()} ${occ.unit.abbreviation}",
-                            style = MaterialTheme.typography.bodyMedium.tabular,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
                     }
 
+                    val qtyLabel = "${occ.doseQuantity.toDisplayString()} ${occ.unit.formatLabel(occ.doseQuantity)}"
                     Text(
                         text = when {
-                            recordedStr != null -> "Recorded at: $recordedStr"
+                            recordedStr != null -> "$qtyLabel · Recorded $recordedStr"
                             occ.status == DoseStatus.ASSUMED ->
-                                "Auto-assumed per schedule"
+                                "$qtyLabel · Auto-assumed per schedule"
                             occ.status == DoseStatus.MISSED && occ.recordedEpochMs == null ->
-                                "Unrecorded past dose (evaluated as Missed)"
-                            else -> "Not yet recorded"
+                                "$qtyLabel · Unrecorded past dose"
+                            else -> "$qtyLabel · Not yet recorded"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

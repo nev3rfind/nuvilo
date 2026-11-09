@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** Novelo
+**Project:** Nuvilo
 **Generated:** 2026-11-05 15:03:40
 **Category:** Medication & Pill Reminder
 **Design Dials:** Variance 5/10 (Balanced / Modern) | Motion 3/10 (Subtle) | Density 4/10 (Standard)
@@ -17,7 +17,7 @@
 
 ### Color Palette & Reconciled Brand Tokens
 
-Novelo's visual identity centers on **Novelo Clinical Blue (`#005EB8`)** as the primary brand anchor (NHS-inspired trust, credibility, and authority), complemented by **Interaction Blue (`#0284C7`)** for interactive controls, **Cyan Accent (`#0891B2` / `#22D3EE`)** for active highlights and luminous aura, and **Secondary Clinical Teal (`#007F7B` / `#DDF5F4`)** with a dedicated supporting role for dosage forms, schedule tags, and medication categories.
+Nuvilo's visual identity centers on **Nuvilo Clinical Blue (`#005EB8`)** as the primary brand anchor (NHS-inspired trust, credibility, and authority), complemented by **Interaction Blue (`#0284C7`)** for interactive controls, **Cyan Accent (`#0891B2` / `#22D3EE`)** for active highlights and luminous aura, and **Secondary Clinical Teal (`#007F7B` / `#DDF5F4`)** with a dedicated supporting role for dosage forms, schedule tags, and medication categories.
 
 | Role | Light Hex | Dark Hex | Role & Usage | Contrast vs Background |
 |------|-----------|----------|--------------|------------------------|

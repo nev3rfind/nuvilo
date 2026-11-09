@@ -1,6 +1,6 @@
-# Novelo Release Checklist & Build Hardening Verification
+# Nuvilo Release Checklist & Build Hardening Verification
 
-**Application:** Novelo (Personal Medication Management)  
+**Application:** Nuvilo (Personal Medication Management)  
 **Package:** `com.example.nuvilo`  
 **Platform:** Native Android (Kotlin 2.2, Jetpack Compose, Material 3, Room v3)  
 **Min SDK:** 24 | **Target/Compile SDK:** 37  
@@ -44,7 +44,7 @@ All core verification tasks execute cleanly and pass 100%:
 
 A temporary QA keystore was generated outside the git working tree:
 - **Keystore Location:** `$env:USERPROFILE\.android\novelo-qa.keystore`
-- **Distinguished Name:** `CN=Novelo QA, OU=Quality Assurance, O=Novelo, L=London, C=GB`
+- **Distinguished Name:** `CN=Nuvilo QA, OU=Quality Assurance, O=Nuvilo, L=London, C=GB`
 - **Key Algorithm / Size:** RSA 2048-bit (Validity: 10,000 days)
 - **Certificate SHA-256 Digest:** `4dd27e24e977e2a8657ecae44358ad7adb57d1d9cce38b20bcb98fac8e6461d1`
 - **Certificate SHA-1 Digest:** `d9bf417c3389452ea162b81c6b7465f7d1bfdeaa`
@@ -88,7 +88,7 @@ The release configuration combines AGP optimization with dedicated keep rules:
 -keep class * extends androidx.work.Worker { *; }
 -keep class * extends androidx.work.ListenableWorker { *; }
 
-# Novelo Domain Models & Room Entities
+# Nuvilo Domain Models & Room Entities
 -keep class com.example.nuvilo.domain.model.** { *; }
 -keep class com.example.nuvilo.data.local.entity.** { *; }
 ```

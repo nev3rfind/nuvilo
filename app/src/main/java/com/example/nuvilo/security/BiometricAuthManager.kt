@@ -58,7 +58,7 @@ class BiometricAuthManager(private val context: Context) {
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock Novelo")
+            .setTitle("Unlock Nuvilo")
             .setSubtitle("Confirm your identity to manage medications")
             .setAllowedAuthenticators(authenticators)
             // Note: setNegativeButtonText is strictly prohibited when DEVICE_CREDENTIAL is enabled

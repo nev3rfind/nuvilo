@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create a professional Google Play Store screenshot collection (8 Phone, 8 Tablet, 1 Feature Graphic) showcasing Novelo's genuine healthcare features with an editable Next.js screenshot editor project, automated PIL export validation, and comprehensive Play Store marketing documentation.
+**Goal:** Create a professional Google Play Store screenshot collection (8 Phone, 8 Tablet, 1 Feature Graphic) showcasing Nuvilo's genuine healthcare features with an editable Next.js screenshot editor project, automated PIL export validation, and comprehensive Play Store marketing documentation.
 
 **Architecture:** Maintain complete separation between the Android application module and the Next.js screenshot editor by placing the editor in `store-assets/google-play/editor/`. Capture authentic application screens from Android emulators with realistic synthetic data, compose them using the "Premium Clinical Blue + Editorial Bento" design direction in the screenshot editor with `app-store-screenshots.json`, render opaque 24-bit PNGs matching exact Google Play dimensions, and validate all assets using an automated Python Pillow verification suite.
 
@@ -15,7 +15,7 @@
 - **Phone Dimensions:** Exactly 8 images, 1080 × 1920 px (9:16 portrait), opaque 24-bit RGB PNG (no alpha channel).
 - **Tablet Dimensions:** Exactly 8 images, 1920 × 1080 px (16:9 landscape) or 1080 × 1920 px (9:16 portrait) based on actual responsive evaluation, opaque 24-bit RGB PNG (no alpha channel).
 - **Feature Graphic:** Exactly 1 image, 1024 × 500 px, opaque 24-bit RGB PNG (no alpha channel), centered composition, no device frames or rating badges.
-- **Brand Palette:** Novelo Clinical Blue (`#005EB8`), Interaction Blue (`#0284C7`), Cyan Accent (`#0891B2`), Dark Neutral (`#121820` / `#0C1015`), and official Novelo 3D logo / icon.
+- **Brand Palette:** Nuvilo Clinical Blue (`#005EB8`), Interaction Blue (`#0284C7`), Cyan Accent (`#0891B2`), Dark Neutral (`#121820` / `#0C1015`), and official Nuvilo 3D logo / icon.
 - **Offline / Privacy Safety:** Zero network claims; do not claim remote sync or clinical guarantees.
 - **Prohibited Marketing Claims:** No fake ratings, awards, #1 claims, medical efficacy guarantees, or Google Play badges.
 - **Directory Isolation:** The Next.js screenshot editor lives in `store-assets/google-play/editor/`; do not add Node dependencies to Android Gradle or commit `node_modules`/`.next`.
@@ -58,12 +58,12 @@
 - Create: `store-assets/google-play/editor/package.json`
 - Create: `store-assets/google-play/editor/src/...` (from `.agents/skills/app-store-screenshots/template/`)
 - Modify: `store-assets/google-play/editor/src/lib/devices.ts` (add Google Play 16:9 tablet preset `1920x1080` & `1080x1920`)
-- Create: `store-assets/google-play/editor/public/app-icon.png` (copy official Novelo 3D launcher icon)
+- Create: `store-assets/google-play/editor/public/app-icon.png` (copy official Nuvilo 3D launcher icon)
 
 - [ ] **Step 1: Copy template into `store-assets/google-play/editor/`**
   Copy all files from `.agents/skills/app-store-screenshots/template/` into `store-assets/google-play/editor/`.
 
-- [ ] **Step 2: Copy official Novelo app icon into editor public directory**
+- [ ] **Step 2: Copy official Nuvilo app icon into editor public directory**
   Copy `app/src/main/res/mipmap-xxxhdpi/ic_launcher.png` (or high-res 3D brand logo) to `store-assets/google-play/editor/public/app-icon.png`.
 
 - [ ] **Step 3: Update `src/lib/devices.ts` with Google Play compliant 16:9 and 9:16 tablet presets**
@@ -93,7 +93,7 @@
 - Create: `store-assets/google-play/source-captures/tablet/01-dashboard.png` ... `08-privacy.png`
 - Create: `store-assets/google-play/source-captures/CAPTURE_LOG.md`
 
-- [ ] **Step 1: Install and launch Novelo on Android emulator**
+- [ ] **Step 1: Install and launch Nuvilo on Android emulator**
   Deploy `app-debug.apk` to `emulator-5554` with `adb install -r`.
   Populate with realistic synthetic test data (consistent dates, active medications, FEFO lots, adherence record).
 
@@ -110,7 +110,7 @@
 
 - [ ] **Step 3: Capture 8 tablet screens and evaluate responsive behavior**
   Inspect layout on tablet profile (`Medium_Tablet` or tablet window configuration).
-  Evaluate whether landscape (`1920x1080`) or portrait (`1080x1920`) best highlights Novelo's real interface.
+  Evaluate whether landscape (`1920x1080`) or portrait (`1080x1920`) best highlights Nuvilo's real interface.
   Capture the 8 corresponding tablet screens.
 
 - [ ] **Step 4: Document capture environment in `CAPTURE_LOG.md`**
@@ -122,9 +122,9 @@
 
 **Files:**
 - Create: `store-assets/google-play/editor/app-store-screenshots.json`
-- Modify: `store-assets/google-play/editor/src/lib/constants.ts` (register Novelo clinical theme tokens)
+- Modify: `store-assets/google-play/editor/src/lib/constants.ts` (register Nuvilo clinical theme tokens)
 
-- [ ] **Step 1: Define Novelo theme preset in `constants.ts`**
+- [ ] **Step 1: Define Nuvilo theme preset in `constants.ts`**
   Register theme `novelo-clinical`:
   - Background primary: `#F8FAFC` (light), `#121820` (dark)
   - Primary anchor: `#005EB8`
@@ -134,12 +134,12 @@
 
 - [ ] **Step 2: Author `app-store-screenshots.json`**
   Configure:
-  - App Name: "Novelo"
+  - App Name: "Nuvilo"
   - Locale: "en-GB"
   - Platform: "android"
   - 8 Phone slides (`android` deck) with headlines, supporting copy, layout ("device-bottom", "split-landscape", "hero", "bento-card"), source captures.
   - 8 Tablet slides (`android-tablet` deck) configured with responsive tablet captures.
-  - Feature Graphic (`feature-graphic` deck): 1024x500 banner with centered 3D logo, headline "Novelo", tagline "Medication, made manageable.", no device mockup.
+  - Feature Graphic (`feature-graphic` deck): 1024x500 banner with centered 3D logo, headline "Nuvilo", tagline "Medication, made manageable.", no device mockup.
 
 - [ ] **Step 3: Verify preview rendering**
   Start Next.js dev server or run headless screenshot export verification.

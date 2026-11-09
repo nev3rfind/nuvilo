@@ -1,6 +1,6 @@
-# Novelo Engineering Handover Document (HANDOFF.md)
+# Nuvilo Engineering Handover Document (HANDOFF.md)
 
-> **Product**: Novelo — *"Medication, made manageable."*  
+> **Product**: Nuvilo — *"Medication, made manageable."*  
 > **Package**: `com.example.nuvilo`  
 > **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
 > **Active Branch**: `main` (Single source of truth; clean and in sync with `origin/main`)  
@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary & Repository State
 
-Novelo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. All development phases (**Phases 0 through 8**, **UI/UX Pro Max Stages 1 & 2**, **Bug Remediation**, and the **Pre-Merge 200+ Regression Suite**) have been completed, verified on physical/emulated Android 17 (API 37), and fast-forward merged directly into `main`.
+Nuvilo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. All development phases (**Phases 0 through 8**, **UI/UX Pro Max Stages 1 & 2**, **Bug Remediation**, and the **Pre-Merge 200+ Regression Suite**) have been completed, verified on physical/emulated Android 17 (API 37), and fast-forward merged directly into `main`.
 
 ### Active Branch & Git Cleanliness
 - **Branch**: `main`
@@ -116,7 +116,7 @@ When working on ViewModels, Receivers, or Compose UI, be aware of recent archite
 ## 6. How the Next Agent Should Work
 
 ### 1. Environment Configuration (PowerShell)
-Novelo compiles against Android SDK 37 using Java 21/25 (bundled Android Studio JBR):
+Nuvilo compiles against Android SDK 37 using Java 21/25 (bundled Android Studio JBR):
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ```

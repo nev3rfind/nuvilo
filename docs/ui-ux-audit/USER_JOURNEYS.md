@@ -1,6 +1,6 @@
-# Novelo Phase 8 — Core User Journeys & Interaction Flows
+# Nuvilo Phase 8 — Core User Journeys & Interaction Flows
 
-This document maps the 7 primary clinical and operational user journeys in **Novelo**, detailing how the Phase 8 UI/UX overhaul minimizes cognitive load, reduces tap counts, and preserves medication safety invariants.
+This document maps the 7 primary clinical and operational user journeys in **Nuvilo**, detailing how the Phase 8 UI/UX overhaul minimizes cognitive load, reduces tap counts, and preserves medication safety invariants.
 
 ---
 
@@ -27,7 +27,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["Open Novelo -> Today Dashboard"] --> B{"Pending Doses Today?"}
+    A["Open Nuvilo -> Today Dashboard"] --> B{"Pending Doses Today?"}
     B -- "Yes" --> C["HeroDoseCard Focal Point\n(Next Due Medication, Strength, Time, Stock Pill)"]
     C --> D["Tap 'Take Dose' (Primary CTA)"]
     C --> E["Tap 'Snooze 15m'"]
@@ -41,7 +41,7 @@ flowchart TD
 ### Key UX Enhancements
 1. **Unmistakable Visual Hierarchy:** `HeroDoseCard` is the single dominant surface on the Today screen, featuring a high-contrast primary container, clear dosage pill, and a full-width `Take Dose` button separated from secondary `Snooze 15m` and `Skip` actions to prevent accidental taps.
 2. **Tactile & Visual Feedback:** Confirming a dose triggers haptic feedback, smoothly animates the daily adherence progress bar (`animateFloatAsState`), and transitions the Hero card to the next pending dose or the celebratory `CompletedDayCard`.
-3. **No Catch-Up Dose Recommendations:** In strict compliance with Novelo's medical guardrails, overdue or missed doses never suggest doubling up or taking catch-up doses.
+3. **No Catch-Up Dose Recommendations:** In strict compliance with Nuvilo's medical guardrails, overdue or missed doses never suggest doubling up or taking catch-up doses.
 
 ---
 

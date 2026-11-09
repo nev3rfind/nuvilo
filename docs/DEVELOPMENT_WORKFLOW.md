@@ -1,6 +1,6 @@
-# Novelo Development & Release Workflow
+# Nuvilo Development & Release Workflow
 
-This document details the engineering lifecycle, quality gates, and release procedures for **Novelo**.
+This document details the engineering lifecycle, quality gates, and release procedures for **Nuvilo**.
 
 ---
 

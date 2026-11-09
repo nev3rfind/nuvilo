@@ -1,6 +1,6 @@
-# Novelo: Pre-Merge Regression Testing Defect Log (BUGS_FOUND.md)
+# Nuvilo: Pre-Merge Regression Testing Defect Log (BUGS_FOUND.md)
 
-**Product:** Novelo – Medication, made manageable.  
+**Product:** Nuvilo – Medication, made manageable.  
 **Repository:** https://github.com/nev3rfind/nuvilo  
 **Target Branch:** `test/8-pre-merge-regression-200`  
 **Execution Date:** 2026-11-06  

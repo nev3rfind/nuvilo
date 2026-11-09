@@ -1,4 +1,4 @@
-# Novelo Phase 8 — UI/UX & Functional Issue Log
+# Nuvilo Phase 8 — UI/UX & Functional Issue Log
 
 This document records every UI/UX, functional, state-management, accessibility, and performance defect identified during the Phase 8 audit, categorized by severity (`P0` Blocker/Critical Functional UX, `P1` High-Impact Product/Visual Defect, `P2` Polish/Interaction/Performance Defect, `P3` Minor Typography/Copy Refinement).
 

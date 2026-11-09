@@ -231,13 +231,13 @@ class AccessibilityTest {
 
         // 1. Verify app title is a semantic heading
         composeTestRule
-            .onNodeWithText("Novelo")
+            .onNodeWithText("Nuvilo")
             .assertIsDisplayed()
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
 
         // 2. Verify unlock button satisfies touch target $\ge 48$dp
         composeTestRule
-            .onNodeWithText("Unlock Novelo")
+            .onNodeWithText("Unlock Nuvilo")
             .assertIsDisplayed()
             .assertHeightIsAtLeast(48.dp)
             .assertWidthIsAtLeast(48.dp)

@@ -544,7 +544,8 @@ fun AddMedicationDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     when (step) {

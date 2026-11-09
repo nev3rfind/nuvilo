@@ -20,7 +20,7 @@ class PrivacyAndManifestRegressionTest {
 
         val manifestContent = manifestFile.readText()
         assertFalse(
-            "Security Violation: android.permission.INTERNET must never be declared in Novelo",
+            "Security Violation: android.permission.INTERNET must never be declared in Nuvilo",
             manifestContent.contains("android.permission.INTERNET")
         )
     }

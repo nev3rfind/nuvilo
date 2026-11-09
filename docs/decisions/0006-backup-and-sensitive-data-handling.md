@@ -22,7 +22,7 @@ Medication history, dosages, and prescribing physician details are classified as
 
 ## Alternatives Considered
 1. **Default Android Cloud Backup**: Extremely convenient, but silently uploads plaintext health records to third-party cloud servers without explicit user informed consent.
-2. **Proprietary Cloud Sync**: Defeats the zero-network offline-first architectural commitment of Novelo.
+2. **Proprietary Cloud Sync**: Defeats the zero-network offline-first architectural commitment of Nuvilo.
 
 ## Consequences
 - **Positive**: Strict health data sovereignty; zero accidental cloud data leaks; complete compliance with user privacy expectations.

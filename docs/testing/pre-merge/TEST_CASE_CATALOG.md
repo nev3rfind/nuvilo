@@ -1,6 +1,6 @@
-# Novelo: Pre-Merge Test Case Catalog (T001 – T200)
+# Nuvilo: Pre-Merge Test Case Catalog (T001 – T200)
 
-**Product:** Novelo – Medication, made manageable.  
+**Product:** Nuvilo – Medication, made manageable.  
 **Repository:** https://github.com/nev3rfind/nuvilo  
 **Target Branch:** `test/8-pre-merge-regression-200`  
 **Total Cataloged Regression Cases:** 200 new automated test cases across 7 categories.

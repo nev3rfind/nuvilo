@@ -1,15 +1,15 @@
-# Novelo Brand & Visual Identity Direction
+# Nuvilo Brand & Visual Identity Direction
 
 ## 1. Brand Philosophy
-Novelo is a precision medication management companion. Individuals taking daily medications—whether managing complex chronic illnesses, recovering from surgery, or adhering to daily wellness routines—frequently experience cognitive overload and anxiety regarding missed doses or running out of supplies.
+Nuvilo is a precision medication management companion. Individuals taking daily medications—whether managing complex chronic illnesses, recovering from surgery, or adhering to daily wellness routines—frequently experience cognitive overload and anxiety regarding missed doses or running out of supplies.
 
-Novelo's visual identity communicates:
+Nuvilo's visual identity communicates:
 - **Calm**: Reduces medical anxiety through spacious, clean, uncluttered layouts.
 - **Precision**: Crisp typography and exact figures instil confidence in stock and schedule calculations.
 - **Discretion**: Quiet, respectful UI that protects personal health privacy in public environments.
 - **Clarity**: High contrast, unambiguous status indicators, and immediate glanceability.
 
-> **Design Reference**: Inspired by the clean, accessible, public-service clarity of NHS digital standards (trusted blue, high-contrast white, legible sans-serif typography). **Important**: Novelo does not use NHS trademarks, proprietary logos, or wording implying official endorsement.
+> **Design Reference**: Inspired by the clean, accessible, public-service clarity of NHS digital standards (trusted blue, high-contrast white, legible sans-serif typography). **Important**: Nuvilo does not use NHS trademarks, proprietary logos, or wording implying official endorsement.
 
 ---
 
@@ -25,7 +25,7 @@ Novelo's visual identity communicates:
 - **Text Medium Emphasis**: `#475569` (Subtitles, units, secondary timestamps).
 
 ### Dark Mode Palette (Deliberately Crafted Surfaces)
-Novelo avoids harsh pure-black (`#000000`) or naive color inversions:
+Nuvilo avoids harsh pure-black (`#000000`) or naive color inversions:
 - **Dark Background**: `#0F141C` (Deep blue-tinted slate; soothing for nighttime dose checks).
 - **Dark Surface Primary**: `#18202C` (Elevated card surface; distinct from background).
 - **Dark Surface Secondary**: `#222D3D` (Input fields, dialog containers, and secondary cards).
@@ -45,7 +45,7 @@ Status is **never** communicated by color alone. Every semantic state is paired 
 
 ## 3. Typography Direction
 
-Novelo uses Android's native system typeface (`Roboto` / `MaterialTheme.typography`) styled for clinical legibility:
+Nuvilo uses Android's native system typeface (`Roboto` / `MaterialTheme.typography`) styled for clinical legibility:
 - **Display / App Header**: Bold, assertive, warm (`HeadlineMedium`, 28sp).
 - **Section Headers**: Clear, scannable titles (`TitleMedium`, 18sp, SemiBold).
 - **Dose & Stock Numbers**: Prominent tabular figures (`HeadlineLarge`, 32sp) for effortless reading by elderly or visually impaired users.

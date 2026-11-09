@@ -263,7 +263,7 @@ class NotificationHelper(private val context: Context) {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Novelo Reminder Test")
+            .setContentTitle("Nuvilo Reminder Test")
             .setContentText("Notifications and reminder sound/vibration are working correctly.")
             .setContentIntent(contentPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

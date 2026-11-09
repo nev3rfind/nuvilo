@@ -90,7 +90,7 @@ fun LockScreen(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_novelo_logo),
-                        contentDescription = "Novelo Logo",
+                        contentDescription = "Nuvilo Logo",
                         modifier = Modifier
                             .size(86.dp)
                             .clip(RoundedCornerShape(22.dp))
@@ -107,7 +107,7 @@ fun LockScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Novelo",
+                        text = "Nuvilo",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -185,7 +185,7 @@ fun LockScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Unlock Novelo",
+                                text = "Unlock Nuvilo",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -209,7 +209,7 @@ fun LockScreen(
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Text(
-                                    text = "App Lock is enabled, but no screen lock or biometrics are currently configured on this device. Please re-enable a device PIN or biometric lock in Android Settings to unlock Novelo.",
+                                    text = "App Lock is enabled, but no screen lock or biometrics are currently configured on this device. Please re-enable a device PIN or biometric lock in Android Settings to unlock Nuvilo.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     textAlign = TextAlign.Center

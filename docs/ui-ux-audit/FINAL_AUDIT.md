@@ -1,7 +1,7 @@
 # Phase 8 Final UI/UX & Accessibility Audit Report
 
 ## 1. Executive Summary
-Novelo's Phase 8 overhaul transformed the application from a functional Material 3 utility into a calm, distinctive, clinically trustworthy health companion. All **25 identified UI/UX issues (`UX-01` through `UX-25`)** across 9 screens and 10 dialogs have been resolved, verified on-device across Light and Dark modes, and validated with automated unit, instrumented accessibility, and Lint checks.
+Nuvilo's Phase 8 overhaul transformed the application from a functional Material 3 utility into a calm, distinctive, clinically trustworthy health companion. All **25 identified UI/UX issues (`UX-01` through `UX-25`)** across 9 screens and 10 dialogs have been resolved, verified on-device across Light and Dark modes, and validated with automated unit, instrumented accessibility, and Lint checks.
 
 ---
 
@@ -28,7 +28,7 @@ Novelo's Phase 8 overhaul transformed the application from a functional Material
 | `UX-17` | Medium | `SettingsScreen` | Redesigned theme selector into visual `System`, `Light`, and `Dark` preview cards with clear active border and badge | **Resolved** |
 | `UX-18` | Medium | `SettingsScreen` | Structured local data management into distinct **Encrypted Full Backup (`.json`)** vs **Readable Export (`.zip` CSV)** cards | **Resolved** |
 | `UX-19` | Low | `SettingsScreen` | Made **Reminder & Alarm Diagnostics** collapsible so routine users aren't overwhelmed by technical telemetry | **Resolved** |
-| `UX-20` | Medium | `LockScreen` | Polished biometric lock screen with calm security shield badge, privacy reassurance copy, and 52dp `Unlock Novelo` primary button | **Resolved** |
+| `UX-20` | Medium | `LockScreen` | Polished biometric lock screen with calm security shield badge, privacy reassurance copy, and 52dp `Unlock Nuvilo` primary button | **Resolved** |
 | `UX-21` | High | `Color.kt` / `Theme.kt` | Created `NoveloSemanticColors` (`LocalNoveloColors`) providing dedicated Light and Dark semantic tokens (`taken`, `assumed`, `skipped`, `missed`, `warning`) | **Resolved** |
 | `UX-22` | Medium | `Type.kt` / `Shape.kt` / `Motion.kt` | Established complete 15-style typography hierarchy, unified shape tokens (`8dp`–`28dp`), and physics-based `NoveloMotion` transitions | **Resolved** |
 | `UX-23` | Medium | `EmptyStateCard` | Redesigned empty states across Dashboard, Medications, Calendar, and Dose History with tonal icon badges, reassuring guidance, and direct CTAs | **Resolved** |

@@ -1,6 +1,6 @@
-# Novelo: Pre-Merge Test Coverage Analysis (TEST_COVERAGE.md)
+# Nuvilo: Pre-Merge Test Coverage Analysis (TEST_COVERAGE.md)
 
-**Product:** Novelo – Medication, made manageable.  
+**Product:** Nuvilo – Medication, made manageable.  
 **Repository:** https://github.com/nev3rfind/nuvilo  
 **Target Branch:** `test/8-pre-merge-regression-200`  
 **Total Automated Tests:** 285 tests (56 baseline JVM + 29 baseline AVD + 80 regression JVM + 120 regression AVD)

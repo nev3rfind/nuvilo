@@ -314,7 +314,7 @@ fun HeroDoseCard(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${medication.strength} · Take ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.displayName.lowercase()}",
+                                text = "${medication.strength} · Take ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.formatLabel(occurrence.doseQuantity)}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -822,7 +822,7 @@ fun TimelineDoseItem(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${medication.strength} · ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.displayName.lowercase()}",
+                            text = "${medication.strength} · ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.formatLabel(occurrence.doseQuantity)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1263,6 +1263,7 @@ fun MedicationItemCard(
                     // Schedule summary pill
                     Row(
                         modifier = Modifier
+                            .weight(1f, fill = false)
                             .clip(NoveloPillShape)
                             .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f))
                             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1306,7 +1307,9 @@ fun MedicationItemCard(
                         Text(
                             text = if (medication.recordingMode == RecordingMode.CONFIRM) "Confirm" else "Auto",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }

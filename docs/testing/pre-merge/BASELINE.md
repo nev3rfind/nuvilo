@@ -1,7 +1,7 @@
-# Novelo — Pre-Merge Testing Baseline Report
+# Nuvilo — Pre-Merge Testing Baseline Report
 
 **Date:** 2026-11-06  
-**Product:** Novelo – *Medication, made manageable.*  
+**Product:** Nuvilo – *Medication, made manageable.*  
 **Package:** `com.example.nuvilo`  
 **Working Branch:** `test/8-pre-merge-regression-200` (based on `feat/6-uiux-pro-max-implementation` @ `aaed023`)  
 **Tracking Issue:** [Issue #8](https://github.com/nev3rfind/nuvilo/issues/8)  

@@ -8,7 +8,7 @@
 Medication tracking involves highly sensitive personal health data (PHI). Users expect privacy, immediate responsiveness, and complete functionality regardless of network conditions (e.g., in hospitals, airplanes, or rural areas without mobile signal).
 
 ## Decision
-Novelo is strictly **local-only and offline-first**. All data is stored locally on the device using **Room (SQLite)** for relational domain entities and **Jetpack DataStore** for user preferences. The application will not request `android.permission.INTERNET`, will have no cloud sync backend, and will include no third-party network SDKs.
+Nuvilo is strictly **local-only and offline-first**. All data is stored locally on the device using **Room (SQLite)** for relational domain entities and **Jetpack DataStore** for user preferences. The application will not request `android.permission.INTERNET`, will have no cloud sync backend, and will include no third-party network SDKs.
 
 ## Alternatives Considered
 1. **Cloud-First with Firebase/Supabase**: Allows multi-device sync, but requires user accounts, privacy policy disclosures, GDPR/HIPAA compliance overhead, cloud infrastructure costs, and risks data leakage or vendor lock-in.

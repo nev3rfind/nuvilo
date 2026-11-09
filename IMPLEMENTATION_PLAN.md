@@ -1,6 +1,6 @@
-# Novelo Phased Implementation Plan
+# Nuvilo Phased Implementation Plan
 
-This plan organizes the implementation of Novelo into sequential, verifiable work packages. Each phase lists clear prerequisites, implementation tasks, acceptance criteria, test requirements, and a verification checklist.
+This plan organizes the implementation of Nuvilo into sequential, verifiable work packages. Each phase lists clear prerequisites, implementation tasks, acceptance criteria, test requirements, and a verification checklist.
 
 ---
 
@@ -214,7 +214,7 @@ This plan organizes the implementation of Novelo into sequential, verifiable wor
 ## Phase 8: Premium Product Experience & Complete UI/UX Overhaul [COMPLETED]
 - **Status**: Completed / Verified (Issue #3)
 - **Dependencies**: Phases 0–7.1.
-- **Goal**: Transform Novelo into a commercially competitive, distinctive, accessible, and effortless-to-use healthcare product through a comprehensive UI/UX audit, screen-by-screen redesign, workflow completion, and dark/light semantic token system.
+- **Goal**: Transform Nuvilo into a commercially competitive, distinctive, accessible, and effortless-to-use healthcare product through a comprehensive UI/UX audit, screen-by-screen redesign, workflow completion, and dark/light semantic token system.
 - **Work Packages**:
   1. [x] **Complete UI/UX Audit & Design System Documentation (`docs/ui-ux-audit/`)**:
      - Created `SCREEN_INVENTORY.md`, `ISSUES.md`, `DESIGN_SYSTEM.md`, `UX_DECISIONS.md`, `USER_JOURNEYS.md`, and `FINAL_AUDIT.md`.

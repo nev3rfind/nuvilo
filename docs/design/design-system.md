@@ -1,6 +1,6 @@
-# Novelo Design System Specification
+# Nuvilo Design System Specification
 
-This document details the reusable design tokens, component specifications, and interaction guidelines for **Novelo** in Jetpack Compose.
+This document details the reusable design tokens, component specifications, and interaction guidelines for **Nuvilo** in Jetpack Compose.
 
 ---
 

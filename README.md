@@ -1,9 +1,9 @@
-# Novelo 💊
+# Nuvilo 💊
 > *"Medication, made manageable."*
 
-Novelo is a premium, offline-first personal medication tracking and prescription management application built natively for Android.
+Nuvilo is a premium, offline-first personal medication tracking and prescription management application built natively for Android.
 
-Designed with healthcare-grade rigor, Novelo focuses on mathematical stock integrity, idempotent dose recording, reliable alarm scheduling, and strict personal health privacy—without cloud dependencies, advertising, or external telemetry.
+Designed with healthcare-grade rigor, Nuvilo focuses on mathematical stock integrity, idempotent dose recording, reliable alarm scheduling, and strict personal health privacy—without cloud dependencies, advertising, or external telemetry.
 
 ---
 
@@ -52,7 +52,7 @@ Designed with healthcare-grade rigor, Novelo focuses on mathematical stock integ
 
 ## 🏗 Building and Testing
 
-Novelo requires Java 25 or a compatible modern JDK (such as the bundled Android Studio JBR).
+Nuvilo requires Java 25 or a compatible modern JDK (such as the bundled Android Studio JBR).
 
 ### Set Java Home (PowerShell)
 ```powershell

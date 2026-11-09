@@ -151,7 +151,7 @@ fun SplashScreen(
                 onClick = onSplashComplete
             )
             .semantics {
-                contentDescription = "Novelo startup screen. $statusText ${(progress * 100).toInt()}%"
+                contentDescription = "Nuvilo startup screen. $statusText ${(progress * 100).toInt()}%"
             },
         contentAlignment = Alignment.Center
     ) {
@@ -187,10 +187,10 @@ fun SplashScreen(
                         )
                 )
 
-                // The Official 3D Novelo Logo
+                // The Official 3D Nuvilo Logo
                 Image(
                     painter = painterResource(R.drawable.ic_novelo_logo),
-                    contentDescription = "Novelo Logo",
+                    contentDescription = "Nuvilo Logo",
                     modifier = Modifier
                         .size(136.dp)
                         .scale(logoScale.value)
@@ -213,7 +213,7 @@ fun SplashScreen(
                 modifier = Modifier.alpha(contentAlpha.value)
             ) {
                 Text(
-                    text = "Novelo",
+                    text = "Nuvilo",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontSize = 34.sp,
                         letterSpacing = 1.2.sp

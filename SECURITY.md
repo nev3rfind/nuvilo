@@ -1,6 +1,6 @@
-# Novelo Security, Privacy & Threat Model
+# Nuvilo Security, Privacy & Threat Model
 
-This document outlines the security posture, privacy guarantees, permission policies, and threat assumptions for **Novelo**.
+This document outlines the security posture, privacy guarantees, permission policies, and threat assumptions for **Nuvilo**.
 
 ---
 
@@ -23,7 +23,7 @@ This document outlines the security posture, privacy guarantees, permission poli
 
 ## 2. Permission Policy
 
-Novelo strictly limits Android permissions to the bare functional minimum:
+Nuvilo strictly limits Android permissions to the bare functional minimum:
 
 | Permission | API Level | Purpose | Justification |
 | :--- | :--- | :--- | :--- |
@@ -50,7 +50,7 @@ Novelo strictly limits Android permissions to the bare functional minimum:
 - Android file-based encryption (FBE) natively encrypts the entire credential-encrypted storage area while the device is locked.
 
 ### App Lock Scope
-- When enabled in User Settings, Novelo requests authentication via `BiometricPrompt` (fingerprint, face unlock, or device PIN/pattern) before displaying any application screen.
+- When enabled in User Settings, Nuvilo requests authentication via `BiometricPrompt` (fingerprint, face unlock, or device PIN/pattern) before displaying any application screen.
 - App lock protects against unauthorized physical inspection when the phone is unlocked.
 - **Monotonic Clock Security**: Grace periods are tracked using `SystemClock.elapsedRealtime()` via `MonotonicClock`, preventing wall-clock manipulation, timezone shifts, or DST changes from extending grace periods or bypassing authentication.
 - **Visual Gating & TalkBack Security**: When `isLocked == true`, the underlying medication hierarchy is removed from the composition, completely neutralizing TalkBack accessibility scraping or memory snooping.
@@ -58,7 +58,7 @@ Novelo strictly limits Android permissions to the bare functional minimum:
 - *Explicit Limitation*: App lock is an authentication barrier in front of the UI; it does not replace operating-system-level disk encryption.
 
 ### Database Encryption (SQLCipher Consideration)
-- Novelo relies on Android's hardware-backed Credential Encrypted Storage (CE) by default.
+- Nuvilo relies on Android's hardware-backed Credential Encrypted Storage (CE) by default.
 - If raw file-level SQLCipher database encryption is introduced in a future phase, key management must use the Android Keystore backed by StrongBox / TEE. No claims of full database encryption shall be made until SQLCipher integration is implemented and verified.
 
 ---
@@ -105,7 +105,7 @@ To prevent sensitive medication records from leaking into unencrypted cloud back
 
 ### Data Migration Policy vs Direct SQLite Copying
 - **Prohibition of Direct SQLite / WAL Copying**: Directly copying SQLite database files (`novelo.db`, `novelo.db-wal`, `novelo.db-shm`) via ADB (`run-as` or filesystem access) is strictly prohibited as a normal backup or migration method. Copying active database files while Room SQLite connections are live causes race conditions with SQLite's write-ahead log, resulting in database corruption, missing recent transactions, and broken referential integrity upon restoration.
-- **Approved Migration Workflow**: All data migrations (including testing across signature boundaries) must be executed at the application layer using Novelo's encrypted JSON backup via the Storage Access Framework (SAF) and restored inside the app on a clean/disposable environment.
+- **Approved Migration Workflow**: All data migrations (including testing across signature boundaries) must be executed at the application layer using Nuvilo's encrypted JSON backup via the Storage Access Framework (SAF) and restored inside the app on a clean/disposable environment.
 - **CI Artifact & Build Security**:
   - R8 obfuscation mapping files (`mapping.txt`, `seeds.txt`) are excluded from public pull-request CI artifacts to prevent symbol and architectural exposure. Mapping files are restricted to secure release environments.
   - No signing keystores, passwords, or credentials are ever checked into source control or uploaded to CI artifacts.
@@ -122,7 +122,7 @@ To prevent sensitive medication records from leaking into unencrypted cloud back
 
 ## 7. Android IPC, Intent & Receiver Security
 
-Novelo enforces strict Android IPC security policies across all background receivers and pending intents:
+Nuvilo enforces strict Android IPC security policies across all background receivers and pending intents:
 
 ### Receiver Export Isolation
 - **`AlarmReceiver` (`android:exported="false"`)**:
@@ -141,7 +141,7 @@ Novelo enforces strict Android IPC security policies across all background recei
 - Stable, deterministic request codes prevent pending intent collision across medication occurrences.
 
 ### Notification Privacy Masking
-- When Notification Privacy Mode is enabled in settings (`isPrivacyModeEnabled = true`), Novelo masks sensitive health details:
+- When Notification Privacy Mode is enabled in settings (`isPrivacyModeEnabled = true`), Nuvilo masks sensitive health details:
   - **Masked Title**: `"Medication Reminder"` (replaces drug name).
   - **Masked Body**: `"It's time for your scheduled medication."` (replaces form, dosage, and stock balance).
 - This prevents shoulder-surfing disclosure and unauthorized viewing of sensitive treatments on the lock screen.

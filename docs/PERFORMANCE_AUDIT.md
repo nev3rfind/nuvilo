@@ -1,8 +1,8 @@
-# Novelo Performance & Memory Profile Audit
+# Nuvilo Performance & Memory Profile Audit
 
 **Document Version:** 1.1.0 (Phase 7.1 Release Candidate Validation)  
 **Date:** November 2, 2026  
-**Auditor:** Novelo QA & Performance Engineering  
+**Auditor:** Nuvilo QA & Performance Engineering  
 **Evaluation Device:** Android 16 (API 37) `Medium_Phone_API_37.0(AVD)`  
 **Package:** `com.example.nuvilo`
 
@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary
 
-Novelo is designed as an offline-first, battery-efficient, and always-responsive medication management utility. The application must operate smoothly across varying hardware profiles, maintain responsive startup times, eliminate dropped frames during calendar and timeline navigation, and maintain a minimal, tightly bounded memory footprint.
+Nuvilo is designed as an offline-first, battery-efficient, and always-responsive medication management utility. The application must operate smoothly across varying hardware profiles, maintain responsive startup times, eliminate dropped frames during calendar and timeline navigation, and maintain a minimal, tightly bounded memory footprint.
 
 This performance audit provides empirical measurements captured on a connected Android 16 emulator running the release-optimized candidate build (`apksigner`-verified, R8 minified, and resource-shrunk).
 

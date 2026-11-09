@@ -1,6 +1,6 @@
-# Novelo Agent Guidelines & Project Instructions
+# Nuvilo Agent Guidelines & Project Instructions
 
-Novelo is a premium, offline-first personal medication tracking and prescription management application for native Android.
+Nuvilo is a premium, offline-first personal medication tracking and prescription management application for native Android.
 Tagline: *"Medication, made manageable."*
 
 ---

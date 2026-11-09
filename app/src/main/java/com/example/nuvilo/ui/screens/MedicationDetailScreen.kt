@@ -987,7 +987,7 @@ private fun ScheduleSummaryCard(
                     }
 
                     Text(
-                        text = "$freqDesc · ${sch.doseQuantityPerOccurrence.toDisplayString()} ${unit.displayName.lowercase()} per dose",
+                        text = "$freqDesc · ${sch.doseQuantityPerOccurrence.toDisplayString()} ${unit.formatLabel(sch.doseQuantityPerOccurrence)} per dose",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -2303,23 +2303,33 @@ private fun PrescriptionOverviewSection(
                     text = "Prescription & Repeat Tracking",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (prescriptions.isNotEmpty()) {
-                        TextButton(onClick = onViewHistoryClick) {
-                            Text("Audit Log")
+                        TextButton(
+                            onClick = onViewHistoryClick,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Audit Log", maxLines = 1)
                         }
                     }
-                    TextButton(onClick = onAddPrescriptionClick) {
+                    TextButton(
+                        onClick = onAddPrescriptionClick,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add Rx")
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Add Rx", maxLines = 1)
                     }
                 }
             }
@@ -2991,7 +3001,7 @@ fun RequestRepeatDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Record an order submitted to your GP surgery for ${medication.name} (${medication.strength}). Novelo will track this pending order in reminders and stock forecasts.",
+                    text = "Record an order submitted to your GP surgery for ${medication.name} (${medication.strength}). Nuvilo will track this pending order in reminders and stock forecasts.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -1,6 +1,6 @@
-# Novelo Product Requirements Document (PRD)
+# Nuvilo Product Requirements Document (PRD)
 
-**Product Name**: Novelo  
+**Product Name**: Nuvilo  
 **Category**: Personal Medication Tracking & Prescription Management  
 **Tagline**: "Medication, made manageable."  
 **Platform**: Native Android (API 24+)  
@@ -10,7 +10,7 @@
 
 ## 1. Product Vision & Principles
 
-Novelo is an offline-first, privacy-respecting Android application that empowers individuals to manage complex medication schedules, track physical inventory without stock drift, and manage prescriptions with confidence.
+Nuvilo is an offline-first, privacy-respecting Android application that empowers individuals to manage complex medication schedules, track physical inventory without stock drift, and manage prescriptions with confidence.
 
 ### Core Tenets
 1. **Clinical & Mathematical Integrity Over Decoration**: Exact ledger calculations, deterministic dose occurrence identities, and dependable alarm delivery take absolute priority over decorative animations.

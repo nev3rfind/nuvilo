@@ -347,8 +347,8 @@ fun SettingsScreen(
                         val isAuthAvailable = biometricStatus == BiometricStatus.AVAILABLE ||
                             biometricStatus == BiometricStatus.DEVICE_CREDENTIAL_ONLY
                         val subText = when (biometricStatus) {
-                            BiometricStatus.AVAILABLE -> "Require fingerprint, face, or device PIN to open Novelo."
-                            BiometricStatus.DEVICE_CREDENTIAL_ONLY -> "Require device PIN, pattern, or password to open Novelo."
+                            BiometricStatus.AVAILABLE -> "Require fingerprint, face, or device PIN to open Nuvilo."
+                            BiometricStatus.DEVICE_CREDENTIAL_ONLY -> "Require device PIN, pattern, or password to open Nuvilo."
                             BiometricStatus.NONE_ENROLLED -> "No biometric or screen lock enrolled in Android Settings."
                             BiometricStatus.NO_HARDWARE, BiometricStatus.UNAVAILABLE -> "Device security authentication is unavailable on this device."
                         }
@@ -551,7 +551,7 @@ fun SettingsScreen(
                 BackupFormatCard(
                     icon = Icons.Default.Lock,
                     badge = "RECOMMENDED FOR MIGRATION",
-                    title = "Encrypted JSON Backup (.novelo.json)",
+                    title = "Encrypted JSON Backup (.nuvilo.json)",
                     description = "Protects medications, schedules, doses, stock ledger, and prescriptions with AES-256-GCM + PBKDF2 passphrase encryption.",
                     buttonLabel = "Export Encrypted Backup",
                     isPrimary = true,
@@ -850,14 +850,14 @@ fun SettingsScreen(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_novelo_logo),
-                        contentDescription = "Novelo Logo",
+                        contentDescription = "Nuvilo Logo",
                         modifier = Modifier
                             .size(36.dp)
                             .clip(RoundedCornerShape(9.dp))
                     )
                     Column {
                         Text(
-                            text = "Novelo 1.0",
+                            text = "Nuvilo 1.0",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -896,7 +896,7 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Your backup will be encrypted using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation. Keep this passphrase safe — Novelo operates offline and cannot recover forgotten passphrases.",
+                        text = "Your backup will be encrypted using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation. Keep this passphrase safe — Nuvilo operates offline and cannot recover forgotten passphrases.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -956,7 +956,7 @@ fun SettingsScreen(
                             showCreatePassphraseDialog = false
                             val timestamp = FILE_TS_FORMATTER.format(LocalDateTime.now())
                             viewModel.setSystemDialogActive(true)
-                            createJsonLauncher.launch("novelo_backup_$timestamp.novelo.json")
+                            createJsonLauncher.launch("nuvilo_backup_$timestamp.nuvilo.json")
                         }
                     }
                 ) {
@@ -989,7 +989,7 @@ fun SettingsScreen(
                         showCsvExportConfirmDialog = false
                         val timestamp = FILE_TS_FORMATTER.format(LocalDateTime.now())
                         viewModel.setSystemDialogActive(true)
-                        createZipLauncher.launch("novelo_export_$timestamp.zip")
+                        createZipLauncher.launch("nuvilo_export_$timestamp.zip")
                     }
                 ) {
                     Text("Export Unencrypted ZIP")

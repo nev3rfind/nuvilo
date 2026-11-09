@@ -1,8 +1,8 @@
-# Novelo Accessibility Audit (WCAG 2.1 Level AA Compliance)
+# Nuvilo Accessibility Audit (WCAG 2.1 Level AA Compliance)
 
 **Document Version:** 1.1.0 (Phase 7.1 Release Candidate Validation)  
 **Date:** November 2, 2026  
-**Auditor:** Novelo QA & Accessibility Engineering  
+**Auditor:** Nuvilo QA & Accessibility Engineering  
 **Evaluation Environment:** Android 16 (API 37) `Medium_Phone_API_37.0(AVD)` with TalkBack 16.0 & UIAutomator  
 **Target Specification:** WCAG 2.1 Level AA & Android Accessibility Architecture  
 **Package:** `com.example.nuvilo`
@@ -11,9 +11,9 @@
 
 ## 1. Executive Summary
 
-Novelo is designed as a mission-critical personal medication management application where legibility, touch precision, and cognitive clarity directly impact health safety. Users of medication applications frequently experience situational limitations, visual impairments, tremors, or cognitive overload.
+Nuvilo is designed as a mission-critical personal medication management application where legibility, touch precision, and cognitive clarity directly impact health safety. Users of medication applications frequently experience situational limitations, visual impairments, tremors, or cognitive overload.
 
-This audit establishes empirical, reproducible evidence that Novelo conforms to **WCAG 2.1 Level AA** standards across all production screens:
+This audit establishes empirical, reproducible evidence that Nuvilo conforms to **WCAG 2.1 Level AA** standards across all production screens:
 - **Dashboard (Today)**
 - **Adherence Calendar**
 - **Medication List & Inventory**
@@ -97,7 +97,7 @@ $$\text{Contrast Ratio} = \frac{L_1 + 0.05}{L_2 + 0.05} \quad (L_1 \ge L_2)$$
 The accessibility node hierarchy was evaluated using Android's accessibility dump service and TalkBack 16.0 navigation gestures (swipe right to navigate next, double tap to activate).
 
 1. **Dashboard Screen:**
-   - Heading announced: `"Novelo, heading"`
+   - Heading announced: `"Nuvilo, heading"`
    - Subheader announced: `"Good afternoon, here is your plan."`
    - Hero Dose Card: Header clearly announces `"Next dose due: Amoxicillin 500 mg at 08:00. Status: Due."` followed by distinct, independent action nodes: `"Record Amoxicillin as taken, button"`, `"Skip Amoxicillin dose, button"`, `"Snooze Amoxicillin reminder, button"`.
    - Empty State Card: Announces title, description, and primary CTA `"Add Medication, button"` without clumping text together.
@@ -105,10 +105,10 @@ The accessibility node hierarchy was evaluated using Android's accessibility dum
    - Tabs announce tab status: `"Active, tab 1 of 2, selected"`, `"Archived, tab 2 of 2"`.
    - Medication Item Card: Title and strength read as single unit, stock pill announces `"Stock: 28 CAPSULES (14 days remaining)"`, and archive button announces `"Archive Amoxicillin, button"`.
 3. **Settings Screen:**
-   - Privacy banner announces `"100% Offline & Private: Novelo requests zero network permissions. Your medication history is never transmitted to any cloud or third party."`
+   - Privacy banner announces `"100% Offline & Private: Nuvilo requests zero network permissions. Your medication history is never transmitted to any cloud or third party."`
    - Security toggle announces switch state: `"Biometric App Lock, switch, off, double tap to toggle"`.
 4. **App Lock Screen:**
-   - Content isolation verified: Screen displays `"Novelo, heading"` and `"Unlock Novelo, button"`. TalkBack node hierarchy search contains **zero** instances of medication names, dose records, or prescription details while locked.
+   - Content isolation verified: Screen displays `"Nuvilo, heading"` and `"Unlock Nuvilo, button"`. TalkBack node hierarchy search contains **zero** instances of medication names, dose records, or prescription details while locked.
 
 ---
 

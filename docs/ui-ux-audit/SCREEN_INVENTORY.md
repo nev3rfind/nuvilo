@@ -1,6 +1,6 @@
-# Novelo Phase 8 — Complete Screen & Component Inventory
+# Nuvilo Phase 8 — Complete Screen & Component Inventory
 
-This inventory catalogues every user-facing screen, sub-screen, modal dialog, and secondary state in **Novelo** prior to the Phase 8 UI/UX overhaul, documenting its entry routes, state dependencies, identified visual/functional issues, priority, and target resolution status.
+This inventory catalogues every user-facing screen, sub-screen, modal dialog, and secondary state in **Nuvilo** prior to the Phase 8 UI/UX overhaul, documenting its entry routes, state dependencies, identified visual/functional issues, priority, and target resolution status.
 
 ---
 
@@ -110,7 +110,7 @@ This inventory catalogues every user-facing screen, sub-screen, modal dialog, an
 - **Identified Problems:**
   1. **Appearance Radio List:** Theme selection uses 3 plain radio rows instead of a tactile 3-card visual theme selector (`System`, `Light`, `Dark`).
   2. **Technical Diagnostics Prominence:** Raw diagnostics (`Exact Alarm Status`, `Reconcile Now`, `Test Alert`) sit prominently above Appearance with dense technical copy; should be cleanly organized with a collapsible technical detail drawer.
-  3. **Outdated Footer String:** Footer in `SettingsScreen.kt` still says `"Novelo 1.0 (Phase 6 Privacy & Security)"`.
+  3. **Outdated Footer String:** Footer in `SettingsScreen.kt` still says `"Nuvilo 1.0 (Phase 6 Privacy & Security)"`.
   4. **Lock Screen Polish:** `LockScreen.kt` is functional but can be elevated with a refined shield emblem, subtle pulsing/spring entrance, and clearer privacy reassurance badge.
 
 ### 19 & 20. Global Navigation Shell (`MainActivity.kt`) & Shared Components (`NoveloComponents.kt`)

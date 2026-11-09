@@ -7,11 +7,13 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/markdown.xml
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
+.kotlin/
 local.properties
 
 # UI/UX Pro Max local skill directories (re-generable via `uipro init`, excluded due to upstream license discrepancy)
@@ -25,7 +27,6 @@ local.properties
 
 # Temporary scratch scripts
 scratch/
-
 
 # Store Assets & Screenshot Editor
 node_modules/

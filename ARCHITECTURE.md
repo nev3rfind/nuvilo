@@ -1,6 +1,6 @@
-# Novelo System Architecture
+# Nuvilo System Architecture
 
-This document describes the architectural patterns, package layout, data boundaries, and technical decisions governing **Novelo**.
+This document describes the architectural patterns, package layout, data boundaries, and technical decisions governing **Nuvilo**.
 
 ---
 
@@ -222,7 +222,7 @@ com.example.nuvilo/ (or com.novelo.app)
 
 ```mermaid
 graph LR
-    User([User]) <-->|Biometric / Credential Lock| UI[Novelo UI]
+    User([User]) <-->|Biometric / Credential Lock| UI[Nuvilo UI]
     UI <--> Room[Local Room DB]
     Room -.->|Explicit User Export| SAF[Android Storage Access Framework (SAF)]
     System[Android OS] <--> Alarm[AlarmManager / Exact Alarms]
@@ -350,7 +350,7 @@ graph LR
 ## 9. Release Hardening & Build Architecture
 
 ### 9.1 R8 Code Optimization & Keep Rules (`app/src/main/keepRules/rules.keep`)
-Novelo employs R8 code shrinking, resource shrinking, and dead-code stripping in release builds, reducing the final binary size from ~23 MB down to 3.09 MB (~86.6% reduction).
+Nuvilo employs R8 code shrinking, resource shrinking, and dead-code stripping in release builds, reducing the final binary size from ~23 MB down to 3.09 MB (~86.6% reduction).
 - **Preserved Attributes**: `*Annotation*`, `Signature`, `InnerClasses`, `EnclosingMethod` to ensure correct runtime reflection and type token preservation.
 - **Room Preservation**: Room entity classes, DAO interfaces, and database implementation classes are explicitly protected from obfuscation.
 - **Worker Preservation**: `LowStockCheckWorker` and subclasses of `ListenableWorker` are retained to allow WorkManager reflection instantiation.
@@ -358,7 +358,7 @@ Novelo employs R8 code shrinking, resource shrinking, and dead-code stripping in
 - **Receiver Preservation**: `AlarmReceiver`, `NotificationActionReceiver`, and `BootAndChangeReceiver` retain public constructors for system invocation.
 
 ### 9.2 Zero-Network Architectural Invariant
-Novelo strictly enforces zero-network permissions:
+Nuvilo strictly enforces zero-network permissions:
 - `android.permission.INTERNET` is forbidden across all manifests.
 - `android.permission.ACCESS_NETWORK_STATE` (automatically merged by WorkManager runtime) is explicitly stripped via `tools:node="remove"`.
 - All database backups are local-first via Android's Storage Access Framework (SAF) using user-selected URIs (`CreateDocument` / `OpenDocument`).

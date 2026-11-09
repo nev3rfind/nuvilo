@@ -1,6 +1,6 @@
-# Novelo Phase 8 — Product & UX Architecture Decisions
+# Nuvilo Phase 8 — Product & UX Architecture Decisions
 
-This document records the key product design, interaction, and architectural decisions made during the Phase 8 UI/UX overhaul of **Novelo**.
+This document records the key product design, interaction, and architectural decisions made during the Phase 8 UI/UX overhaul of **Nuvilo**.
 
 ---
 
@@ -47,7 +47,7 @@ This document records the key product design, interaction, and architectural dec
 - **Problem:** Inventory (`RestockDialog`, `AdjustStockDialog`) and historical audit (`CorrectDoseDialog`) dialogs modified the append-only stock ledger without showing the user the resulting balance or exact compensating movement before confirmation.
 - **Decision:** Embed a live **Ledger Impact Preview** banner in all three dialogs showing `Current Balance → New Balance` and the exact ledger movement (`+RESTOCK`, `+ADJUSTMENT_IN` / `-ADJUSTMENT_OUT`, or `+DOSE_REVERSAL` / `-DOSE_TAKEN`).
 - **Rationale:**
-  - Reinforces user trust in Novelo's append-only ledger math and prevents accidental data entry errors before they are committed.
+  - Reinforces user trust in Nuvilo's append-only ledger math and prevents accidental data entry errors before they are committed.
 
 ---
 

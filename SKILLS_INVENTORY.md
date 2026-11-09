@@ -1,6 +1,6 @@
 # Skills & Workflows Inventory
 
-This document tracks all external and internal agent skills and workflows configured for **Novelo**, their provenance, license compliance, local installation paths, and verification results.
+This document tracks all external and internal agent skills and workflows configured for **Nuvilo**, their provenance, license compliance, local installation paths, and verification results.
 
 ---
 
@@ -98,7 +98,7 @@ This document tracks all external and internal agent skills and workflows config
 | `using-superpowers` | obra/superpowers | MIT | Workspace (`.agents/skills`) | Verified |
 | `compose-accessibility` | awesome-kotlin-android | Apache 2.0 | Workspace (`.agents/skills`) | Verified |
 | `kotlin-data-layer` | awesome-kotlin-android | Apache 2.0 | Workspace (`.agents/skills`) | Verified |
-| `novelo-medication-safety` | Internal (Novelo) | Proprietary | Workspace (`.agents/skills`) | Verified |
+| `novelo-medication-safety` | Internal (Nuvilo) | Proprietary | Workspace (`.agents/skills`) | Verified |
 | `ui-ux-pro-max` | nextlevelbuilder/ui-ux-pro-max-skill | MIT / CC-BY-NC-4.0 | Developer CLI Tool (Local only) | Verified (v2.15.0) |
 
 ---
@@ -121,6 +121,6 @@ During Phase 8 (*Premium Product Experience & Complete UI/UX Overhaul*), the fol
 - **Licensing Disclosure & IP Safeguards**:
   - The upstream skill code, python scripts, and internal CSV/JSON datasets are treated strictly as an offline developer-side tool.
   - All upstream skill directories (`.agents/skills/ui-ux-pro-max/`, etc.) are ignored via `.gitignore` and are NEVER committed to version control or bundled into the application APK.
-  - All research synthesis documents (`docs/ui-ux-audit/PRO_MAX_RESEARCH.md`, `docs/ui-ux-audit/pro-max-research/`) and the generated design system (`design-system/novelo/MASTER.md`) are original, project-specific derivative specifications tailored to Novelo's medication safety invariants.
+  - All research synthesis documents (`docs/ui-ux-audit/PRO_MAX_RESEARCH.md`, `docs/ui-ux-audit/pro-max-research/`) and the generated design system (`design-system/novelo/MASTER.md`) are original, project-specific derivative specifications tailored to Nuvilo's medication safety invariants.
 - **Verification Status**: Verified. CLI executable tested via `uipro versions`. Design system generated with `--variance 5 --motion 3 --density 4` for product *"Medication & Pill Reminder"*. 6 domain research queries executed and archived in `docs/ui-ux-audit/pro-max-research/`.
 

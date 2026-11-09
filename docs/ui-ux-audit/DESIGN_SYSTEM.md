@@ -1,4 +1,4 @@
-# Novelo Phase 8 — Product Design & Motion System Specification
+# Nuvilo Phase 8 — Product Design & Motion System Specification
 
 **Brand Tagline:** *"Medication, made manageable."*  
 **Aesthetic Direction:** **Clinical Warmth & Editorial Precision** — combining NHS-inspired clinical trust (`#005EB8`) with calm, tactile surface layering, high-contrast semantic clarity, and purposeful micro-motion.
@@ -10,7 +10,7 @@
 ### 1.1 Primary Brand & Tonal Surfaces
 | Token | Light Mode Hex | Dark Mode Hex | Role & Usage |
 |---|---|---|---|
-| `primary` | `#005EB8` (Novelo Clinical Blue) | `#6EB4FF` (Luminous Sky Blue) | Primary CTAs (`Take Dose`), active indicators, key clinical metrics |
+| `primary` | `#005EB8` (Nuvilo Clinical Blue) | `#6EB4FF` (Luminous Sky Blue) | Primary CTAs (`Take Dose`), active indicators, key clinical metrics |
 | `onPrimary` | `#FFFFFF` | `#002F64` | Text and icons on primary actions |
 | `primaryContainer` | `#E1EFFF` | `#00448A` | Hero accents, active filter chips, selected state containers |
 | `onPrimaryContainer` | `#002B5B` | `#D8E9FF` | High-contrast text inside primary containers |
@@ -40,7 +40,7 @@ To eliminate hardcoded light-mode pastels in Dark Mode, all semantic status colo
 
 ## 2. Typography Hierarchy (`Type.kt`)
 
-Novelo uses a clean, high-legibility geometric/humanist sans-serif scale engineered for effortless scanning of drug names, strengths, and quantities:
+Nuvilo uses a clean, high-legibility geometric/humanist sans-serif scale engineered for effortless scanning of drug names, strengths, and quantities:
 
 | Style | Size / Line Height | Weight | Letter Spacing | Primary Use Case |
 |---|---|---|---|---|

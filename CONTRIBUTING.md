@@ -1,6 +1,6 @@
-# Contributing to Novelo
+# Contributing to Nuvilo
 
-Thank you for contributing to **Novelo**, a premium, offline-first personal medication tracking application for native Android (*"Medication, made manageable."*).
+Thank you for contributing to **Nuvilo**, a premium, offline-first personal medication tracking application for native Android (*"Medication, made manageable."*).
 
 To maintain the architectural integrity, patient safety invariants, and strict privacy guarantees of the application, all contributions must adhere to the standards outlined in this guide.
 
@@ -15,7 +15,7 @@ Before writing or modifying any code, review:
 - `.agents/rules/offline-privacy.md` - Zero-network and health data privacy rules.
 
 ### Key Invariants
-1. **Zero Network Access**: `android.permission.INTERNET` is strictly forbidden. Novelo contains no remote telemetry, cloud SDKs, third-party analytics, or crash trackers.
+1. **Zero Network Access**: `android.permission.INTERNET` is strictly forbidden. Nuvilo contains no remote telemetry, cloud SDKs, third-party analytics, or crash trackers.
 2. **Immutable Stock Ledger**: All stock quantities are calculated from append-only ledger entries. Scaled integers (`ScaledQuantity`) are mandatory; floating-point types (`Float`, `Double`) are prohibited for quantities and dose counts.
 3. **Deterministic Dose Occurrence**: Every scheduled dose has a unique, deterministic `occurrenceId`. Reversals (`DOSE_REVERSAL`) compensate for changes idempotently.
 4. **Offline Storage Access Framework (SAF)**: Backup and restore must use system SAF pickers (`ACTION_CREATE_DOCUMENT`, `ACTION_OPEN_DOCUMENT`). No broad storage permissions (`MANAGE_EXTERNAL_STORAGE`, `READ/WRITE_EXTERNAL_STORAGE`).

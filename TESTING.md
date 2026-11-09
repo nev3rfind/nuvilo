@@ -1,6 +1,6 @@
-# Novelo Testing & Verification Guide
+# Nuvilo Testing & Verification Guide
 
-This document specifies the exact, verified commands and test configurations for **Novelo** on this development machine.
+This document specifies the exact, verified commands and test configurations for **Nuvilo** on this development machine.
 
 ---
 
@@ -394,4 +394,4 @@ No task or phase shall be marked complete without providing direct terminal exec
 
 ### Safe Application Data Testing Protocol
 - **Prohibition of Direct SQLite Copying**: Copying raw SQLite database files (`novelo.db` / `novelo.db-wal`) via ADB while Room is running is strictly prohibited due to race conditions with live WAL buffers and database corruption risks.
-- **Encrypted Application Backup & Restoration**: All data migration and test validation across certificate boundaries (e.g. `CN=Android Debug` vs `CN=Novelo QA`) must be performed using Novelo's built-in AES-256-GCM encrypted JSON export/restore via the Storage Access Framework (SAF) onto a disposable test environment, as detailed in `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md`.
+- **Encrypted Application Backup & Restoration**: All data migration and test validation across certificate boundaries (e.g. `CN=Android Debug` vs `CN=Nuvilo QA`) must be performed using Nuvilo's built-in AES-256-GCM encrypted JSON export/restore via the Storage Access Framework (SAF) onto a disposable test environment, as detailed in `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md`.

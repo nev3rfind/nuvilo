@@ -1,6 +1,6 @@
-# Novelo Screen Specifications & Wireframe Layouts
+# Nuvilo Screen Specifications & Wireframe Layouts
 
-This document defines the 12 core screens for **Novelo**, including detailed structural descriptions, interactive elements, and a design trade-off comparison between two dashboard layouts for user review.
+This document defines the 12 core screens for **Nuvilo**, including detailed structural descriptions, interactive elements, and a design trade-off comparison between two dashboard layouts for user review.
 
 ---
 
@@ -13,7 +13,7 @@ Focuses on the entire day's sequence, displaying doses grouped chronologically (
 
 ```
 +-------------------------------------------------------------+
-| Novelo                   [Privacy Mask: OFF]  [Settings ⚙️]  |
+| Nuvilo                   [Privacy Mask: OFF]  [Settings ⚙️]  |
 | Thursday, 29 October                                        |
 | "Medication, made manageable."                              |
 +-------------------------------------------------------------+
@@ -64,7 +64,7 @@ Focuses exclusively on the immediate next action required, with a large "Hero" c
 
 ```
 +-------------------------------------------------------------+
-| Novelo                                        [Settings ⚙️]  |
+| Nuvilo                                        [Settings ⚙️]  |
 | Thursday, 29 October                                        |
 +-------------------------------------------------------------+
 | NEXT SCHEDULED DOSE                                         |

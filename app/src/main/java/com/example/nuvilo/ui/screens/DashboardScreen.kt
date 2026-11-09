@@ -258,10 +258,16 @@ private fun DashboardHeaderSection(uiState: DashboardUiState) {
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_novelo_logo),
-                    contentDescription = "Novelo",
+                    contentDescription = "Nuvilo",
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(7.dp))
+                )
+                Text(
+                    text = "Nuvilo",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Surface(
                     shape = RoundedCornerShape(20.dp),

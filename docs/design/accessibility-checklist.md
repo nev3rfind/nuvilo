@@ -1,4 +1,4 @@
-# Novelo Accessibility & Inclusion Checklist (WCAG 2.1 AA)
+# Nuvilo Accessibility & Inclusion Checklist (WCAG 2.1 AA)
 
 Medication applications serve diverse user demographics, including elderly adults, individuals with visual impairments, tremor or dexterity challenges, and neurodivergent users. Accessibility is not an afterthought; it is a foundational architectural requirement.
 

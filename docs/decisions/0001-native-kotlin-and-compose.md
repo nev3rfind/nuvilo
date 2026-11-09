@@ -5,10 +5,10 @@
 - **Deciders**: Senior Android Lead, Product Architect
 
 ## Context
-Novelo is a personal medication tracking application requiring high reliability, battery efficiency, precise system alarm triggers, and modern accessible user interfaces. We needed to choose the UI framework and core programming language.
+Nuvilo is a personal medication tracking application requiring high reliability, battery efficiency, precise system alarm triggers, and modern accessible user interfaces. We needed to choose the UI framework and core programming language.
 
 ## Decision
-We will build Novelo purely in **idiomatic Kotlin with Jetpack Compose and Material 3**, targeting modern Android (minSdk 24, compileSdk/targetSdk 37).
+We will build Nuvilo purely in **idiomatic Kotlin with Jetpack Compose and Material 3**, targeting modern Android (minSdk 24, compileSdk/targetSdk 37).
 
 ## Alternatives Considered
 1. **Kotlin with Traditional XML Views**: Well understood and mature, but significantly more boilerplate, more prone to UI state desynchronization, and harder to maintain with complex dynamic lists and stateful schedules.

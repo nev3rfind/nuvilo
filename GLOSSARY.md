@@ -1,6 +1,6 @@
-# Novelo Domain Glossary
+# Nuvilo Domain Glossary
 
-This document establishes the ubiquitous language for Novelo. Every term defined here has a precise architectural, database, and user interface meaning that must remain consistent across the codebase, documentation, and agent conversations.
+This document establishes the ubiquitous language for Nuvilo. Every term defined here has a precise architectural, database, and user interface meaning that must remain consistent across the codebase, documentation, and agent conversations.
 
 ---
 
@@ -38,7 +38,7 @@ A dose occurrence where the scheduled time and grace window elapsed without user
 An atomic, immutable record in the stock ledger tracking any change to medication inventory. Movements have a direction (`IN` or `OUT`), an exact quantity, a reason, a timestamp, and an optional foreign key link to a `doseEventId` or `restockEventId`.
 
 ### Opening Stock
-The initial quantity of medication physically in possession when the user first registers or begins tracking the medication in Novelo. Represents the initial `IN` movement in the stock ledger.
+The initial quantity of medication physically in possession when the user first registers or begins tracking the medication in Nuvilo. Represents the initial `IN` movement in the stock ledger.
 
 ### Restock
 A stock movement representing new physical inventory acquired by the user (e.g. picking up a prescription refill). Appends an `IN` movement to the ledger.
@@ -74,7 +74,7 @@ An actionable system alert triggered by `AlarmManager` at the scheduled dose tim
 A temporary deferral of an active reminder (e.g. snooze for 15 minutes). Does not alter the scheduled dose time, does not record a dose, and does not alter stock.
 
 ### Idempotency
-The mathematical property where an operation can be applied multiple times without changing the result beyond the initial application. In Novelo, tapping a notification "Take" action 5 times or encountering race conditions must record exactly one dose and deduct stock exactly once.
+The mathematical property where an operation can be applied multiple times without changing the result beyond the initial application. In Nuvilo, tapping a notification "Take" action 5 times or encountering race conditions must record exactly one dose and deduct stock exactly once.
 
 ### Timezone Policy
 The deterministic rule set governing how schedules adjust when the device crosses timezone boundaries:

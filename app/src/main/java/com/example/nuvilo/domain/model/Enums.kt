@@ -12,17 +12,22 @@ enum class MedicationForm(val displayName: String, val isEstimatedConsumption: B
     OTHER("Other")
 }
 
-enum class StockUnit(val displayName: String, val abbreviation: String) {
-    TABLETS("Tablets", "tab"),
-    CAPSULES("Capsules", "cap"),
-    ML("Millilitres", "ml"),
-    DROPS("Drops", "drops"),
-    PUFFS("Puffs", "puffs"),
-    APPLICATIONS("Applications", "app"),
-    UNITS("Units", "IU"),
-    PATCHES("Patches", "patch"),
-    BOTTLES("Bottles", "btl"),
-    OTHER("Units", "units")
+enum class StockUnit(val displayName: String, val abbreviation: String, val singularName: String = displayName.removeSuffix("s")) {
+    TABLETS("Tablets", "tab", "Tablet"),
+    CAPSULES("Capsules", "cap", "Capsule"),
+    ML("Millilitres", "ml", "Millilitre"),
+    DROPS("Drops", "drops", "Drop"),
+    PUFFS("Puffs", "puffs", "Puff"),
+    APPLICATIONS("Applications", "app", "Application"),
+    UNITS("Units", "IU", "Unit"),
+    PATCHES("Patches", "patch", "Patch"),
+    BOTTLES("Bottles", "btl", "Bottle"),
+    OTHER("Units", "units", "Unit");
+
+    fun formatLabel(quantity: ScaledQuantity, lowercase: Boolean = true): String {
+        val base = if (quantity.rawScaledValue == ScaledQuantity.SCALE) singularName else displayName
+        return if (lowercase) base.lowercase() else base
+    }
 }
 
 enum class RecordingMode(val displayName: String) {

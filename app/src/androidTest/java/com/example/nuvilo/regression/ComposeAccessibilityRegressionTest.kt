@@ -157,6 +157,6 @@ class ComposeAccessibilityRegressionTest {
         }
 
         composeTestRule.onNodeWithText("App Locked · Health Records Protected").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Unlock Novelo").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unlock Nuvilo").assertIsDisplayed()
     }
 }
