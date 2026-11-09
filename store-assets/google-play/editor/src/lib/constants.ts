@@ -42,9 +42,9 @@ export function screenshotFontFamily(fontId: ScreenshotFontId | undefined): stri
 }
 
 export const THEMES: Record<string, Theme> = {
-  "novelo-clinical": {
-    id: "novelo-clinical",
-    name: "Novelo Clinical Bento",
+  "nuvilo-clinical": {
+    id: "nuvilo-clinical",
+    name: "Nuvilo Clinical Bento",
     bg: "#F8FAFC",
     bgAlt: "#121820",
     fg: "#0F172A",

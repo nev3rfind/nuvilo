@@ -1,43 +1,29 @@
-# Novelo — Google Play Screenshot Marketing Content & Policy Audit
+# Nuvilo — Google Play Store Screenshot Content & Feature Mapping (`en-GB`)
 
-**Date:** 2026-11-09  
-**Product:** Novelo – *Medication, made manageable.*  
-**Package:** `com.example.nuvilo`  
-**Target Locale:** `en-GB`  
-**Compliance Standard:** [Google Play Developer Policy – Metadata and Store Listing](https://support.google.com/googleplay/android-developer/answer/9866151)
-
----
-
-## 1. Content Catalog & Feature Mapping
-
-| Slide | Category Kicker | Headline | Supporting Benefit Copy | Source Screen | Verified Feature Represented | Prohibited Claims Check |
-| :---: | :--- | :--- | :--- | :--- | :--- | :---: |
-| **01** | `01 · DAILY DASHBOARD` | **Your medication day, at a glance.** | "See what's next, what you've taken and what's still ahead." | `DashboardScreen.kt` | Hero next-dose card, scheduled time countdown, one-tap Take/Snooze/Skip pill actions, 80% clinical adherence benchmark meter. | **COMPLIANT** (No guarantee of adherence) |
-| **02** | `02 · MEDICATION ORGANISATION` | **Every medication, clearly organised.** | "Keep medication details, schedules and supplies together." | `MedicationListScreen.kt` | Search bar, Active/Archived segmented tabs, medication cards with strength, form, schedule chips, and "+ Stock" shortcuts. | **COMPLIANT** (Truthful representation) |
-| **03** | `03 · GUIDED ROUTINE SETUP` | **Create your routine, step by step.** | "A guided way to add medication, schedules and stock." | `AddMedicationDialog.kt` | 3-step setup wizard (1. Identity, 2. Schedule, 3. Stock), form selector, intake frequency, and recording preference mode. | **COMPLIANT** (Exact 3-step wizard) |
-| **04** | `04 · STOCK & FEFO LOTS` | **Know what's in your supply.** | "Keep quantities, medication lots and expiry dates in view." | `MedicationDetailScreen.kt` | Remaining supply indicator, batch lot tracking with FEFO (First-Expired, First-Out) badge, expiration dates, and 3-tier mobile stock movements ledger. | **COMPLIANT** (Reflects immutable ledger) |
-| **05** | `05 · ADHERENCE CALENDAR` | **See your routine over time.** | "Review daily outcomes and your medication history." | `AdherenceCalendarScreen.kt` | Monthly calendar grid with color-coded day status dots, daily dose breakdown, and 80% clinical target compliance comparison. | **COMPLIANT** (No medical guarantees) |
-| **06** | `06 · AUDITABLE DOSE HISTORY` | **A clear record of every dose.** | "See scheduled times, recorded outcomes and history." | `MedicationDoseHistoryScreen.kt` | Chronological date grouping (Today, Yesterday), verified vs assumed outcome badges, scheduled vs actual recorded timestamps, compensating reversals. | **COMPLIANT** (Historical audit only) |
-| **07** | `07 · PRESCRIPTION TRACKING` | **Keep prescriptions organised.** | "Track expiry dates, repeat requests and collections." | `PrescriptionDialog.kt` / Detail | Doctor repeat authorization status, remaining repeats count (e.g. 3 of 4 remaining), collection dates, and expiry tracking. | **COMPLIANT** (Does not claim pharmacy ordering) |
-| **08** | `08 · PRIVACY & PROTECTION` | **Privacy built into your routine.** | "Offline-first tracking, app lock and encrypted backups." | `SettingsScreen.kt` | 100% offline zero-network boundary statement, AndroidX BiometricPrompt app lock, PBKDF2/AES-256-GCM encrypted local SAF backups. | **COMPLIANT** (Truthful security claims) |
+**Official Application Name:** Nuvilo  
+**Tagline:** *Medication, made manageable.*  
+**Package Name:** `com.example.nuvilo`  
+**Target Locale:** `en-GB`
 
 ---
 
-## 2. Policy & Marketing Integrity Audit
+## 1. Complete 8-Slide Campaign Narrative & Mapping
 
-### Prohibited Content Verification:
-- [x] **No Fake Ratings or Reviews:** Zero star ratings, quote testimonials, or user review badges are included in any visual asset.
-- [x] **No Ranking or Superlative Claims:** No claims of "#1 Medication Tracker", "Best App", or "Top Rated".
-- [x] **No Promotional or Price Messaging:** No discount banners, free trial claims, or price promotion copy.
-- [x] **No Medical Efficacy Guarantees:** No claims that Novelo "prevents all missed doses", "cures non-adherence", or provides certified medical diagnosis.
-- [x] **No Google Play Branding:** Zero Google Play badges, Android robot logos, or Play Store UI chrome in the marketing artwork.
-- [x] **Truthful Feature Representation:** Every displayed UI element corresponds directly to verified, shipping Jetpack Compose code and Room database entities.
+| Slide | Export Filename | Source Capture | Headline (Accented Word in Bold) | Supporting Copy | Real Nuvilo Screen & Route | Genuine Features Demonstrated |
+| :---: | :--- | :--- | :--- | :--- | :--- | :--- |
+| **01** | `01-dashboard.png` | `dashboard.png` | Your day, in **view.** | See what's next and what's already recorded. | `DashboardScreen` (`today`) | `Nuvilo` top bar wordmark, `Offline Protected` badge, `5 / 8 taken (62%)` adherence bar, low-stock alert banner, Next Due Dose hero card (`Metformin 500mg · Take 1 tablet` at `19:00`), `Confirm Dose Taken (1 tab)`, `Snooze 15m`, `Skip Dose`, and Rest of Today's Schedule. |
+| **02** | `02-medications.png` | `medications.png` | Every medicine, **organised.** | Keep details, doses and schedules together. | `MedicationListScreen` (`medications`) | `Active (5)` / `Archived (0)` segmented tabs, search bar, `Low Stock (1)` filter chip, and medication cards for `Amoxicillin 500mg Capsule`, `Atorvastatin 20mg Tablet` (`Auto` mode), `Lisinopril 10mg Tablet` (`5 tab left` warning), and `Metformin 500mg Tablet`. |
+| **03** | `03-setup.png` | `setup.png` | Build your **routine,** simply. | Set up medication, timing and stock. | `AddMedicationDialog` (`medications` → `+ Add Medication`) | Guided 3-step setup wizard (`1. Identity`, `2. Schedule`, `3. Stock` — `Step 3 of 3`), `Opening Stock (tab)` = `28`, `Low Alert (tab)` = `7`, and live `Regimen Summary` card for `Ramipril · 5mg (Tablet)`. |
+| **04** | `04-stock.png` | `stock.png` | Know your **supply.** | Track quantities, lots and expiry dates. | `MedicationDetailScreen` (`medication_detail/med_amox_500`) | Expanded `Batch Lots & FEFO Allocation (2)` showing `Lot #NHS-BATCH-409A` and `Lot #NHS-BATCH-512B` (`✓ Active FEFO Lot`, `Remaining: 25 of 28 cap`, `Exp: 23 Apr 2027`), plus expanded `Append-Only Stock Ledger (20)`. |
+| **05** | `05-calendar.png` | `calendar.png` | See your routine **over time.** | Review daily outcomes in one calendar. | `AdherenceHistoryScreen` (`adherence`) | `Last 30 Days Clinical Adherence: 92%` (`✓ Therapeutic Target Met (≥80%)`), `Today 100%`, `Last 7 Days 92% (`39v + 6a / 49`)`, `Last 30 Days 92%`, rolling window selector (`7D`, `14D`, `30D`, `90D`), and `November 2026` monthly adherence calendar. |
+| **06** | `06-history.png` | `history.png` | Every dose, **clearly** recorded. | See scheduled times and recorded outcomes. | `MedicationDoseHistoryScreen` (`medication_history/med_amox_500`) | `Amoxicillin Dose History` (`500mg · Explicit Confirmation`), `Last 30 Days Adherence: 97%` (`31 Confirmed`, `0 Assumed`, `1 Skipped`, `0 Missed`), date/outcome filters, and chronological dose cards (`Scheduled 14:00`, `1 capsule · Recorded 9 Nov, 14:04`, `✓ Confirmed Taken`, `Correct`). |
+| **07** | `07-prescriptions.png` | `prescriptions.png` | **Prescriptions,** kept organised. | Track expiry and repeat collections. | `MedicationDetailScreen` (`PrescriptionOverviewSection`) | `Amoxicillin 500mg · Capsule` (`25 Capsules`, `~8 day(s) supply`), `Dosage Regimen & Schedule`, and `Prescription & Repeat Tracking` (`Ref: NHS-RX-94820-B`, `✓ Active`, `Repeats Remaining: 4 of 6 authorised`, `Pharmacy: St Mary's High Street Pharmacy`, `1. Request Repeat`, `2. Collect Repeat`). |
+| **08** | `08-privacy.png` | `privacy.png` | **Privacy,** built in. | App lock and encrypted backups. | `SettingsScreen` (`settings`) | `Appearance & Theme` (`Light · NHS Blue`), `Privacy & App Lock` (`Biometric / Device Lock`, `Mask Lock-Screen Notifications` enabled), and `Local Data Backup & Restore` (`Encrypted JSON Backup (.nuvilo.json)` with AES-256-GCM + PBKDF2 encryption and `Export Encrypted Backup`). |
 
 ---
 
-## 3. Google Play Feature Graphic Specifications
+## 2. Google Play Policy & Medical Safety Compliance
 
-- **Dimensions:** 1024 × 500 px
-- **Visual Composition:** Minimal clinical blue (`#005EB8`) to deep navy (`#0C1015`) gradient background with official Novelo 3D brand logo (220×220) and central focal point.
-- **Copy:** "Novelo" headline with official product tagline "Medication, made manageable." and security pill badge `● 100% OFFLINE · NO NETWORK TRACKING · BIOMETRIC SECURE`.
-- **Safe Zone:** All essential branding and copy remain centered within the inner 80% safe area ($102\text{px}$ side margins, $50\text{px}$ top/bottom margins).
+1. **Zero Unverified Medical Claims:** All copy describes personal organisation, schedule tracking, stock accounting, and local privacy. No claims of curing, diagnosing, or preventing disease are made.
+2. **Zero Prohibited Store Badges or Fake Testimonials:** No star ratings, `#1` rankings, awards, user testimonials, or Google Play / NHS endorsement logos appear anywhere in the campaign.
+3. **100% Authentic UI:** Every screenshot embeds a real empirical capture from `com.example.nuvilo` running on Android 16 (`API 36`) with zero soft keyboards covering content and zero external webviews.

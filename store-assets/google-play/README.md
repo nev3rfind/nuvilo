@@ -1,10 +1,9 @@
-# Novelo — Google Play Store Screenshot Campaign Assets
+# Nuvilo — Google Play Store Screenshot Campaign & Editor Project
 
-This directory contains the complete marketing screenshot collection, editable Next.js screenshot editor project, authentic source application captures, contact sheet previews, and technical export validation reports for **Novelo** on Google Play.
-
-Tagline: *"Medication, made manageable."*  
-Package: `com.example.nuvilo`  
-Target Locale: `en-GB`
+**Official Application Name:** Nuvilo  
+**Tagline:** Medication, made manageable.  
+**Package Name:** `com.example.nuvilo`  
+**Screenshot Editor Tool:** [`ParthJadhav/app-store-screenshots`](https://github.com/ParthJadhav/app-store-screenshots) (MIT License)
 
 ---
 
@@ -12,28 +11,24 @@ Target Locale: `en-GB`
 
 ```text
 store-assets/google-play/
-├── editor/                     # Next.js 16 + React 19 editable screenshot editor
-│   ├── app-store-screenshots.json  # Canonical project source-of-truth deck configuration
-│   ├── package.json
-│   ├── public/                 # Served assets, frames, app icons, and screenshots
-│   └── src/                    # Editor UI, canvas, typography, themes, device frames
+├── nuvilo/                             # Canonical Nuvilo store-asset campaign package
+│   ├── editor/                         # Reproducible Next.js screenshot editor (appName: "Nuvilo")
+│   ├── source-captures/                # Raw, unedited Jetpack Compose captures (phone + tablet)
+│   ├── exports/                        # Final 24-bit RGB PNGs (8 phone, 8 tablet, 1 feature graphic)
+│   ├── preview/                        # Contact sheets, full campaign overview, & 160px thumbnail strip
+│   ├── ALT_TEXT.md                     # Google Play accessibility alt text (<= 140 chars per asset)
+│   ├── BRAND_AUDIT.md                  # Complete Novelo -> Nuvilo rebrand audit
+│   ├── EXPORT_VALIDATION.md            # Automated technical validation report (17/17 PASS)
+│   ├── PREVIOUS_CAMPAIGN_REVIEW.md     # Root-cause review of the archived flawed campaign
+│   ├── SCREENSHOT_CONTENT.md           # Slide-by-slide copy, layout, and screen mapping
+│   ├── render_campaign.py              # Deterministic rendering & editor sync script
+│   └── validate_exports.py             # Automated PNG dimension, RGB mode, and size validator
 │
-├── source-captures/            # High-resolution empirical captures from live Android emulators
-│   ├── CAPTURE_LOG.md          # Technical audit of devices, window sizes, and DPI
-│   ├── phone/                  # 8 source screens captured at 1080 × 2400 (420 dpi)
-│   └── tablet/                 # 8 source screens captured at 1080 × 1920 (240 dpi)
-│
-├── exports/                    # Production-ready marketing deliverables
-│   ├── phone/en-GB/            # 8 Phone screenshots (1080 × 1920, 9:16 portrait, RGB opaque)
-│   ├── tablet/en-GB/           # 8 Tablet screenshots (1080 × 1920, 9:16 portrait, RGB opaque)
-│   ├── feature-graphic/        # Google Play Feature Graphic (1024 × 500, RGB opaque)
-│   └── preview/                # Contact sheets and campaign composite overview
-│
-├── validate_exports.py         # Automated Python/Pillow technical verification suite
-├── EXPORT_VALIDATION.md        # Technical validation audit report (17/17 checks passed)
-├── SCREENSHOT_CONTENT.md       # Content catalog, feature mapping, and policy integrity audit
-├── ALT_TEXT.md                 # Screen-reader alt-text descriptions (all <= 140 characters)
-└── README.md                   # This documentation
+├── editor/                             # Active Next.js 16 + React 19 screenshot editor workspace
+├── source-captures/                    # Synced phone (1080×2400) & tablet (1200×1920) source captures
+├── exports/                            # Synced phone (1080×1920), tablet (1920×1080), & feature graphic (1024×500)
+├── preview/                            # Synced contact sheets & 160px thumbnail legibility strip
+└── previous-campaign-archive/          # Archived flawed campaign for audit comparison
 ```
 
 ---
@@ -42,57 +37,28 @@ store-assets/google-play/
 
 | Asset Group | Count | Target Dimensions | Aspect Ratio | Color Depth | Alpha Channel | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Phone Screenshots** | 8 | 1080 × 1920 px | 9:16 portrait | 24-bit RGB | **None (Opaque)** | **VERIFIED** |
-| **Tablet Screenshots** | 8 | 1080 × 1920 px | 9:16 portrait | 24-bit RGB | **None (Opaque)** | **VERIFIED** |
-| **Feature Graphic** | 1 | 1024 × 500 px | 2.048:1 landscape | 24-bit RGB | **None (Opaque)** | **VERIFIED** |
-| **Contact Sheets** | 3 | Varied | Composite | 24-bit RGB | **None (Opaque)** | **GENERATED** |
+| **Phone Screenshots** | 8 | `1080 × 1920` px | `9:16` portrait | 24-bit RGB | **None (Opaque)** | **VERIFIED PASS** |
+| **Tablet Screenshots** | 8 | `1920 × 1080` px | `16:9` landscape | 24-bit RGB | **None (Opaque)** | **VERIFIED PASS** |
+| **Feature Graphic** | 1 | `1024 × 500` px | `2.048:1` landscape | 24-bit RGB | **None (Opaque)** | **VERIFIED PASS** |
+| **Contact Sheets & Strip** | 4 | Composite | Composite | 24-bit RGB | **None (Opaque)** | **GENERATED** |
 
 ---
 
-## 3. Marketing Story Sequence
-
-1. **`01-dashboard.png`** — *Your medication day, at a glance.*  
-   Hero next-dose card, scheduled time countdown, one-tap Take/Snooze/Skip pill actions, 80% clinical adherence benchmark meter.
-2. **`02-medications.png`** — *Every medication, clearly organised.*  
-   Pill search bar, Active/Archived segmented tabs, medication cards with strength, form, schedule chips, and "+ Stock" shortcuts.
-3. **`03-setup.png`** — *Create your routine, step by step.*  
-   Guided 3-step setup wizard (1. Identity, 2. Schedule, 3. Stock), form selector, intake frequency, and recording preference mode.
-4. **`04-stock.png`** — *Know what's in your supply.*  
-   Remaining supply indicator, batch lot tracking with FEFO (First-Expired, First-Out) badge, expiration dates, and 3-tier mobile stock movements ledger.
-5. **`05-calendar.png`** — *See your routine over time.*  
-   Monthly calendar grid with color-coded day status dots, daily dose breakdown, and 80% clinical target compliance comparison.
-6. **`06-history.png`** — *A clear record of every dose.*  
-   Chronological date grouping (Today, Yesterday), verified vs assumed outcome badges, scheduled vs actual recorded timestamps, compensating reversals.
-7. **`07-prescriptions.png`** — *Keep prescriptions organised.*  
-   Doctor repeat authorization status, remaining repeats count (e.g. 3 of 4 remaining), collection dates, and expiry tracking.
-8. **`08-privacy.png`** — *Privacy built into your routine.*  
-   100% offline zero-network boundary statement, AndroidX BiometricPrompt app lock, PBKDF2/AES-256-GCM encrypted local SAF backups.
-
----
-
-## 4. How to Run the Next.js Screenshot Editor
-
-The interactive editor allows visual adjustments to copy, layouts, transforms, and device frames:
+## 3. Running the Interactive Next.js Screenshot Editor
 
 ```powershell
-# Navigate to editor directory
 cd store-assets/google-play/editor
-
-# Start Next.js local development server
+npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` in any web browser. Edits automatically persist to `app-store-screenshots.json`.
+Open `http://localhost:3000` in your browser. Edits automatically persist to `app-store-screenshots.json` (`appName: "Nuvilo"`, `themeId: "nuvilo-clinical"`).
 
 ---
 
-## 5. How to Re-Run the Export & Validation Suite
+## 4. Reproducing the Exports & Running Technical Validation
 
 ```powershell
-# From repository root
-# 1. Render all 17 assets and contact sheets
-python scratch/render_assets.py
-
-# 2. Run automated validation checks
-python store-assets/google-play/validate_exports.py
+python store-assets/google-play/nuvilo/render_campaign.py
+python store-assets/google-play/nuvilo/validate_exports.py
 ```

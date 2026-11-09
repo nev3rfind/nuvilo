@@ -1,7 +1,8 @@
 {
   "schemaVersion": 2,
-  "appName": "Novelo",
-  "themeId": "novelo-clinical",
+  "appName": "Nuvilo",
+  "themeId": "nuvilo-clinical",
+  "fontId": "system-sans",
   "connectedCanvas": false,
   "locales": [
     "en-GB"
@@ -10,229 +11,385 @@
   "device": "android",
   "orientation": "portrait",
   "appIcon": "/app-icon.png",
+  "scene": {
+    "backdrop": "gradient",
+    "span": false,
+    "decoration": "blobs",
+    "shadow": 55,
+    "glow": 35,
+    "tilt": 0,
+    "headlineWeight": 800,
+    "headlineScale": 1.15,
+    "headlineCase": "as-typed",
+    "captionAlign": "auto"
+  },
   "slidesByDevice": {
     "android": [
       {
         "id": "slide_01",
-        "layout": "device-bottom",
+        "layout": "hero",
+        "inverted": true,
         "label": {
-          "en-GB": "01 · DAILY DASHBOARD"
+          "en-GB": "01 · TODAY'S SCHEDULE"
         },
         "headline": {
-          "en-GB": "Your medication day,\nat a glance."
+          "en-GB": "Your day, in view."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/01-dashboard.png",
+        "screenshot": "/screenshots/phone/01-dashboard.png",
+        "screenshotSecondary": "/screenshots/phone/calendar.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_01_sub",
             "text": {
-              "en-GB": "See what's next, what you've taken and what's still ahead."
+              "en-GB": "See what's next and what's already recorded."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_02",
         "layout": "device-bottom",
+        "inverted": false,
         "label": {
-          "en-GB": "02 · MEDICATION ORGANISATION"
+          "en-GB": "02 · MEDICATION REGIMEN"
         },
         "headline": {
-          "en-GB": "Every medication,\nclearly organised."
+          "en-GB": "Every medicine,\norganised."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/02-medications.png",
+        "screenshot": "/screenshots/phone/02-medications.png",
+        "screenshotSecondary": "/screenshots/phone/dashboard.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_02_sub",
             "text": {
-              "en-GB": "Keep medication details, schedules and supplies together."
+              "en-GB": "Keep details, doses and schedules together."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_03",
         "layout": "hero",
+        "inverted": false,
         "label": {
-          "en-GB": "03 · GUIDED ROUTINE SETUP"
+          "en-GB": "03 · 3-STEP SETUP WIZARD"
         },
         "headline": {
-          "en-GB": "Create your routine,\nstep by step."
+          "en-GB": "Build your routine,\nsimply."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/03-setup.png",
+        "screenshot": "/screenshots/phone/03-setup.png",
+        "screenshotSecondary": "/screenshots/phone/medications.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_03_sub",
             "text": {
-              "en-GB": "A guided way to add medication, schedules and stock."
+              "en-GB": "Set up medication, timing and stock."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_04",
         "layout": "device-bottom",
+        "inverted": true,
         "label": {
-          "en-GB": "04 · STOCK & FEFO LOTS"
+          "en-GB": "04 · FEFO LOTS & LEDGER"
         },
         "headline": {
-          "en-GB": "Know what's in\nyour supply."
+          "en-GB": "Know your supply."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/04-stock.png",
+        "screenshot": "/screenshots/phone/04-stock.png",
+        "screenshotSecondary": "/screenshots/phone/medications.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_04_sub",
             "text": {
-              "en-GB": "Keep quantities, medication lots and expiry dates in view."
+              "en-GB": "Track quantities, lots and expiry dates."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_05",
-        "layout": "device-bottom",
+        "layout": "device-top",
+        "inverted": false,
         "label": {
           "en-GB": "05 · ADHERENCE CALENDAR"
         },
         "headline": {
           "en-GB": "See your routine\nover time."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/05-calendar.png",
+        "screenshot": "/screenshots/phone/05-calendar.png",
+        "screenshotSecondary": "/screenshots/phone/history.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": -60,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 1380,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_05_sub",
             "text": {
-              "en-GB": "Review daily outcomes and your medication history."
+              "en-GB": "Review daily outcomes in one calendar."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 1600,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_06",
-        "layout": "device-bottom",
+        "layout": "hero",
+        "inverted": false,
         "label": {
-          "en-GB": "06 · AUDITABLE DOSE HISTORY"
+          "en-GB": "06 · DOSE AUDIT TRAIL"
         },
         "headline": {
-          "en-GB": "A clear record\nof every dose."
+          "en-GB": "Every dose, clearly\nrecorded."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/06-history.png",
+        "screenshot": "/screenshots/phone/06-history.png",
+        "screenshotSecondary": "/screenshots/phone/calendar.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_06_sub",
             "text": {
-              "en-GB": "See scheduled times, recorded outcomes and history."
+              "en-GB": "See scheduled times and recorded outcomes."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_07",
-        "layout": "device-bottom",
+        "layout": "two-devices",
+        "inverted": true,
         "label": {
-          "en-GB": "07 · PRESCRIPTION TRACKING"
+          "en-GB": "07 · REPEAT PRESCRIPTIONS"
         },
         "headline": {
-          "en-GB": "Keep prescriptions\norganised."
+          "en-GB": "Prescriptions, kept\norganised."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/07-prescriptions.png",
+        "screenshot": "/screenshots/phone/07-prescriptions.png",
+        "screenshotSecondary": "/screenshots/phone/medications.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_07_sub",
             "text": {
-              "en-GB": "Track expiry dates, repeat requests and collections."
+              "en-GB": "Track expiry and repeat collections."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_08",
         "layout": "device-bottom",
+        "inverted": true,
         "label": {
-          "en-GB": "08 · PRIVACY & SECURITY"
+          "en-GB": "08 · OFFLINE PRIVACY & BACKUP"
         },
         "headline": {
-          "en-GB": "Privacy built into\nyour routine."
+          "en-GB": "Privacy, built in."
         },
-        "screenshot": "/screenshots/android/phone/en-GB/08-privacy.png",
+        "screenshot": "/screenshots/phone/08-privacy.png",
+        "screenshotSecondary": "/screenshots/phone/dashboard.png",
+        "transforms": {
+          "device": {
+            "x": 72,
+            "y": 360,
+            "width": 936,
+            "height": 1940,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 68,
+            "y": 54,
+            "width": 944,
+            "height": 280,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_08_sub",
             "text": {
-              "en-GB": "Offline-first tracking, app lock and encrypted backups."
+              "en-GB": "App lock and encrypted backups."
             },
             "transform": {
-              "x": 80,
-              "y": 300,
-              "width": 920,
-              "height": 70,
+              "x": 68,
+              "y": 255,
+              "width": 944,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 29,
+            "fontWeight": 600
           }
         ]
       }
@@ -240,225 +397,369 @@
     "android-10": [
       {
         "id": "slide_01",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": true,
         "label": {
-          "en-GB": "01 · DAILY DASHBOARD"
+          "en-GB": "01 · TODAY'S SCHEDULE"
         },
         "headline": {
-          "en-GB": "Your medication day,\nat a glance."
+          "en-GB": "Your day, in view."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/01-dashboard.png",
+        "screenshot": "/screenshots/tablet/01-dashboard.png",
+        "screenshotSecondary": "/screenshots/tablet/calendar.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_01_sub",
             "text": {
-              "en-GB": "See what's next, what you've taken and what's still ahead."
+              "en-GB": "See what's next and what's already recorded."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_02",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": false,
         "label": {
-          "en-GB": "02 · MEDICATION ORGANISATION"
+          "en-GB": "02 · MEDICATION REGIMEN"
         },
         "headline": {
-          "en-GB": "Every medication,\nclearly organised."
+          "en-GB": "Every medicine,\norganised."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/02-medications.png",
+        "screenshot": "/screenshots/tablet/02-medications.png",
+        "screenshotSecondary": "/screenshots/tablet/dashboard.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_02_sub",
             "text": {
-              "en-GB": "Keep medication details, schedules and supplies together."
+              "en-GB": "Keep details, doses and schedules together."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_03",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": false,
         "label": {
-          "en-GB": "03 · GUIDED ROUTINE SETUP"
+          "en-GB": "03 · 3-STEP SETUP WIZARD"
         },
         "headline": {
-          "en-GB": "Create your routine,\nstep by step."
+          "en-GB": "Build your routine,\nsimply."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/03-setup.png",
+        "screenshot": "/screenshots/tablet/03-setup.png",
+        "screenshotSecondary": "/screenshots/tablet/medications.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_03_sub",
             "text": {
-              "en-GB": "A guided way to add medication, schedules and stock."
+              "en-GB": "Set up medication, timing and stock."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_04",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": true,
         "label": {
-          "en-GB": "04 · STOCK & FEFO LOTS"
+          "en-GB": "04 · FEFO LOTS & LEDGER"
         },
         "headline": {
-          "en-GB": "Know what's in\nyour supply."
+          "en-GB": "Know your supply."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/04-stock.png",
+        "screenshot": "/screenshots/tablet/04-stock.png",
+        "screenshotSecondary": "/screenshots/tablet/medications.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_04_sub",
             "text": {
-              "en-GB": "Keep quantities, medication lots and expiry dates in view."
+              "en-GB": "Track quantities, lots and expiry dates."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_05",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": false,
         "label": {
           "en-GB": "05 · ADHERENCE CALENDAR"
         },
         "headline": {
           "en-GB": "See your routine\nover time."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/05-calendar.png",
+        "screenshot": "/screenshots/tablet/05-calendar.png",
+        "screenshotSecondary": "/screenshots/tablet/history.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_05_sub",
             "text": {
-              "en-GB": "Review daily outcomes and your medication history."
+              "en-GB": "Review daily outcomes in one calendar."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_06",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": false,
         "label": {
-          "en-GB": "06 · AUDITABLE DOSE HISTORY"
+          "en-GB": "06 · DOSE AUDIT TRAIL"
         },
         "headline": {
-          "en-GB": "A clear record\nof every dose."
+          "en-GB": "Every dose, clearly\nrecorded."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/06-history.png",
+        "screenshot": "/screenshots/tablet/06-history.png",
+        "screenshotSecondary": "/screenshots/tablet/calendar.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_06_sub",
             "text": {
-              "en-GB": "See scheduled times, recorded outcomes and history."
+              "en-GB": "See scheduled times and recorded outcomes."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_07",
-        "layout": "device-bottom",
+        "layout": "two-devices",
+        "inverted": true,
         "label": {
-          "en-GB": "07 · PRESCRIPTION TRACKING"
+          "en-GB": "07 · REPEAT PRESCRIPTIONS"
         },
         "headline": {
-          "en-GB": "Keep prescriptions\norganised."
+          "en-GB": "Prescriptions, kept\norganised."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/07-prescriptions.png",
+        "screenshot": "/screenshots/tablet/07-prescriptions.png",
+        "screenshotSecondary": "/screenshots/tablet/medications.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_07_sub",
             "text": {
-              "en-GB": "Track expiry dates, repeat requests and collections."
+              "en-GB": "Track expiry and repeat collections."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       },
       {
         "id": "slide_08",
-        "layout": "device-bottom",
+        "layout": "split-landscape",
+        "inverted": true,
         "label": {
-          "en-GB": "08 · PRIVACY & SECURITY"
+          "en-GB": "08 · OFFLINE PRIVACY & BACKUP"
         },
         "headline": {
-          "en-GB": "Privacy built into\nyour routine."
+          "en-GB": "Privacy, built in."
         },
-        "screenshot": "/screenshots/android/tablet/en-GB/08-privacy.png",
+        "screenshot": "/screenshots/tablet/08-privacy.png",
+        "screenshotSecondary": "/screenshots/tablet/dashboard.png",
+        "transforms": {
+          "device": {
+            "x": 755,
+            "y": 42,
+            "width": 1100,
+            "height": 1740,
+            "zIndex": 2
+          },
+          "caption": {
+            "x": 72,
+            "y": 96,
+            "width": 620,
+            "height": 340,
+            "zIndex": 5
+          }
+        },
         "textElements": [
           {
             "id": "text:slide_08_sub",
             "text": {
-              "en-GB": "Offline-first tracking, app lock and encrypted backups."
+              "en-GB": "App lock and encrypted backups."
             },
             "transform": {
-              "x": 80,
-              "y": 280,
-              "width": 920,
-              "height": 70,
+              "x": 72,
+              "y": 360,
+              "width": 620,
+              "height": 64,
               "zIndex": 10
             },
-            "fontSize": 26,
-            "fontWeight": 400
+            "fontSize": 27,
+            "fontWeight": 600
           }
         ]
       }
@@ -467,30 +768,14 @@
       {
         "id": "fg_01",
         "layout": "feature-graphic",
+        "inverted": true,
         "label": {
-          "en-GB": "OFFLINE HEALTH VAULT"
+          "en-GB": "OFFLINE MEDICATION & PRESCRIPTION TRACKER"
         },
         "headline": {
-          "en-GB": "Novelo"
+          "en-GB": "Medication, made manageable."
         },
-        "screenshot": "",
-        "textElements": [
-          {
-            "id": "text:fg_tagline",
-            "text": {
-              "en-GB": "Medication, made manageable."
-            },
-            "transform": {
-              "x": 262,
-              "y": 310,
-              "width": 500,
-              "height": 50,
-              "zIndex": 10
-            },
-            "fontSize": 28,
-            "fontWeight": 500
-          }
-        ]
+        "screenshot": "/screenshots/phone/01-dashboard.png"
       }
     ]
   }
