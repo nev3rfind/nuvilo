@@ -36,3 +36,10 @@ store-assets/**/.next/
 store-assets/**/out/
 store-assets/**/.turbo/
 store-assets/**/*.log
+
+# Release build artifacts & signing credentials
+app/release/
+*.aab
+*.apk
+*.jks
+*.keystore
