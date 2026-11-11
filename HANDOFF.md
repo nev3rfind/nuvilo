@@ -177,3 +177,5 @@ If tasked with continuing work, the following areas represent natural high-value
 | [`docs/testing/pre-merge/`](docs/testing/pre-merge/) | Pre-merge QA deliverables (`TEST_RESULTS.md`, `TEST_CASE_CATALOG.md`, `BUGS_FOUND.md`, `TEST_COVERAGE.md`). |
 | [`docs/ui-ux-audit/`](docs/ui-ux-audit/) | Complete Phase 8 & Stage 2 UI/UX audit, design system specs, and before/after screenshots. |
 | [`design-system/novelo/MASTER.md`](design-system/novelo/MASTER.md) | Master design system tokens, typography scales, and component specifications. |
+| [`website-handoff/`](website-handoff/) | Official website, Lovable master prompt, verified privacy policy specification, and visual asset suite. |
+| [`store-assets/google-play/`](store-assets/google-play/) | Google Play Store marketing campaign (phone/tablet screenshots, feature graphic, and Next.js editor project). |
