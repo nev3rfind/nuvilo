@@ -51,6 +51,8 @@ Status designations: `NOT STARTED` | `IN PROGRESS` | `BLOCKED` | `VERIFIED`
 ---
 
 | **Integration & QA** | Pre-Merge 200+ Regression Suite, Defect Remediation & Full Main Merge | `VERIFIED` | 287 automated tests passing (136 JVM + 151 Connected on AVD API 37) with 100% pass rate. BUG-001 (receiver null safety) and BUG-002 (stock recount race condition) remediated with regression tests `t130b` and `t148b`. `lintDebug` 0 errors, `assembleRelease` successful. All 22 stacked commits fast-forward merged and pushed to `origin/main` (`cd0e43f`). | None | **Fully Integrated on Main** |
+| **Store Campaign** | Google Play Store Screenshots, Rebrand Audit & Asset Regeneration | `VERIFIED` | 17 verified Google Play assets (8 phone + 8 tablet + 1 feature graphic), Next.js editor project, NUVILO_REBRAND_AUDIT.md, merged to main via PR #12. Package name set to `com.nuvilomed.app`. | None | **Live on Main** |
+| **Website & Privacy** | Official Website & Verified Privacy Policy Platform Specification | `VERIFIED` | GitHub Issue [#13](https://github.com/nev3rfind/nuvilo/issues/13), Branch `feat/13-website-privacy-handoff`, complete `website-handoff/` suite (Product Audit, Privacy Audit, Brand Design System, Website Structure, Lovable Master Prompt, Asset Manifest, and 12 verified high-res assets). | None | Complete (Ready for Lovable) |
 
 ---
 

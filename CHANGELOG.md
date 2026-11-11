@@ -8,6 +8,16 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Official Website & Verified Privacy Policy Platform Specification (Refs #13)**:
+  - Conducted comprehensive product functionality audit across all 22 genuine native Android features (`PRODUCT_FUNCTIONALITY_AUDIT.md`) detailing storage locations, cascade deletes, scaled integer math, and source code references.
+  - Completed deep privacy and security data audit (`PRIVACY_DATA_AUDIT.md`) verifying zero-network architecture (`android.permission.INTERNET` absent in source and merged release manifest), PBKDF2 + AES-256-GCM cryptography, Room SQLite storage, DataStore preferences, and hardware-isolated `BiometricPrompt` operations.
+  - Extracted complete brand design system tokens (`BRAND_DESIGN_SYSTEM.md`) including NHS Clinical Blue (`#005EB8`), interaction blue (`#0284C7`), cyan accent (`#0891B2`), slate neutrals, typography scale with tabular figures (`tnum`), and implementation-ready CSS custom properties / Tailwind config.
+  - Designed complete 3-page website structure (`WEBSITE_STRUCTURE.md`) for Privacy Policy (`/privacy-policy`), About Nuvilo (`/about`), and Support & Contact (`/contact`).
+  - Created implementation-ready, self-contained Lovable master prompt (`LOVABLE_MASTER_PROMPT.md`) for generating the official Nuvilo website without requiring repo access.
+  - Curated 12 verified high-resolution visual assets in `website-handoff/assets/` (transparent logo, app icon, monogram, 8 native phone captures, and feature graphic) and cataloged them in `LOVABLE_ASSET_MANIFEST.md`.
+  - Authored comprehensive Lovable handoff guide (`website-handoff/HANDOFF.md`) with quick-start steps, outstanding legal entity placeholders, and verification findings.
+
+### Added
 - **Pre-Merge Comprehensive Testing, 200+ Regression Suite & Main Integration (Refs #6)**:
   - Added 202 new automated regression tests (T001–T200, T130b, T148b) expanding the total test suite to 287 automated tests (136 JVM unit tests, 151 connected on-device instrumentation tests on API 37) with 100% pass rate.
   - Implemented exact mathematical boundary verification for `ScaledQuantity` and `StockLedgerCalculator` (zero balances, non-negative invariants, fractional doses, FEFO multi-lot allocations, discard wastage, and physical recount reconciliations).
