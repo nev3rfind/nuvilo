@@ -3,7 +3,7 @@
 **Application Name:** Nuvilo  
 **Tagline:** Medication, made manageable.  
 **Authority:** [Google Play Official Store Listing Requirements](https://support.google.com/googleplay/android-developer/answer/9866151)  
-**Package:** `com.example.nuvilo`  
+**Package:** `com.nuvilomed.app`  
 **Status:** `VERIFIED PASS`
 
 ---

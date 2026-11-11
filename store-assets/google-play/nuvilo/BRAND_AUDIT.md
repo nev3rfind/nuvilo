@@ -2,7 +2,7 @@
 
 **Official Application Name:** **Nuvilo**  
 **Tagline:** *"Medication, made manageable."*  
-**Package:** `com.example.nuvilo`  
+**Package:** `com.nuvilomed.app`  
 **Audit Date:** 2026-11-09  
 
 ---

@@ -2,7 +2,7 @@
 
 **Official Application Name:** Nuvilo  
 **Tagline:** *Medication, made manageable.*  
-**Package Name:** `com.example.nuvilo`  
+**Package Name:** `com.nuvilomed.app`  
 **Target Locale:** `en-GB`
 
 ---

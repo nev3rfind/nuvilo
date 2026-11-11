@@ -1,7 +1,7 @@
 # Nuvilo Engineering Handover Document (HANDOFF.md)
 
 > **Product**: Nuvilo — *"Medication, made manageable."*  
-> **Package**: `com.example.nuvilo`  
+> **Package / Application ID**: `com.nuvilomed.app` (internal namespace: `com.example.nuvilo`)  
 > **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
 > **Active Branch**: `main` (Single source of truth; clean and in sync with `origin/main`)  
 > **Latest Verified Commit**: `5a1ef35`  

@@ -2,7 +2,7 @@
 
 **Official Application Name:** **Nuvilo**  
 **Tagline:** *"Medication, made manageable."*  
-**Package / Application ID:** `com.example.nuvilo`  
+**Package / Application ID:** `com.nuvilomed.app`  
 **Audit Date:** 2026-11-09  
 
 ---
@@ -39,7 +39,7 @@ In accordance with Section 1 of the campaign specification (*"Preserve stable te
 
 | Identifier / Symbol | Location | Reason for Preservation |
 | :--- | :--- | :--- |
-| `com.example.nuvilo` | `app/build.gradle.kts`, package declarations | Already uses the official `nuvilo` namespace and `applicationId`. |
+| `com.example.nuvilo` | `app/build.gradle.kts` (namespace), Kotlin package declarations | Internal code namespace for R and BuildConfig class generation. The production `applicationId` published to Google Play is set to `com.nuvilomed.app`. |
 | `DATABASE_NAME = "novelo.db"` | `NoveloDatabase.kt` | Renaming the SQLite database file would orphan existing local user databases on upgrade. |
 | `NoveloDatabase`, `NoveloRepository`, `NoveloApplication`, `NoveloDataBackup` | `app/src/main/java/com/example/nuvilo/**` | Internal Kotlin class and ProGuard keep-rule symbols (`-keep class com.example.nuvilo.data.local.NoveloDatabase_Impl`). Preserving them avoids unnecessary reflection/Room generated-code churn. |
 | `CHANNEL_REMINDERS_ID = "novelo_medication_reminders"`<br>`CHANNEL_LOW_STOCK_ID = "novelo_low_stock_alerts"` | `NotificationHelper.kt` | Android notification channel IDs are immutable once registered with the OS; changing them creates duplicate orphaned channels in system settings. User-visible channel names (`"Medication Reminders"`, `"Low Stock Alerts"`) are already brand-neutral. |

@@ -29,7 +29,7 @@ def validate():
     report_lines.append("**Application Name:** Nuvilo  ")
     report_lines.append("**Tagline:** Medication, made manageable.  ")
     report_lines.append("**Authority:** [Google Play Official Store Listing Requirements](https://support.google.com/googleplay/android-developer/answer/9866151)  ")
-    report_lines.append("**Package:** `com.example.nuvilo`  ")
+    report_lines.append("**Package:** `com.nuvilomed.app`  ")
     report_lines.append("**Status:** `VERIFIED PASS`\n")
     report_lines.append("---\n")
 
