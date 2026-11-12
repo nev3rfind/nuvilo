@@ -12,8 +12,14 @@ data class Medication(
     val notes: String = "",
     val colorTagHex: String = "#005EB8",
     val isArchived: Boolean = false,
-    val createdAtEpochMs: Long = System.currentTimeMillis()
-)
+    val createdAtEpochMs: Long = System.currentTimeMillis(),
+    val packagingConfig: PackagingConfig? = null,
+    val administrationProfile: AdministrationProfile = AdministrationProfile(),
+    val lowStockDaysThreshold: Int? = null
+) {
+    val effectiveConsumptionUnit: StockUnit
+        get() = packagingConfig?.consumptionUnit ?: stockUnit
+}
 
 data class StockLot(
     val id: String,
@@ -24,8 +30,21 @@ data class StockLot(
     val unit: StockUnit,
     val expiryDateEpochMs: Long? = null,
     val createdAtEpochMs: Long = System.currentTimeMillis(),
-    val notes: String? = null
-)
+    val notes: String? = null,
+    val packageType: PackageType? = null,
+    val packageLabel: String? = null,
+    val packageStatus: PackageStatus = PackageStatus.UNOPENED,
+    val openedAtEpochMs: Long? = null,
+    val discardAfterOpeningDays: Int? = null,
+    val discardAfterOpeningEpochMs: Long? = null,
+    val discardedAtEpochMs: Long? = null,
+    val discardReason: String? = null
+) {
+    val effectiveDiscardAfterOpeningEpochMs: Long?
+        get() = discardAfterOpeningEpochMs ?: if (openedAtEpochMs != null && discardAfterOpeningDays != null) {
+            openedAtEpochMs + discardAfterOpeningDays.toLong() * 86_400_000L
+        } else null
+}
 
 data class StockLedgerEntry(
     val id: String,
