@@ -23,7 +23,7 @@ data class NoveloDataBackup(
 ) {
     companion object {
         const val CURRENT_FORMAT_VERSION = 1
-        const val CURRENT_SCHEMA_VERSION = 3
+        const val CURRENT_SCHEMA_VERSION = 4
     }
 
     val totalRecordsCount: Int

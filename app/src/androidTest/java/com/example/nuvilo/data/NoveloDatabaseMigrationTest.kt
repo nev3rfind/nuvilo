@@ -261,4 +261,144 @@ class NoveloDatabaseMigrationTest {
 
         v1Db.close()
     }
+
+    @Test
+    fun migration3To4_preservesAllDataAndInfersPackageStatuses() {
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(3) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    // Build complete V1->V2->V3 schema cleanly using existing migrations on V1 base tables
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `medications` (
+                            `id` TEXT NOT NULL,
+                            `name` TEXT NOT NULL,
+                            `strength` TEXT NOT NULL,
+                            `form` TEXT NOT NULL,
+                            `stock_unit` TEXT NOT NULL,
+                            `opening_stock_raw` INTEGER NOT NULL,
+                            `low_stock_threshold_raw` INTEGER NOT NULL,
+                            `recording_mode` TEXT NOT NULL,
+                            `notes` TEXT NOT NULL,
+                            `color_tag_hex` TEXT NOT NULL,
+                            `is_archived` INTEGER NOT NULL,
+                            `created_at_epoch_ms` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_medications_is_archived` ON `medications` (`is_archived`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_medications_name` ON `medications` (`name`)")
+
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `schedules` (
+                            `id` TEXT NOT NULL,
+                            `medication_id` TEXT NOT NULL,
+                            `schedule_type` TEXT NOT NULL,
+                            `target_times_csv` TEXT NOT NULL,
+                            `days_of_week_csv` TEXT NOT NULL,
+                            `dose_quantity_raw` INTEGER NOT NULL,
+                            `start_date_epoch_day` INTEGER NOT NULL,
+                            `end_date_epoch_day` INTEGER,
+                            `instructions` TEXT NOT NULL,
+                            PRIMARY KEY(`id`),
+                            FOREIGN KEY(`medication_id`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_schedules_medication_id` ON `schedules` (`medication_id`)")
+
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `dose_events` (
+                            `occurrence_id` TEXT NOT NULL,
+                            `medication_id` TEXT NOT NULL,
+                            `scheduled_epoch_ms` INTEGER NOT NULL,
+                            `dose_quantity_raw` INTEGER NOT NULL,
+                            `unit` TEXT NOT NULL,
+                            `status` TEXT NOT NULL,
+                            `recorded_epoch_ms` INTEGER,
+                            `notes` TEXT,
+                            PRIMARY KEY(`occurrence_id`),
+                            FOREIGN KEY(`medication_id`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_dose_events_medication_id` ON `dose_events` (`medication_id`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_dose_events_scheduled_epoch_ms` ON `dose_events` (`scheduled_epoch_ms`)")
+
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `stock_ledger_entries` (
+                            `id` TEXT NOT NULL,
+                            `medication_id` TEXT NOT NULL,
+                            `timestamp_epoch_ms` INTEGER NOT NULL,
+                            `movement_type` TEXT NOT NULL,
+                            `quantity_raw` INTEGER NOT NULL,
+                            `unit` TEXT NOT NULL,
+                            `reason` TEXT,
+                            `dose_occurrence_id` TEXT,
+                            `restock_lot_number` TEXT,
+                            `is_estimate` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`),
+                            FOREIGN KEY(`medication_id`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_ledger_entries_medication_id` ON `stock_ledger_entries` (`medication_id`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_ledger_entries_timestamp_epoch_ms` ON `stock_ledger_entries` (`timestamp_epoch_ms`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_ledger_entries_dose_occurrence_id` ON `stock_ledger_entries` (`dose_occurrence_id`)")
+
+                    NoveloDatabase.MIGRATION_1_2.migrate(db)
+                    NoveloDatabase.MIGRATION_2_3.migrate(db)
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val v3Db = factory.create(config).writableDatabase
+        val nowMs = System.currentTimeMillis()
+        val futureExp = nowMs + 90L * 86_400_000L
+        val pastExp = nowMs - 10L * 86_400_000L
+
+        v3Db.execSQL("INSERT INTO medications VALUES ('med_tab', 'Atorvastatin', '20mg', 'TABLET', 'TABLETS', 28000, 7000, 'CONFIRM', '', '#005EB8', 0, 1000000)")
+        v3Db.execSQL("INSERT INTO medications VALUES ('med_eye', 'Hydro Forte', '0.3%', 'DROPS', 'DROPS', 300000, 30000, 'CONFIRM', 'Old eye drop', '#0284C7', 0, 1000000)")
+
+        // Partial lot -> should become OPENED; Sealed lot -> UNOPENED; Empty -> EMPTY; Expired -> EXPIRED
+        v3Db.execSQL("INSERT INTO stock_lots VALUES ('lot_partial', 'med_eye', 'B1', 300000, 240000, 'DROPS', $futureExp, 1000000, 'Opened pre-v4')")
+        v3Db.execSQL("INSERT INTO stock_lots VALUES ('lot_sealed', 'med_tab', 'T1', 28000, 28000, 'TABLETS', $futureExp, 1000000, 'Sealed pre-v4')")
+        v3Db.execSQL("INSERT INTO stock_lots VALUES ('lot_empty', 'med_tab', 'T0', 28000, 0, 'TABLETS', $futureExp, 900000, 'Finished')")
+        v3Db.execSQL("INSERT INTO stock_lots VALUES ('lot_exp', 'med_eye', 'B0', 300000, 100000, 'DROPS', $pastExp, 800000, 'Expired')")
+
+        NoveloDatabase.MIGRATION_3_4.migrate(v3Db)
+
+        val eyeMed = v3Db.query("SELECT * FROM medications WHERE id = 'med_eye'")
+        assertTrue(eyeMed.moveToFirst())
+        assertEquals("ESTIMATED", eyeMed.getString(eyeMed.getColumnIndexOrThrow("tracking_precision")))
+        assertEquals("NONE", eyeMed.getString(eyeMed.getColumnIndexOrThrow("administration_site")))
+        eyeMed.close()
+
+        val tabMed = v3Db.query("SELECT * FROM medications WHERE id = 'med_tab'")
+        assertTrue(tabMed.moveToFirst())
+        assertEquals("EXACT", tabMed.getString(tabMed.getColumnIndexOrThrow("tracking_precision")))
+        tabMed.close()
+
+        fun lotStatus(id: String): String {
+            val c = v3Db.query("SELECT package_status FROM stock_lots WHERE id = '$id'")
+            assertTrue(c.moveToFirst())
+            val s = c.getString(0)
+            c.close()
+            return s
+        }
+        assertEquals("OPENED", lotStatus("lot_partial"))
+        assertEquals("UNOPENED", lotStatus("lot_sealed"))
+        assertEquals("EMPTY", lotStatus("lot_empty"))
+        assertEquals("EXPIRED", lotStatus("lot_exp"))
+
+        v3Db.close()
+    }
 }
