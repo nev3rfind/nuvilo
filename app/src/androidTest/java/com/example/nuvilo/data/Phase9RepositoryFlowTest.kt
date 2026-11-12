@@ -85,7 +85,7 @@ class Phase9RepositoryFlowTest {
             startDateEpochDay = 20_000L
         )
 
-        val nowMs = 1_760_000_000_000L
+        val nowMs = System.currentTimeMillis()
         val createResult = repository.createMedicationWithPackages(
             medication = med,
             initialSchedule = schedule,
@@ -108,7 +108,8 @@ class Phase9RepositoryFlowTest {
             scheduledEpochMs = nowMs,
             quantity = ScaledQuantity.ofWhole(2),
             unit = StockUnit.DROPS,
-            status = DoseStatus.TAKEN
+            status = DoseStatus.TAKEN,
+            recordedEpochMs = nowMs
         )
         assertTrue(doseRes.isSuccess)
 
