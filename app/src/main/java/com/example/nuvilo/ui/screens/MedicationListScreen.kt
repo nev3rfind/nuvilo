@@ -79,17 +79,31 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.AdministrationSite
+import com.example.nuvilo.domain.model.GelTrackingMode
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
+import com.example.nuvilo.domain.model.PackageStatus
+import com.example.nuvilo.domain.model.PackageType
+import com.example.nuvilo.domain.model.PackagingConfig
 import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.domain.model.ScaledQuantity
+import com.example.nuvilo.domain.model.ScheduleDefinition
+import com.example.nuvilo.domain.model.ScheduleType
+import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.model.TrackingPrecision
+import com.example.nuvilo.domain.stock.SupplyForecastCalculator
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.MedicationItemCard
 import com.example.nuvilo.ui.components.ScheduleConfigurationContent
+import com.example.nuvilo.ui.components.TrackingPrecisionBadge
 import com.example.nuvilo.ui.components.defaultStockUnitForForm
 import com.example.nuvilo.ui.components.formatMinuteOfDay
 import com.example.nuvilo.ui.components.parseAccentColor
+import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
+import com.example.nuvilo.ui.haptics.NuviloHapticEvent
 import com.example.nuvilo.ui.theme.MedicationAccentSwatches
 import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
@@ -287,6 +301,7 @@ fun MedicationListScreen(
                                 stockBalance = item.stockBalance,
                                 schedules = item.schedules,
                                 pendingPrescription = item.pendingPrescription,
+                                supplyForecast = item.supplyForecast,
                                 onArchiveToggle = {
                                     viewModel.setArchived(item.medication.id, !item.medication.isArchived)
                                 },
@@ -307,8 +322,8 @@ fun MedicationListScreen(
     if (showAddDialog) {
         AddMedicationDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, strength, form, unit, opening, threshold, mode, times, daysOfWeek, doseQty, notes, colorHex, instructions ->
-                viewModel.createMedication(
+            onConfirmWithPackaging = { name, strength, form, unit, opening, threshold, mode, times, daysOfWeek, doseQty, notes, colorHex, instructions, packagingConfig, administrationProfile, initialPackagesCount, lowStockDaysThreshold, expiryEpochMs, lotNumber ->
+                viewModel.createMedicationWithPackages(
                     name = name,
                     strength = strength,
                     form = form,
@@ -321,7 +336,13 @@ fun MedicationListScreen(
                     doseQuantityStr = doseQty,
                     notes = notes,
                     colorTagHex = colorHex,
-                    instructions = instructions
+                    instructions = instructions,
+                    packagingConfig = packagingConfig,
+                    administrationProfile = administrationProfile,
+                    initialPackagesCount = initialPackagesCount,
+                    lowStockDaysThreshold = lowStockDaysThreshold,
+                    expiryDateEpochMs = expiryEpochMs,
+                    lotNumber = lotNumber
                 )
                 showAddDialog = false
             }
@@ -333,18 +354,36 @@ fun MedicationListScreen(
             medication = med,
             currentBalance = curBal,
             onDismiss = { medicationToRestock = null },
+            onConfirmPackages = { packageCount, contentsPerPackage, consumptionUnit, packageType, discardDays, lotNumber, expiryEpochMs, notes ->
+                viewModel.restockPackages(
+                    medicationId = med.id,
+                    packageCount = packageCount,
+                    contentsPerPackage = contentsPerPackage,
+                    consumptionUnit = consumptionUnit,
+                    packageType = packageType,
+                    discardAfterOpeningDays = discardDays,
+                    lotNumber = lotNumber,
+                    expiryDateEpochMs = expiryEpochMs,
+                    notes = notes
+                )
+                medicationToRestock = null
+                val addedTotal = ScaledQuantity(contentsPerPackage.rawScaledValue * packageCount.toLong())
+                scope.launch {
+                    snackbarHostState.showSnackbar("Added $packageCount ${packageType.pluralName.lowercase()} (${addedTotal.toDisplayString()} ${consumptionUnit.abbreviation}) for ${med.name}")
+                }
+            },
             onConfirm = { qty, lotNumber, expiryEpochMs, notes ->
                 viewModel.restockMedication(
                     medicationId = med.id,
                     quantity = qty,
-                    unit = med.stockUnit,
+                    unit = med.effectiveConsumptionUnit,
                     lotNumber = lotNumber,
                     expiryDateEpochMs = expiryEpochMs,
                     notes = notes
                 )
                 medicationToRestock = null
                 scope.launch {
-                    snackbarHostState.showSnackbar("Restocked ${qty.toDisplayString()} ${med.stockUnit.abbreviation} for ${med.name}")
+                    snackbarHostState.showSnackbar("Restocked ${qty.toDisplayString()} ${med.effectiveConsumptionUnit.abbreviation} for ${med.name}")
                 }
             }
         )
@@ -410,11 +449,45 @@ private fun SegmentedMedicationTabs(
     }
 }
 
+private fun defaultPackageTypeForForm(form: MedicationForm): PackageType = when (form) {
+    MedicationForm.TABLET, MedicationForm.CAPSULE -> PackageType.BLISTER_PACK
+    MedicationForm.LIQUID_ML, MedicationForm.DROPS -> PackageType.BOTTLE
+    MedicationForm.INHALER_PUFFS -> PackageType.INHALER
+    MedicationForm.TOPICAL_CREAM -> PackageType.TUBE
+    MedicationForm.INJECTION -> PackageType.VIAL
+    MedicationForm.PATCH -> PackageType.PATCH_BOX
+    MedicationForm.OTHER -> PackageType.CUSTOM
+}
+
+private fun availablePackageTypesForForm(form: MedicationForm): List<PackageType> = when (form) {
+    MedicationForm.DROPS -> listOf(PackageType.BOTTLE, PackageType.BOX_SINGLE_DOSE, PackageType.SINGLE_DOSE_UNIT)
+    MedicationForm.TOPICAL_CREAM -> listOf(PackageType.TUBE, PackageType.JAR)
+    MedicationForm.TABLET, MedicationForm.CAPSULE -> listOf(PackageType.BLISTER_PACK, PackageType.BOTTLE)
+    MedicationForm.LIQUID_ML -> listOf(PackageType.BOTTLE, PackageType.SINGLE_DOSE_UNIT)
+    MedicationForm.INHALER_PUFFS -> listOf(PackageType.INHALER)
+    MedicationForm.INJECTION -> listOf(PackageType.VIAL, PackageType.CUSTOM)
+    MedicationForm.PATCH -> listOf(PackageType.PATCH_BOX)
+    MedicationForm.OTHER -> listOf(PackageType.CUSTOM, PackageType.BOTTLE, PackageType.BLISTER_PACK)
+}
+
+private fun defaultContentsPerPackageStr(form: MedicationForm, packageType: PackageType, unit: StockUnit): String = when {
+    form == MedicationForm.DROPS && packageType == PackageType.BOTTLE -> "300"
+    packageType == PackageType.BOX_SINGLE_DOSE -> "30"
+    packageType == PackageType.SINGLE_DOSE_UNIT -> "1"
+    form == MedicationForm.TOPICAL_CREAM && unit == StockUnit.APPLICATIONS -> "30"
+    form == MedicationForm.TOPICAL_CREAM && unit == StockUnit.GRAMS -> "15"
+    form == MedicationForm.LIQUID_ML -> "100"
+    form == MedicationForm.INHALER_PUFFS -> "120"
+    form == MedicationForm.PATCH -> "8"
+    else -> "28"
+}
+
 /**
- * Progressive-disclosure 3-Step Add Medication Wizard.
- * - Step 1: Medication Identity, Dosage Form (with smart StockUnit defaulting), Accent Color, & Notes
- * - Step 2: Schedule Frequency (Daily vs Specific Weekdays), Custom/Preset Dose Times, Dose Quantity, & Recording Mode
- * - Step 3: Opening Stock, Low-Stock Threshold, Estimated Consumption Notice, & Regimen Summary
+ * Progressive-disclosure 3-Step Add Medication Wizard separating:
+ * Purchase Package -> Package Contents -> Administration Consumption -> Remaining Supply.
+ *
+ * Keeps legacy 13-arg [onConfirm] signature default-compatible while supporting rich
+ * packaging & administration output via [onConfirmWithPackaging].
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -434,39 +507,157 @@ fun AddMedicationDialog(
         notes: String,
         colorTagHex: String,
         instructions: String
-    ) -> Unit
+    ) -> Unit = { _, _, _, _, _, _, _, _, _, _, _, _, _ -> },
+    onConfirmWithPackaging: ((
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        openingStock: String,
+        lowStockThreshold: String,
+        recordingMode: RecordingMode,
+        targetTimes: List<Int>,
+        daysOfWeek: Set<Int>,
+        doseQuantity: String,
+        notes: String,
+        colorTagHex: String,
+        instructions: String,
+        packagingConfig: PackagingConfig?,
+        administrationProfile: AdministrationProfile,
+        initialPackagesCount: Int,
+        lowStockDaysThreshold: Int?,
+        expiryDateEpochMs: Long?,
+        lotNumber: String?
+    ) -> Unit)? = null
 ) {
+    val nuviloHaptics = LocalNuviloHaptics.current
     var currentStep by rememberSaveable { mutableIntStateOf(0) }
 
-    // Step 1 State
+    // Step 1 State: Identity, Form & Package Definition
     var name by rememberSaveable { mutableStateOf("") }
     var strength by rememberSaveable { mutableStateOf("") }
     var selectedFormName by rememberSaveable { mutableStateOf(MedicationForm.TABLET.name) }
     var selectedUnitName by rememberSaveable { mutableStateOf(StockUnit.TABLETS.name) }
+    var selectedPackageTypeName by rememberSaveable { mutableStateOf(PackageType.BLISTER_PACK.name) }
+    var contentsPerPackageStr by rememberSaveable { mutableStateOf("28") }
+    var discardAfterOpeningDaysStr by rememberSaveable { mutableStateOf("") }
+    var gelModeName by rememberSaveable { mutableStateOf(GelTrackingMode.ESTIMATED_APPLICATIONS.name) }
     var selectedColorHex by rememberSaveable { mutableStateOf("#005EB8") }
     var notes by rememberSaveable { mutableStateOf("") }
 
-    // Step 2 State
+    // Step 2 State: Schedule & Administration Site
     var isSpecificWeekdays by rememberSaveable { mutableStateOf(false) }
     var selectedDaysList by rememberSaveable { mutableStateOf(listOf(1, 3, 5)) }
     var selectedTimesList by rememberSaveable { mutableStateOf(listOf(480)) } // Default 08:00
     var doseQuantity by rememberSaveable { mutableStateOf("1") }
+    var eyeSiteName by rememberSaveable { mutableStateOf(AdministrationSite.BOTH_EYES.name) }
+    var leftEyeDropsStr by rememberSaveable { mutableStateOf("1") }
+    var rightEyeDropsStr by rememberSaveable { mutableStateOf("1") }
+    var containersPerDoseStr by rememberSaveable { mutableStateOf("1") }
     var instructions by rememberSaveable { mutableStateOf("") }
     var selectedModeName by rememberSaveable { mutableStateOf(RecordingMode.CONFIRM.name) }
 
-    // Step 3 State
+    // Step 3 State: Opening Inventory & Thresholds
+    var initialPackagesCountStr by rememberSaveable { mutableStateOf("1") }
     var openingStock by rememberSaveable { mutableStateOf("28") }
     var lowStockThreshold by rememberSaveable { mutableStateOf("7") }
+    var lowStockDaysThresholdStr by rememberSaveable { mutableStateOf("7") }
+    var lotNumberStr by rememberSaveable { mutableStateOf("") }
+    var expiryDaysAheadStr by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
     val selectedForm = runCatching { MedicationForm.valueOf(selectedFormName) }.getOrDefault(MedicationForm.TABLET)
-    val selectedUnit = runCatching { StockUnit.valueOf(selectedUnitName) }.getOrDefault(StockUnit.TABLETS)
+    val selectedPackageType = runCatching { PackageType.valueOf(selectedPackageTypeName) }.getOrDefault(defaultPackageTypeForForm(selectedForm))
+    val gelMode = runCatching { GelTrackingMode.valueOf(gelModeName) }.getOrDefault(GelTrackingMode.ESTIMATED_APPLICATIONS)
+    val selectedUnit = when {
+        selectedPackageType == PackageType.BOX_SINGLE_DOSE || selectedPackageType == PackageType.SINGLE_DOSE_UNIT -> StockUnit.CONTAINERS
+        selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.GRAMS -> StockUnit.GRAMS
+        selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.ESTIMATED_APPLICATIONS -> StockUnit.APPLICATIONS
+        else -> runCatching { StockUnit.valueOf(selectedUnitName) }.getOrDefault(StockUnit.TABLETS)
+    }
     val selectedMode = runCatching { RecordingMode.valueOf(selectedModeName) }.getOrDefault(RecordingMode.CONFIRM)
+    val eyeSite = runCatching { AdministrationSite.valueOf(eyeSiteName) }.getOrDefault(AdministrationSite.BOTH_EYES)
+
+    val isSingleDoseEyeOrLiquid = selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
+        selectedPackageType == PackageType.SINGLE_DOSE_UNIT ||
+        selectedUnit == StockUnit.CONTAINERS
+
+    val isMultiDoseDrops = selectedForm == MedicationForm.DROPS && !isSingleDoseEyeOrLiquid && selectedUnit == StockUnit.DROPS
+
+    val computedDoseQtyStr = when {
+        isSingleDoseEyeOrLiquid -> containersPerDoseStr.ifBlank { "1" }
+        isMultiDoseDrops -> when (eyeSite) {
+            AdministrationSite.LEFT_EYE -> leftEyeDropsStr.ifBlank { "1" }
+            AdministrationSite.RIGHT_EYE -> rightEyeDropsStr.ifBlank { "1" }
+            AdministrationSite.BOTH_EYES -> {
+                val l = runCatching { ScaledQuantity.fromDisplayString(leftEyeDropsStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+                val r = runCatching { ScaledQuantity.fromDisplayString(rightEyeDropsStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+                (l + r).toDisplayString()
+            }
+            else -> doseQuantity.ifBlank { "1" }
+        }
+        else -> doseQuantity.ifBlank { "1" }
+    }
+
+    val parsedContentsPerPkg = runCatching { ScaledQuantity.fromDisplayString(contentsPerPackageStr) }.getOrNull()
+    val pkgCount = (initialPackagesCountStr.toIntOrNull() ?: 1).coerceAtLeast(1)
+    val parsedDiscardDays = discardAfterOpeningDaysStr.toIntOrNull()?.takeIf { it > 0 }
+    val derivedPrecision = when {
+        selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.TUBE_COUNT_ONLY -> TrackingPrecision.UNKNOWN
+        selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.GRAMS -> TrackingPrecision.APPROXIMATE
+        selectedForm == MedicationForm.DROPS && isSingleDoseEyeOrLiquid -> TrackingPrecision.EXACT
+        selectedForm.isEstimatedConsumption || selectedForm == MedicationForm.DROPS || selectedPackageType == PackageType.BOTTLE && selectedUnit == StockUnit.DROPS -> TrackingPrecision.ESTIMATED
+        else -> TrackingPrecision.EXACT
+    }
+
+    val packagingConfig = PackagingConfig(
+        packageType = selectedPackageType,
+        consumptionUnit = selectedUnit,
+        contentsPerPackage = parsedContentsPerPkg?.takeIf { it.isPositive() },
+        discardAfterOpeningDays = parsedDiscardDays,
+        gelTrackingMode = if (selectedForm == MedicationForm.TOPICAL_CREAM) gelMode else null,
+        trackingPrecision = derivedPrecision
+    )
+
+    val administrationProfile = if (selectedForm == MedicationForm.DROPS) {
+        when {
+            isSingleDoseEyeOrLiquid -> AdministrationProfile(
+                site = eyeSite,
+                containersPerAdministration = runCatching { ScaledQuantity.fromDisplayString(containersPerDoseStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+            )
+            eyeSite == AdministrationSite.BOTH_EYES -> AdministrationProfile(
+                site = AdministrationSite.BOTH_EYES,
+                leftEyeQuantity = runCatching { ScaledQuantity.fromDisplayString(leftEyeDropsStr) }.getOrDefault(ScaledQuantity.ofWhole(1)),
+                rightEyeQuantity = runCatching { ScaledQuantity.fromDisplayString(rightEyeDropsStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+            )
+            eyeSite == AdministrationSite.LEFT_EYE -> AdministrationProfile(
+                site = AdministrationSite.LEFT_EYE,
+                leftEyeQuantity = runCatching { ScaledQuantity.fromDisplayString(leftEyeDropsStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+            )
+            eyeSite == AdministrationSite.RIGHT_EYE -> AdministrationProfile(
+                site = AdministrationSite.RIGHT_EYE,
+                rightEyeQuantity = runCatching { ScaledQuantity.fromDisplayString(rightEyeDropsStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+            )
+            else -> AdministrationProfile(site = eyeSite)
+        }
+    } else {
+        AdministrationProfile()
+    }
+
+    val computedTotalOpening = if (parsedContentsPerPkg != null && parsedContentsPerPkg.isPositive()) {
+        ScaledQuantity(parsedContentsPerPkg.rawScaledValue * pkgCount.toLong())
+    } else {
+        runCatching { ScaledQuantity.fromDisplayString(openingStock) }.getOrDefault(ScaledQuantity.ZERO)
+    }
 
     val effectiveDays = if (isSpecificWeekdays) selectedDaysList.toSet() else emptySet()
     val hasValidIdentity = name.isNotBlank() && strength.isNotBlank()
+    val hasValidPackageContents = when {
+        selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.TUBE_COUNT_ONLY -> true
+        else -> parsedContentsPerPkg != null && parsedContentsPerPkg.isPositive()
+    }
     val hasValidSchedule = selectedTimesList.isNotEmpty() && (!isSpecificWeekdays || effectiveDays.isNotEmpty())
-    val canSubmit = hasValidIdentity && hasValidSchedule && !isSubmitting
+    val canSubmit = hasValidIdentity && hasValidPackageContents && hasValidSchedule && !isSubmitting
 
     val semantic = MaterialTheme.noveloColors
 
@@ -508,8 +699,12 @@ fun AddMedicationDialog(
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
+                                .heightIn(min = 36.dp)
                                 .clip(NoveloPillShape)
-                                .clickable { currentStep = idx },
+                                .clickable {
+                                    nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                    currentStep = idx
+                                },
                             shape = NoveloPillShape,
                             color = when {
                                 isActive -> MaterialTheme.colorScheme.primary
@@ -554,7 +749,7 @@ fun AddMedicationDialog(
                                 value = name,
                                 onValueChange = { name = it },
                                 label = { Text("Medication Name *") },
-                                placeholder = { Text("e.g. Atorvastatin, Lisinopril") },
+                                placeholder = { Text("e.g. Hydro Forte, Atorvastatin") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -563,13 +758,13 @@ fun AddMedicationDialog(
                                 value = strength,
                                 onValueChange = { strength = it },
                                 label = { Text("Strength / Concentration *") },
-                                placeholder = { Text("e.g. 20mg, 500mg, 100mcg/puff") },
+                                placeholder = { Text("e.g. 0.3%, 20mg, 100mcg/puff") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
 
                             Text(
-                                text = "Dosage Form (auto-matches stock unit)",
+                                text = "Dosage Form",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -592,8 +787,14 @@ fun AddMedicationDialog(
                                     FilterChip(
                                         selected = selectedForm == form,
                                         onClick = {
+                                            nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                                             selectedFormName = form.name
-                                            selectedUnitName = defaultStockUnitForForm(form).name
+                                            val defaultPkg = defaultPackageTypeForForm(form)
+                                            val defaultUnit = defaultStockUnitForForm(form)
+                                            selectedPackageTypeName = defaultPkg.name
+                                            selectedUnitName = defaultUnit.name
+                                            contentsPerPackageStr = defaultContentsPerPackageStr(form, defaultPkg, defaultUnit)
+                                            discardAfterOpeningDaysStr = if (form == MedicationForm.DROPS && defaultPkg == PackageType.BOTTLE) "28" else ""
                                         },
                                         label = { Text(form.displayName) },
                                         leadingIcon = if (selectedForm == form) {
@@ -603,23 +804,110 @@ fun AddMedicationDialog(
                                 }
                             }
 
+                            // Contextual Package Selection
+                            val pkgOptions = availablePackageTypesForForm(selectedForm)
                             Text(
-                                text = "Stock Counting Unit",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "How You Buy / Store It (Package)",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                StockUnit.entries.forEach { unit ->
+                                pkgOptions.forEach { pkgType ->
                                     FilterChip(
-                                        selected = selectedUnit == unit,
-                                        onClick = { selectedUnitName = unit.name },
-                                        label = { Text("${unit.displayName} (${unit.abbreviation})") }
+                                        selected = selectedPackageType == pkgType,
+                                        onClick = {
+                                            nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                            selectedPackageTypeName = pkgType.name
+                                            val nextUnit = when (pkgType) {
+                                                PackageType.BOX_SINGLE_DOSE, PackageType.SINGLE_DOSE_UNIT -> StockUnit.CONTAINERS
+                                                PackageType.BOTTLE -> if (selectedForm == MedicationForm.DROPS) StockUnit.DROPS else defaultStockUnitForForm(selectedForm)
+                                                else -> defaultStockUnitForForm(selectedForm)
+                                            }
+                                            selectedUnitName = nextUnit.name
+                                            contentsPerPackageStr = defaultContentsPerPackageStr(selectedForm, pkgType, nextUnit)
+                                            if (pkgType == PackageType.BOX_SINGLE_DOSE || pkgType == PackageType.SINGLE_DOSE_UNIT) {
+                                                discardAfterOpeningDaysStr = ""
+                                            } else if (selectedForm == MedicationForm.DROPS && pkgType == PackageType.BOTTLE && discardAfterOpeningDaysStr.isBlank()) {
+                                                discardAfterOpeningDaysStr = "28"
+                                            }
+                                        },
+                                        label = { Text(pkgType.displayName) }
                                     )
                                 }
+                            }
+
+                            // Gel / Cream Tracking Mode Selector
+                            if (selectedForm == MedicationForm.TOPICAL_CREAM) {
+                                Text(
+                                    text = "Gel / Cream Tracking Mode",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    GelTrackingMode.entries.forEach { modeOpt ->
+                                        FilterChip(
+                                            selected = gelMode == modeOpt,
+                                            onClick = {
+                                                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                                gelModeName = modeOpt.name
+                                                val unitForMode = when (modeOpt) {
+                                                    GelTrackingMode.GRAMS -> StockUnit.GRAMS
+                                                    GelTrackingMode.ESTIMATED_APPLICATIONS, GelTrackingMode.TUBE_COUNT_ONLY -> StockUnit.APPLICATIONS
+                                                }
+                                                selectedUnitName = unitForMode.name
+                                                contentsPerPackageStr = defaultContentsPerPackageStr(selectedForm, selectedPackageType, unitForMode)
+                                            },
+                                            label = { Text(modeOpt.displayName) }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Usable Contents per Package (Never guessed from ml!)
+                            if (!(selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.TUBE_COUNT_ONLY)) {
+                                val pkgSingular = selectedPackageType.displayName.lowercase()
+                                val contentsLabel = when {
+                                    selectedPackageType == PackageType.BOX_SINGLE_DOSE -> "Containers per box *"
+                                    selectedForm == MedicationForm.DROPS && selectedPackageType == PackageType.BOTTLE -> "Usable drops per bottle (leaflet/estimate) *"
+                                    selectedForm == MedicationForm.TOPICAL_CREAM && gelMode == GelTrackingMode.GRAMS -> "Grams per $pkgSingular *"
+                                    selectedForm == MedicationForm.TOPICAL_CREAM -> "Estimated applications per $pkgSingular *"
+                                    else -> "Usable ${selectedUnit.abbreviation} per $pkgSingular *"
+                                }
+                                OutlinedTextField(
+                                    value = contentsPerPackageStr,
+                                    onValueChange = { contentsPerPackageStr = it },
+                                    label = { Text(contentsLabel) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                if (selectedForm == MedicationForm.DROPS && selectedPackageType == PackageType.BOTTLE) {
+                                    Text(
+                                        text = "Nuvilo never converts ml to drops automatically because bottle droppers vary.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (selectedPackageType == PackageType.BOTTLE || selectedPackageType == PackageType.TUBE || selectedPackageType == PackageType.JAR) {
+                                OutlinedTextField(
+                                    value = discardAfterOpeningDaysStr,
+                                    onValueChange = { discardAfterOpeningDaysStr = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Discard After Opening (days, optional)") },
+                                    placeholder = { Text("e.g. 28 for eye drops") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
 
                             Text(
@@ -646,7 +934,10 @@ fun AddMedicationDialog(
                                                 shape = CircleShape
                                             )
                                             .clickable(
-                                                onClick = { selectedColorHex = hex },
+                                                onClick = {
+                                                    nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                                    selectedColorHex = hex
+                                                },
                                                 onClickLabel = "Select $label color tag"
                                             ),
                                         contentAlignment = Alignment.Center
@@ -667,18 +958,103 @@ fun AddMedicationDialog(
                                 value = notes,
                                 onValueChange = { notes = it },
                                 label = { Text("Clinical Notes (Optional)") },
-                                placeholder = { Text("e.g. Prescribed for blood pressure") },
+                                placeholder = { Text("e.g. Wait 5 mins before other drops") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
                         }
 
                         1 -> {
+                            // Ophthalmic Administration Controls when form == DROPS
+                            if (selectedForm == MedicationForm.DROPS) {
+                                Text(
+                                    text = "Treated Eye(s)",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    listOf(
+                                        AdministrationSite.LEFT_EYE,
+                                        AdministrationSite.RIGHT_EYE,
+                                        AdministrationSite.BOTH_EYES,
+                                        AdministrationSite.CUSTOM
+                                    ).forEach { siteOpt ->
+                                        FilterChip(
+                                            selected = eyeSite == siteOpt,
+                                            onClick = {
+                                                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                                eyeSiteName = siteOpt.name
+                                            },
+                                            label = { Text(siteOpt.displayName) }
+                                        )
+                                    }
+                                }
+
+                                if (isSingleDoseEyeOrLiquid) {
+                                    OutlinedTextField(
+                                        value = containersPerDoseStr,
+                                        onValueChange = { containersPerDoseStr = it },
+                                        label = { Text("Single-Dose Containers Used Per Administration *") },
+                                        supportingText = {
+                                            Text("Treated eyes (${eyeSite.displayName}) are recorded separately from container count (e.g. 1 vial used for both eyes).")
+                                        },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else if (eyeSite == AdministrationSite.BOTH_EYES) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = leftEyeDropsStr,
+                                            onValueChange = { leftEyeDropsStr = it },
+                                            label = { Text("Left Eye (drops)") },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        OutlinedTextField(
+                                            value = rightEyeDropsStr,
+                                            onValueChange = { rightEyeDropsStr = it },
+                                            label = { Text("Right Eye (drops)") },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                } else if (eyeSite == AdministrationSite.LEFT_EYE) {
+                                    OutlinedTextField(
+                                        value = leftEyeDropsStr,
+                                        onValueChange = { leftEyeDropsStr = it },
+                                        label = { Text("Drops in Left Eye") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else if (eyeSite == AdministrationSite.RIGHT_EYE) {
+                                    OutlinedTextField(
+                                        value = rightEyeDropsStr,
+                                        onValueChange = { rightEyeDropsStr = it },
+                                        label = { Text("Drops in Right Eye") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+
                             ScheduleConfigurationContent(
                                 isSpecificWeekdays = isSpecificWeekdays,
                                 onScheduleModeChange = { isSpecificWeekdays = it },
                                 selectedDaysOfWeek = selectedDaysList.toSet(),
                                 onToggleDayOfWeek = { day ->
+                                    nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                                     selectedDaysList = if (selectedDaysList.contains(day)) {
                                         if (selectedDaysList.size > 1) selectedDaysList - day else selectedDaysList
                                     } else {
@@ -687,14 +1063,18 @@ fun AddMedicationDialog(
                                 },
                                 selectedTimesMinuteOfDay = selectedTimesList,
                                 onToggleTimeMinuteOfDay = { timeMin ->
+                                    nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                                     selectedTimesList = if (selectedTimesList.contains(timeMin)) {
                                         if (selectedTimesList.size > 1) selectedTimesList - timeMin else selectedTimesList
                                     } else {
                                         (selectedTimesList + timeMin).sorted()
                                     }
                                 },
-                                doseQuantityStr = doseQuantity,
-                                onDoseQuantityChange = { doseQuantity = it },
+                                doseQuantityStr = computedDoseQtyStr,
+                                onDoseQuantityChange = { newQty ->
+                                    doseQuantity = newQty
+                                    if (isSingleDoseEyeOrLiquid) containersPerDoseStr = newQty
+                                },
                                 stockUnit = selectedUnit,
                                 instructions = instructions,
                                 onInstructionsChange = { instructions = it }
@@ -708,50 +1088,26 @@ fun AddMedicationDialog(
 
                             RecordingModeSelectorCard(
                                 selectedMode = selectedMode,
-                                onSelectMode = { selectedModeName = it.name }
+                                onSelectMode = {
+                                    nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                    selectedModeName = it.name
+                                }
                             )
                         }
 
                         else -> {
-                            if (selectedForm.isEstimatedConsumption) {
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = semantic.warningContainer),
-                                    border = BorderStroke(1.dp, semantic.warningBorder),
-                                    shape = NoveloCardShape
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Inventory2,
-                                            contentDescription = null,
-                                            tint = semantic.warning,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            text = "${selectedForm.displayName} supplies are tracked as ESTIMATED balances because physical actuation/application volume can vary.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = semantic.warning
-                                        )
-                                    }
-                                }
-                            }
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 OutlinedTextField(
-                                    value = openingStock,
-                                    onValueChange = { openingStock = it },
-                                    label = { Text("Opening Stock (${selectedUnit.abbreviation})") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    value = initialPackagesCountStr,
+                                    onValueChange = { initialPackagesCountStr = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Initial ${selectedPackageType.pluralName}") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.weight(1f),
                                     singleLine = true
                                 )
-
                                 OutlinedTextField(
                                     value = lowStockThreshold,
                                     onValueChange = { lowStockThreshold = it },
@@ -762,7 +1118,86 @@ fun AddMedicationDialog(
                                 )
                             }
 
-                            // Regimen Review Summary Card
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = lowStockDaysThresholdStr,
+                                    onValueChange = { lowStockDaysThresholdStr = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Alert Days Runway") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = expiryDaysAheadStr,
+                                    onValueChange = { expiryDaysAheadStr = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("Expiry (days, opt)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = lotNumberStr,
+                                onValueChange = { lotNumberStr = it },
+                                label = { Text("Batch / Lot Number (Optional)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            // Live Runway Preview Card
+                            val previewMed = Medication(
+                                id = "preview",
+                                name = name.ifBlank { "Medication" },
+                                strength = strength,
+                                form = selectedForm,
+                                stockUnit = selectedUnit,
+                                openingStock = computedTotalOpening,
+                                lowStockThreshold = runCatching { ScaledQuantity.fromDisplayString(lowStockThreshold) }.getOrDefault(ScaledQuantity.ofWhole(7)),
+                                lowStockDaysThreshold = lowStockDaysThresholdStr.toIntOrNull(),
+                                packagingConfig = packagingConfig,
+                                administrationProfile = administrationProfile
+                            )
+                            val previewDoseQty = runCatching { ScaledQuantity.fromDisplayString(computedDoseQtyStr) }.getOrDefault(ScaledQuantity.ofWhole(1))
+                            val previewSchedule = ScheduleDefinition(
+                                id = "sch-preview",
+                                medicationId = "preview",
+                                scheduleType = if (effectiveDays.isEmpty()) ScheduleType.DAILY else ScheduleType.SPECIFIC_WEEKDAYS,
+                                targetTimesMinuteOfDay = selectedTimesList,
+                                daysOfWeek = effectiveDays,
+                                doseQuantityPerOccurrence = previewDoseQty,
+                                startDateEpochDay = java.time.LocalDate.now().toEpochDay()
+                            )
+                            val perPkgQty = parsedContentsPerPkg ?: ScaledQuantity.ZERO
+                            val previewExpiryMs = expiryDaysAheadStr.toLongOrNull()?.takeIf { it > 0L }?.let {
+                                System.currentTimeMillis() + it * 86_400_000L
+                            }
+                            val previewLots = List(pkgCount) { index ->
+                                StockLot(
+                                    id = "lot-prev-$index",
+                                    medicationId = "preview",
+                                    lotNumber = lotNumberStr.trim().ifBlank { null },
+                                    expiryDateEpochMs = previewExpiryMs,
+                                    initialQuantity = perPkgQty,
+                                    remainingQuantity = perPkgQty,
+                                    unit = selectedUnit,
+                                    packageType = selectedPackageType,
+                                    packageLabel = "${selectedPackageType.displayName} #${index + 1}",
+                                    packageStatus = if (index == 0) PackageStatus.OPENED else PackageStatus.UNOPENED,
+                                    openedAtEpochMs = if (index == 0) System.currentTimeMillis() else null,
+                                    discardAfterOpeningDays = parsedDiscardDays
+                                )
+                            }
+                            val forecast = SupplyForecastCalculator().calculateSupplyForecast(
+                                medication = previewMed,
+                                schedules = listOf(previewSchedule),
+                                lots = previewLots,
+                                ledgerTotalUsable = computedTotalOpening
+                            )
+
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = NoveloCardShape,
@@ -775,30 +1210,50 @@ fun AddMedicationDialog(
                                     modifier = Modifier.padding(14.dp),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Regimen Summary",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        TrackingPrecisionBadge(precision = forecast.precision)
+                                    }
                                     Text(
-                                        text = "Regimen Summary",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "${name.ifBlank { "Unnamed Medication" }} · ${strength.ifBlank { "No strength" }} (${selectedForm.displayName})",
+                                        text = "${name.ifBlank { "Unnamed Medication" }} · ${strength.ifBlank { "No strength" }} (${selectedPackageType.displayName})",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    val timesSummary = selectedTimesList.sorted().joinToString(", ") { formatMinuteOfDay(it) }
-                                    val freqLabel = if (isSpecificWeekdays) "${effectiveDays.size} weekday(s)/week" else "Every day"
+                                    val pkgBreakdown = if (perPkgQty.isPositive()) {
+                                        "$pkgCount ${if (pkgCount == 1) selectedPackageType.displayName.lowercase() else selectedPackageType.pluralName.lowercase()} × ${perPkgQty.toDisplayString()} = ${computedTotalOpening.toDisplayString()} ${selectedUnit.abbreviation}"
+                                    } else {
+                                        "$pkgCount ${selectedPackageType.pluralName.lowercase()} tracked"
+                                    }
                                     Text(
-                                        text = "Schedule: $freqLabel at $timesSummary ($doseQuantity ${selectedUnit.abbreviation} per dose)",
+                                        text = pkgBreakdown,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                    val runwayStr = forecast.daysOfSupply?.let { "Expected supply runway: ~$it day(s)" }
+                                        ?: "Expected supply runway: Add a schedule & capacity to estimate"
                                     Text(
-                                        text = "Opening Ledger Balance: $openingStock ${selectedUnit.abbreviation} (Low-stock alert at $lowStockThreshold ${selectedUnit.abbreviation})",
+                                        text = runwayStr,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
+                                    if (parsedDiscardDays != null) {
+                                        Text(
+                                            text = "Opened pack safety rule: discard $parsedDiscardDays days after opening (Bottle #1 starts opened).",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = semantic.assumed
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -810,7 +1265,10 @@ fun AddMedicationDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (currentStep < 2) {
                     FilledTonalButton(
-                        onClick = { currentStep += 1 }
+                        onClick = {
+                            nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                            currentStep += 1
+                        }
                     ) {
                         Text("Next Step")
                     }
@@ -819,6 +1277,7 @@ fun AddMedicationDialog(
                     onClick = {
                         if (canSubmit) {
                             isSubmitting = true
+                            nuviloHaptics.perform(NuviloHapticEvent.RESTOCK_SAVED)
                             val notesCombined = buildString {
                                 if (notes.isNotBlank()) append(notes.trim())
                                 if (instructions.isNotBlank()) {
@@ -826,21 +1285,56 @@ fun AddMedicationDialog(
                                     append(instructions.trim())
                                 }
                             }
-                            onConfirm(
-                                name.trim(),
-                                strength.trim(),
-                                selectedForm,
-                                selectedUnit,
-                                openingStock.ifBlank { "0" },
-                                lowStockThreshold.ifBlank { "7" },
-                                selectedMode,
-                                selectedTimesList.sorted(),
-                                effectiveDays,
-                                doseQuantity.ifBlank { "1" },
-                                notesCombined,
-                                selectedColorHex,
-                                instructions.trim()
-                            )
+                            val openingStr = if (computedTotalOpening.isPositive()) {
+                                computedTotalOpening.toDisplayString()
+                            } else {
+                                openingStock.ifBlank { "0" }
+                            }
+                            val expiryEpochMs = expiryDaysAheadStr.toLongOrNull()?.takeIf { it > 0L }?.let {
+                                System.currentTimeMillis() + it * 86_400_000L
+                            }
+                            val thresholdDays = lowStockDaysThresholdStr.toIntOrNull()?.takeIf { it > 0 }
+                            val cleanedLot = lotNumberStr.trim().ifBlank { null }
+
+                            if (onConfirmWithPackaging != null) {
+                                onConfirmWithPackaging(
+                                    name.trim(),
+                                    strength.trim(),
+                                    selectedForm,
+                                    selectedUnit,
+                                    openingStr,
+                                    lowStockThreshold.ifBlank { "7" },
+                                    selectedMode,
+                                    selectedTimesList.sorted(),
+                                    effectiveDays,
+                                    computedDoseQtyStr,
+                                    notesCombined,
+                                    selectedColorHex,
+                                    instructions.trim(),
+                                    packagingConfig,
+                                    administrationProfile,
+                                    pkgCount,
+                                    thresholdDays,
+                                    expiryEpochMs,
+                                    cleanedLot
+                                )
+                            } else {
+                                onConfirm(
+                                    name.trim(),
+                                    strength.trim(),
+                                    selectedForm,
+                                    selectedUnit,
+                                    openingStr,
+                                    lowStockThreshold.ifBlank { "7" },
+                                    selectedMode,
+                                    selectedTimesList.sorted(),
+                                    effectiveDays,
+                                    computedDoseQtyStr,
+                                    notesCombined,
+                                    selectedColorHex,
+                                    instructions.trim()
+                                )
+                            }
                         }
                     },
                     enabled = canSubmit
@@ -852,7 +1346,10 @@ fun AddMedicationDialog(
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (currentStep > 0) {
-                    OutlinedButton(onClick = { currentStep -= 1 }) {
+                    OutlinedButton(onClick = {
+                        nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                        currentStep -= 1
+                    }) {
                         Text("Back")
                     }
                 }

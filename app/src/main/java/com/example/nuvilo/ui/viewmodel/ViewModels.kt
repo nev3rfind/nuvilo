@@ -25,11 +25,14 @@ import com.example.nuvilo.domain.adherence.DoseOutcomeFilter
 import com.example.nuvilo.domain.adherence.HistoryDateFilter
 import com.example.nuvilo.domain.adherence.MonthlyCalendarData
 import com.example.nuvilo.domain.adherence.ResolvedDoseOccurrence
+import com.example.nuvilo.domain.model.AdministrationProfile
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
+import com.example.nuvilo.domain.model.PackageType
+import com.example.nuvilo.domain.model.PackagingConfig
 import com.example.nuvilo.domain.model.Prescription
 import com.example.nuvilo.domain.model.PrescriptionEvent
 import com.example.nuvilo.domain.model.PrescriptionStatus
@@ -42,12 +45,19 @@ import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.domain.schedule.ScheduleOccurrenceCalculator
+import com.example.nuvilo.domain.stock.ConsumptionCalculator
+import com.example.nuvilo.domain.stock.OccurrenceConsumption
 import com.example.nuvilo.domain.stock.StockLedgerCalculator
+import com.example.nuvilo.domain.stock.SupplyForecast
+import com.example.nuvilo.domain.stock.SupplyForecastCalculator
 import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.security.BiometricStatus
 import com.example.nuvilo.security.LockGracePeriod
 import com.example.nuvilo.system.alarm.AlarmScheduler
+import com.example.nuvilo.system.notification.ChannelRuntimeDiagnostic
 import com.example.nuvilo.system.notification.NotificationHelper
+import com.example.nuvilo.system.notification.NuviloNotificationCategory
+import com.example.nuvilo.ui.haptics.HapticIntensity
 import java.io.ByteArrayInputStream
 import java.io.OutputStream
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,7 +80,9 @@ import java.util.UUID
 data class DashboardItem(
     val occurrence: DoseOccurrence,
     val medication: Medication,
-    val stockBalance: StockBalance?
+    val stockBalance: StockBalance?,
+    val consumption: OccurrenceConsumption? = null,
+    val supplyForecast: SupplyForecast? = null
 )
 
 data class DashboardUiState(
@@ -83,7 +95,14 @@ data class DashboardUiState(
     val takenDoses: Int = 0,
     val lowStockCount: Int = 0,
     val expiringPrescriptionsCount: Int = 0,
+    val discardWarningCount: Int = 0,
     val isLoading: Boolean = true
+)
+
+private data class DashboardStockBundle(
+    val movements: List<StockLedgerEntry>,
+    val lots: List<StockLot>,
+    val prescriptions: List<Prescription>
 )
 
 class DashboardViewModel(
@@ -93,11 +112,21 @@ class DashboardViewModel(
     private val prescriptionRepository: PrescriptionRepository? = null,
     private val alarmScheduler: AlarmScheduler? = null,
     private val scheduleCalculator: ScheduleOccurrenceCalculator = ScheduleOccurrenceCalculator(),
-    private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator()
+    private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator(),
+    private val consumptionCalculator: ConsumptionCalculator = ConsumptionCalculator(),
+    private val supplyForecastCalculator: SupplyForecastCalculator = SupplyForecastCalculator(consumptionCalculator)
 ) : ViewModel() {
 
     private val zoneId = ZoneId.systemDefault()
     private val today = LocalDate.now(zoneId)
+
+    private val stockBundleFlow = combine(
+        stockRepository.observeAllMovements(),
+        stockRepository.observeAllLots(),
+        prescriptionRepository?.observeAllPrescriptions() ?: flowOf(emptyList())
+    ) { movements, lots, prescriptions ->
+        DashboardStockBundle(movements, lots, prescriptions)
+    }
 
     val uiState: StateFlow<DashboardUiState> = combine(
         medicationRepository.observeActiveMedications(),
@@ -106,22 +135,28 @@ class DashboardViewModel(
             startEpochMs = today.atStartOfDay(zoneId).toInstant().toEpochMilli(),
             endEpochMs = today.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
         ),
-        stockRepository.observeAllMovements(),
-        prescriptionRepository?.observeAllPrescriptions() ?: flowOf(emptyList())
-    ) { medications, schedules, recordedDoses, movements, prescriptions ->
+        stockBundleFlow
+    ) { medications, schedules, recordedDoses, stockBundle ->
+        val movements = stockBundle.movements
+        val lots = stockBundle.lots
+        val prescriptions = stockBundle.prescriptions
+
         val medMap = medications.associateBy { it.id }
         val schedulesByMed = schedules.groupBy { it.medicationId }
         val movementsByMed = movements.groupBy { it.medicationId }
+        val lotsByMed = lots.groupBy { it.medicationId }
 
         val allPlanned = mutableListOf<DoseOccurrence>()
         for (med in medications) {
             val medSchedules = schedulesByMed[med.id].orEmpty()
             for (sch in medSchedules) {
+                val consumption = consumptionCalculator.calculateOccurrenceConsumption(med, sch)
+                val adjustedSchedule = sch.copy(doseQuantityPerOccurrence = consumption.quantity)
                 val occs = scheduleCalculator.generateOccurrencesForDate(
-                    schedule = sch,
+                    schedule = adjustedSchedule,
                     date = today,
                     zoneId = zoneId,
-                    unit = med.stockUnit
+                    unit = consumption.unit
                 )
                 allPlanned.addAll(occs)
             }
@@ -132,26 +167,46 @@ class DashboardViewModel(
             recordedEvents = recordedDoses
         )
 
-        var lowStockCount = 0
-        val items = reconciled.mapNotNull { occ ->
-            val med = medMap[occ.medicationId] ?: return@mapNotNull null
+        val nowMs = System.currentTimeMillis()
+        val forecastByMed = medications.associate { med ->
             val medMovements = movementsByMed[med.id].orEmpty()
             val hasOpening = medMovements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
-            val balance = stockCalculator.calculateBalance(
+            val rawBalance = stockCalculator.calculateBalance(
                 openingStock = baseOpening,
-                openingUnit = med.stockUnit,
+                openingUnit = med.effectiveConsumptionUnit,
                 movements = medMovements,
                 lowStockThreshold = med.lowStockThreshold,
                 isEstimatedConsumption = med.form.isEstimatedConsumption
             )
-            if (balance.isLowStock) {
-                lowStockCount++
-            }
+            val forecast = supplyForecastCalculator.calculateSupplyForecast(
+                medication = med,
+                schedules = schedulesByMed[med.id].orEmpty(),
+                lots = lotsByMed[med.id].orEmpty(),
+                ledgerTotalUsable = rawBalance.currentBalance,
+                nowEpochMs = nowMs,
+                zoneId = zoneId
+            )
+            med.id to (rawBalance.copy(
+                daysRemaining = forecast.daysOfSupply ?: rawBalance.daysRemaining,
+                isLowStock = forecast.isLowStock || rawBalance.isLowStock
+            ) to forecast)
+        }
+
+        val lowStockCount = forecastByMed.values.count { (bal, fc) -> fc.isLowStock || bal.isLowStock }
+        val discardWarningCount = forecastByMed.values.count { (_, fc) -> fc.needsAttentionForExpiredOrOpenLimit }
+
+        val items = reconciled.mapNotNull { occ ->
+            val med = medMap[occ.medicationId] ?: return@mapNotNull null
+            val primarySchedule = schedulesByMed[med.id].orEmpty().firstOrNull()
+            val consumption = consumptionCalculator.calculateOccurrenceConsumption(med, primarySchedule)
+            val pair = forecastByMed[med.id]
             DashboardItem(
                 occurrence = occ,
                 medication = med,
-                stockBalance = balance
+                stockBalance = pair?.first,
+                consumption = consumption,
+                supplyForecast = pair?.second
             )
         }.sortedBy { it.occurrence.scheduledEpochMs }
 
@@ -188,6 +243,7 @@ class DashboardViewModel(
             takenDoses = takenCount,
             lowStockCount = lowStockCount,
             expiringPrescriptionsCount = expiringRxCount,
+            discardWarningCount = discardWarningCount,
             isLoading = false
         )
     }.stateIn(
@@ -242,7 +298,8 @@ data class MedicationListItem(
     val medication: Medication,
     val stockBalance: StockBalance?,
     val schedules: List<ScheduleDefinition> = emptyList(),
-    val pendingPrescription: Prescription? = null
+    val pendingPrescription: Prescription? = null,
+    val supplyForecast: SupplyForecast? = null
 )
 
 data class MedicationListUiState(
@@ -256,23 +313,29 @@ class MedicationViewModel(
     private val stockRepository: StockRepository,
     private val prescriptionRepository: PrescriptionRepository? = null,
     private val alarmScheduler: AlarmScheduler? = null,
-    private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator()
+    private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator(),
+    private val supplyForecastCalculator: SupplyForecastCalculator = SupplyForecastCalculator()
 ) : ViewModel() {
 
     val uiState: StateFlow<MedicationListUiState> = combine(
         medicationRepository.observeAllMedications(),
         medicationRepository.observeAllSchedules(),
         stockRepository.observeAllMovements(),
-        prescriptionRepository?.observeAllPrescriptions() ?: kotlinx.coroutines.flow.flowOf(emptyList())
-    ) { allMeds, allSchedules, movements, allPrescriptions ->
+        stockRepository.observeAllLots(),
+        prescriptionRepository?.observeAllPrescriptions() ?: flowOf(emptyList())
+    ) { allMeds, allSchedules, movements, allLots, allPrescriptions ->
         val movementsByMed = movements.groupBy { it.medicationId }
         val schedulesByMed = allSchedules.groupBy { it.medicationId }
+        val lotsByMed = allLots.groupBy { it.medicationId }
         val prescriptionsByMed = allPrescriptions.groupBy { it.medicationId }
         val todayEpochDay = LocalDate.now().toEpochDay()
+        val nowMs = System.currentTimeMillis()
+        val zoneId = ZoneId.systemDefault()
 
         fun buildItem(med: Medication): MedicationListItem {
             val medMovements = movementsByMed[med.id].orEmpty()
             val medSchedules = schedulesByMed[med.id].orEmpty()
+            val medLots = lotsByMed[med.id].orEmpty()
 
             var dailyConsumptionRaw = 0L
             for (sch in medSchedules) {
@@ -292,13 +355,25 @@ class MedicationViewModel(
 
             val hasOpening = medMovements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
-            val balance = stockCalculator.calculateBalance(
+            val rawBalance = stockCalculator.calculateBalance(
                 openingStock = baseOpening,
-                openingUnit = med.stockUnit,
+                openingUnit = med.effectiveConsumptionUnit,
                 movements = medMovements,
                 lowStockThreshold = med.lowStockThreshold,
                 dailyConsumptionRate = dailyRate,
                 isEstimatedConsumption = med.form.isEstimatedConsumption
+            )
+            val forecast = supplyForecastCalculator.calculateSupplyForecast(
+                medication = med,
+                schedules = medSchedules,
+                lots = medLots,
+                ledgerTotalUsable = rawBalance.currentBalance,
+                nowEpochMs = nowMs,
+                zoneId = zoneId
+            )
+            val balance = rawBalance.copy(
+                daysRemaining = forecast.daysOfSupply ?: rawBalance.daysRemaining,
+                isLowStock = forecast.isLowStock || rawBalance.isLowStock
             )
             val medRxs = prescriptionsByMed[med.id].orEmpty()
             val pendingRx = medRxs.firstOrNull {
@@ -308,7 +383,8 @@ class MedicationViewModel(
                 medication = med,
                 stockBalance = balance,
                 schedules = medSchedules,
-                pendingPrescription = pendingRx
+                pendingPrescription = pendingRx,
+                supplyForecast = forecast
             )
         }
 
@@ -376,6 +452,111 @@ class MedicationViewModel(
         }
     }
 
+    fun createMedicationWithPackages(
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        openingStockStr: String,
+        lowStockThresholdStr: String,
+        recordingMode: RecordingMode,
+        targetTimesMinuteOfDay: List<Int>,
+        daysOfWeek: Set<Int>,
+        doseQuantityStr: String,
+        notes: String = "",
+        colorTagHex: String = "#005EB8",
+        instructions: String = "",
+        packagingConfig: PackagingConfig? = null,
+        administrationProfile: AdministrationProfile = AdministrationProfile(),
+        initialPackagesCount: Int = 1,
+        lowStockDaysThreshold: Int? = null,
+        expiryDateEpochMs: Long? = null,
+        lotNumber: String? = null
+    ) {
+        viewModelScope.launch {
+            val medId = UUID.randomUUID().toString()
+            val opening = runCatching { ScaledQuantity.fromDisplayString(openingStockStr) }
+                .getOrDefault(ScaledQuantity.ZERO)
+            val threshold = runCatching { ScaledQuantity.fromDisplayString(lowStockThresholdStr) }
+                .getOrDefault(ScaledQuantity.ofWhole(7))
+            val doseQuantity = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }
+                .getOrDefault(ScaledQuantity.ofWhole(1))
+            val effectiveUnit = packagingConfig?.consumptionUnit ?: unit
+
+            val totalOpening = if (packagingConfig?.contentsPerPackage != null && initialPackagesCount > 0) {
+                ScaledQuantity(packagingConfig.contentsPerPackage.rawScaledValue * initialPackagesCount.toLong())
+            } else {
+                opening
+            }
+
+            val medication = Medication(
+                id = medId,
+                name = name.trim(),
+                strength = strength.trim(),
+                form = form,
+                stockUnit = effectiveUnit,
+                openingStock = totalOpening,
+                lowStockThreshold = threshold,
+                lowStockDaysThreshold = lowStockDaysThreshold,
+                recordingMode = recordingMode,
+                notes = notes.trim(),
+                colorTagHex = colorTagHex,
+                packagingConfig = packagingConfig,
+                administrationProfile = administrationProfile
+            )
+
+            val schedule = ScheduleDefinition(
+                id = UUID.randomUUID().toString(),
+                medicationId = medId,
+                scheduleType = if (daysOfWeek.isEmpty()) ScheduleType.DAILY else ScheduleType.SPECIFIC_WEEKDAYS,
+                targetTimesMinuteOfDay = targetTimesMinuteOfDay.sorted(),
+                daysOfWeek = daysOfWeek,
+                doseQuantityPerOccurrence = doseQuantity,
+                startDateEpochDay = LocalDate.now().toEpochDay(),
+                instructions = instructions.trim()
+            )
+
+            if (packagingConfig != null) {
+                medicationRepository.createMedicationWithPackages(
+                    medication = medication,
+                    initialSchedule = schedule,
+                    initialPackagesCount = initialPackagesCount.coerceAtLeast(1),
+                    expiryDateEpochMs = expiryDateEpochMs,
+                    lotNumber = lotNumber
+                )
+            } else {
+                medicationRepository.createMedication(medication, schedule)
+            }
+            alarmScheduler?.reconcileUpcomingReminders()
+        }
+    }
+
+    fun restockPackages(
+        medicationId: String,
+        packageCount: Int,
+        contentsPerPackage: ScaledQuantity,
+        consumptionUnit: StockUnit,
+        packageType: PackageType,
+        discardAfterOpeningDays: Int? = null,
+        lotNumber: String? = null,
+        expiryDateEpochMs: Long? = null,
+        notes: String? = null
+    ) {
+        viewModelScope.launch {
+            stockRepository.restockPackages(
+                medicationId = medicationId,
+                packageCount = packageCount,
+                contentsPerPackage = contentsPerPackage,
+                consumptionUnit = consumptionUnit,
+                packageType = packageType,
+                discardAfterOpeningDays = discardAfterOpeningDays,
+                lotNumber = lotNumber,
+                expiryDateEpochMs = expiryDateEpochMs,
+                notes = notes
+            )
+        }
+    }
+
     fun setArchived(medicationId: String, archived: Boolean) {
         viewModelScope.launch {
             medicationRepository.setArchived(medicationId, archived)
@@ -408,6 +589,7 @@ data class MedicationDetailUiState(
     val medication: Medication? = null,
     val schedules: List<ScheduleDefinition> = emptyList(),
     val stockBalance: StockBalance? = null,
+    val supplyForecast: SupplyForecast? = null,
     val lots: List<StockLot> = emptyList(),
     val recentDoses: List<DoseOccurrence> = emptyList(),
     val recentMovements: List<StockLedgerEntry> = emptyList(),
@@ -445,7 +627,8 @@ class MedicationDetailViewModel(
     private val prescriptionRepository: PrescriptionRepository? = null,
     private val alarmScheduler: AlarmScheduler? = null,
     private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator(),
-    private val adherenceCalculator: AdherenceCalculator = AdherenceCalculator()
+    private val adherenceCalculator: AdherenceCalculator = AdherenceCalculator(),
+    private val supplyForecastCalculator: SupplyForecastCalculator = SupplyForecastCalculator()
 ) : ViewModel() {
 
     private val zoneId = ZoneId.systemDefault()
@@ -507,9 +690,9 @@ class MedicationDetailViewModel(
             val hasOpening = core.movements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
 
-            val balance = stockCalculator.calculateBalance(
+            val rawBalance = stockCalculator.calculateBalance(
                 openingStock = baseOpening,
-                openingUnit = med.stockUnit,
+                openingUnit = med.effectiveConsumptionUnit,
                 movements = core.movements,
                 lowStockThreshold = med.lowStockThreshold,
                 dailyConsumptionRate = dailyRate,
@@ -517,6 +700,19 @@ class MedicationDetailViewModel(
             )
 
             val nowMs = System.currentTimeMillis()
+            val supplyForecast = supplyForecastCalculator.calculateSupplyForecast(
+                medication = med,
+                schedules = medSchedules,
+                lots = core.lots,
+                ledgerTotalUsable = rawBalance.currentBalance,
+                nowEpochMs = nowMs,
+                zoneId = zoneId
+            )
+            val balance = rawBalance.copy(
+                daysRemaining = supplyForecast.daysOfSupply ?: rawBalance.daysRemaining,
+                isLowStock = supplyForecast.isLowStock || rawBalance.isLowStock
+            )
+
             val today = LocalDate.now(zoneId)
             val fullHistory = adherenceCalculator.buildMedicationDoseHistory(
                 medication = med,
@@ -543,6 +739,7 @@ class MedicationDetailViewModel(
                 medication = med,
                 schedules = medSchedules,
                 stockBalance = balance,
+                supplyForecast = supplyForecast,
                 lots = core.lots,
                 recentDoses = core.doses.take(20),
                 recentMovements = core.movements.reversed().take(20),
@@ -636,6 +833,111 @@ class MedicationDetailViewModel(
                 _actionSuccessMessage.value = "Stock adjusted to ${targetBalance.toDisplayString()} ${unit.abbreviation}"
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to adjust stock"
+            }
+        }
+    }
+
+    fun restockPackages(
+        packageCount: Int,
+        contentsPerPackage: ScaledQuantity,
+        consumptionUnit: StockUnit,
+        packageType: PackageType,
+        discardAfterOpeningDays: Int? = null,
+        lotNumber: String? = null,
+        expiryDateEpochMs: Long? = null,
+        notes: String? = null
+    ) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.restockPackages(
+                medicationId = medicationId,
+                packageCount = packageCount,
+                contentsPerPackage = contentsPerPackage,
+                consumptionUnit = consumptionUnit,
+                packageType = packageType,
+                discardAfterOpeningDays = discardAfterOpeningDays,
+                lotNumber = lotNumber,
+                expiryDateEpochMs = expiryDateEpochMs,
+                notes = notes
+            )
+            if (result.isSuccess) {
+                val totalAdded = ScaledQuantity(contentsPerPackage.rawScaledValue * packageCount.toLong())
+                _actionSuccessMessage.value = "Added $packageCount ${packageType.pluralName.lowercase()} (${totalAdded.toDisplayString()} ${consumptionUnit.abbreviation})"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to add packages"
+            }
+        }
+    }
+
+    fun openPackage(lotId: String) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.openPackage(lotId)
+            if (result.isSuccess) {
+                val label = result.getOrNull()?.packageLabel ?: "Package"
+                _actionSuccessMessage.value = "$label opened and active for dosing"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Unable to open package"
+            }
+        }
+    }
+
+    fun discardPackage(lotId: String, reason: String) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.discardPackage(lotId, reason)
+            if (result.isSuccess) {
+                val label = result.getOrNull()?.packageLabel ?: "Package"
+                _actionSuccessMessage.value = "$label discarded (wastage logged in ledger)"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to discard package"
+            }
+        }
+    }
+
+    fun recountOpenedPackage(
+        lotId: String,
+        observedRemaining: ScaledQuantity,
+        reason: String
+    ) {
+        viewModelScope.launch {
+            val state = awaitLoadedState()
+            val unit = state.medication?.effectiveConsumptionUnit ?: StockUnit.TABLETS
+            val result = stockRepository.recountOpenedPackage(
+                lotId = lotId,
+                observedRemaining = observedRemaining,
+                reason = reason
+            )
+            if (result.isSuccess) {
+                _actionSuccessMessage.value = "Opened package updated to ${observedRemaining.toDisplayString()} ${unit.abbreviation}"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to recount opened package"
+            }
+        }
+    }
+
+    fun updatePackageDetails(
+        lotId: String,
+        packageLabel: String?,
+        lotNumber: String?,
+        expiryDateEpochMs: Long?,
+        discardAfterOpeningDays: Int?,
+        notes: String?
+    ) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.updatePackageDetails(
+                lotId = lotId,
+                packageLabel = packageLabel,
+                lotNumber = lotNumber,
+                expiryDateEpochMs = expiryDateEpochMs,
+                discardAfterOpeningDays = discardAfterOpeningDays,
+                notes = notes
+            )
+            if (result.isSuccess) {
+                _actionSuccessMessage.value = "Package details updated"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to update package details"
             }
         }
     }
@@ -810,7 +1112,10 @@ class MedicationDetailViewModel(
         lowStockThresholdStr: String,
         recordingMode: RecordingMode,
         notes: String,
-        colorTagHex: String
+        colorTagHex: String,
+        packagingConfig: PackagingConfig? = null,
+        administrationProfile: AdministrationProfile? = null,
+        lowStockDaysThreshold: Int? = null
     ) {
         viewModelScope.launch {
             val current = uiState.value.medication ?: return@launch
@@ -820,11 +1125,14 @@ class MedicationDetailViewModel(
                 name = name.trim(),
                 strength = strength.trim(),
                 form = form,
-                stockUnit = unit,
+                stockUnit = packagingConfig?.consumptionUnit ?: unit,
                 lowStockThreshold = threshold,
+                lowStockDaysThreshold = lowStockDaysThreshold ?: current.lowStockDaysThreshold,
                 recordingMode = recordingMode,
                 notes = notes.trim(),
-                colorTagHex = colorTagHex
+                colorTagHex = colorTagHex,
+                packagingConfig = packagingConfig ?: current.packagingConfig,
+                administrationProfile = administrationProfile ?: current.administrationProfile
             )
             val result = medicationRepository.updateMedication(updated)
             if (result.isSuccess) {
@@ -1122,8 +1430,38 @@ class SettingsViewModel(
         }
     }
 
-    fun triggerTestNotification() {
-        notificationHelper?.showTestNotification()
+    fun setHapticsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setHapticsEnabled(enabled)
+        }
+    }
+
+    fun setHapticIntensity(intensity: HapticIntensity) {
+        viewModelScope.launch {
+            preferencesRepository.setHapticIntensity(intensity)
+        }
+    }
+
+    fun setCategorySoundEnabled(category: NuviloNotificationCategory, enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setCategorySoundEnabled(category, enabled)
+        }
+    }
+
+    fun setCategoryVibrationEnabled(category: NuviloNotificationCategory, enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setCategoryVibrationEnabled(category, enabled)
+        }
+    }
+
+    fun getChannelDiagnostics(prefs: UserPreferences): List<ChannelRuntimeDiagnostic> =
+        notificationHelper?.getChannelDiagnostics(prefs) ?: emptyList()
+
+    fun buildChannelSettingsIntent(channelId: String) =
+        notificationHelper?.buildChannelSettingsIntent(channelId)
+
+    fun triggerTestNotification(category: NuviloNotificationCategory = NuviloNotificationCategory.MEDICATION_REMINDERS) {
+        notificationHelper?.showTestNotification(category)
     }
 
     fun reconcileReminders() {
@@ -1262,7 +1600,9 @@ class ViewModelFactory(
                     prescriptionRepository = appContainer.repository,
                     alarmScheduler = appContainer.alarmScheduler,
                     scheduleCalculator = appContainer.scheduleCalculator,
-                    stockCalculator = appContainer.stockCalculator
+                    stockCalculator = appContainer.stockCalculator,
+                    consumptionCalculator = appContainer.consumptionCalculator,
+                    supplyForecastCalculator = appContainer.supplyForecastCalculator
                 ) as T
             }
             modelClass.isAssignableFrom(MedicationViewModel::class.java) -> {
@@ -1271,7 +1611,8 @@ class ViewModelFactory(
                     stockRepository = appContainer.repository,
                     prescriptionRepository = appContainer.repository,
                     alarmScheduler = appContainer.alarmScheduler,
-                    stockCalculator = appContainer.stockCalculator
+                    stockCalculator = appContainer.stockCalculator,
+                    supplyForecastCalculator = appContainer.supplyForecastCalculator
                 ) as T
             }
             modelClass.isAssignableFrom(SettingsViewModel::class.java) -> {
@@ -1304,7 +1645,8 @@ class ViewModelFactory(
             prescriptionRepository = appContainer.repository,
             alarmScheduler = appContainer.alarmScheduler,
             stockCalculator = appContainer.stockCalculator,
-            adherenceCalculator = appContainer.adherenceCalculator
+            adherenceCalculator = appContainer.adherenceCalculator,
+            supplyForecastCalculator = appContainer.supplyForecastCalculator
         )
     }
 }

@@ -49,6 +49,9 @@ import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.security.BiometricAuthResult
 import com.example.nuvilo.security.BiometricStatus
 import com.example.nuvilo.system.notification.NotificationHelper
+import com.example.nuvilo.ui.haptics.AndroidNuviloHapticController
+import com.example.nuvilo.ui.haptics.HapticSettings
+import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
 import com.example.nuvilo.ui.screens.AdherenceCalendarScreen
 import com.example.nuvilo.ui.screens.DashboardScreen
 import com.example.nuvilo.ui.screens.LockScreen
@@ -139,33 +142,51 @@ class MainActivity : FragmentActivity() {
                 }
             }
 
-            NoveloTheme(darkTheme = darkTheme) {
-                AnimatedContent(
-                    targetState = showSplashScreen,
-                    transitionSpec = { NoveloMotion.screenTransition() },
-                    label = "splashAppTransition"
-                ) { isSplash ->
-                    if (isSplash) {
-                        SplashScreen(
-                            onSplashComplete = { showSplashScreen = false }
+            val composeHapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
+            val hapticController = remember(prefs.hapticsEnabled, prefs.hapticIntensity, composeHapticFeedback) {
+                AndroidNuviloHapticController(
+                    context = applicationContext,
+                    settingsProvider = {
+                        HapticSettings(
+                            enabled = prefs.hapticsEnabled,
+                            intensity = prefs.hapticIntensity
                         )
-                    } else if (prefs.isBiometricLockEnabled && isLocked) {
-                        val bioStatus = remember(isLocked) { biometricAuthManager.checkBiometricStatus() }
-                        LockScreen(
-                            biometricStatus = bioStatus,
-                            errorMessage = authErrorMessageState.value,
-                            onUnlockClick = { triggerBiometricPrompt() }
-                        )
-                    } else {
-                        NoveloMainContent(
-                            dashboardViewModel = dashboardViewModel,
-                            medicationViewModel = medicationViewModel,
-                            adherenceCalendarViewModel = adherenceCalendarViewModel,
-                            settingsViewModel = settingsViewModel,
-                            viewModelFactory = viewModelFactory,
-                            intentMedicationId = intentMedicationIdState.value,
-                            onConsumeIntentMedicationId = { intentMedicationIdState.value = null }
-                        )
+                    },
+                    composeFallback = composeHapticFeedback
+                )
+            }
+
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalNuviloHaptics provides hapticController
+            ) {
+                NoveloTheme(darkTheme = darkTheme) {
+                    AnimatedContent(
+                        targetState = showSplashScreen,
+                        transitionSpec = { NoveloMotion.screenTransition() },
+                        label = "splashAppTransition"
+                    ) { isSplash ->
+                        if (isSplash) {
+                            SplashScreen(
+                                onSplashComplete = { showSplashScreen = false }
+                            )
+                        } else if (prefs.isBiometricLockEnabled && isLocked) {
+                            val bioStatus = remember(isLocked) { biometricAuthManager.checkBiometricStatus() }
+                            LockScreen(
+                                biometricStatus = bioStatus,
+                                errorMessage = authErrorMessageState.value,
+                                onUnlockClick = { triggerBiometricPrompt() }
+                            )
+                        } else {
+                            NoveloMainContent(
+                                dashboardViewModel = dashboardViewModel,
+                                medicationViewModel = medicationViewModel,
+                                adherenceCalendarViewModel = adherenceCalendarViewModel,
+                                settingsViewModel = settingsViewModel,
+                                viewModelFactory = viewModelFactory,
+                                intentMedicationId = intentMedicationIdState.value,
+                                onConsumeIntentMedicationId = { intentMedicationIdState.value = null }
+                            )
+                        }
                     }
                 }
             }

@@ -94,8 +94,16 @@ class ConsumptionCalculator {
     fun calculateOccurrenceConsumption(
         medication: Medication,
         schedule: ScheduleDefinition?
+    ): OccurrenceConsumption = calculateOccurrenceConsumption(
+        medication = medication,
+        baseScheduleQuantity = schedule?.doseQuantityPerOccurrence ?: ScaledQuantity.ofWhole(1)
+    )
+
+    fun calculateOccurrenceConsumption(
+        medication: Medication,
+        baseScheduleQuantity: ScaledQuantity
     ): OccurrenceConsumption {
-        val baseScheduleQty = schedule?.doseQuantityPerOccurrence ?: ScaledQuantity.ofWhole(1)
+        val baseScheduleQty = baseScheduleQuantity
         val unit = medication.effectiveConsumptionUnit
         val packaging = medication.packagingConfig
         val admin = medication.administrationProfile

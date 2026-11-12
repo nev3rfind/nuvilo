@@ -96,6 +96,7 @@ interface PrescriptionRepository {
 interface StockRepository {
     fun observeStockBalance(medication: Medication): Flow<StockBalance>
     fun observeLotsForMedication(medicationId: String): Flow<List<StockLot>>
+    fun observeAllLots(): Flow<List<StockLot>> = kotlinx.coroutines.flow.flowOf(emptyList())
     fun observeMovementsForMedication(medicationId: String): Flow<List<StockLedgerEntry>>
     fun observeAllMovements(): Flow<List<StockLedgerEntry>>
     suspend fun restock(
@@ -513,6 +514,9 @@ class NoveloRepositoryImpl(
 
     override fun observeLotsForMedication(medicationId: String): Flow<List<StockLot>> =
         stockLotDao.observeLotsForMedication(medicationId).map { list -> list.map { it.toDomain() } }
+
+    override fun observeAllLots(): Flow<List<StockLot>> =
+        stockLotDao.observeAllLots().map { list -> list.map { it.toDomain() } }
 
     override fun observeMovementsForMedication(medicationId: String): Flow<List<StockLedgerEntry>> =
         stockLedgerDao.observeMovementsForMedication(medicationId).map { list -> list.map { it.toDomain() } }

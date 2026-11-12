@@ -38,7 +38,7 @@ fun MedicationEntity.toDomain(): Medication {
     val parsedGelMode = gelTrackingMode?.let { runCatching { GelTrackingMode.valueOf(it) }.getOrNull() }
     val parsedSite = runCatching { AdministrationSite.valueOf(administrationSite) }.getOrDefault(AdministrationSite.NONE)
 
-    val pkgConfig = if (parsedPkgType != null || contentsPerPackageRaw != null || netContentLabel != null || discardAfterOpeningDays != null || parsedGelMode != null || parsedPrecision != TrackingPrecision.UNKNOWN) {
+    val pkgConfig = if (parsedPkgType != null || contentsPerPackageRaw != null || netContentLabel != null || discardAfterOpeningDays != null || parsedGelMode != null) {
         PackagingConfig(
             packageType = parsedPkgType ?: PackageType.CUSTOM,
             consumptionUnit = parsedUnit,
