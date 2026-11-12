@@ -4,20 +4,20 @@
 > **Package / Application ID**: `com.nuvilomed.app` (internal namespace: `com.example.nuvilo`)  
 > **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
 > **Active Branch**: `main` (Single source of truth; clean and in sync with `origin/main`)  
-> **Latest Verified Commit**: `5a1ef35`  
-> **Date**: 2026-11-09  
+> **Latest Verified Commit**: `5a1ef35` (Pre-merge main) / `feat/16-intelligent-medication-inventory` (Phase 9)  
+> **Date**: 2026-11-12  
 
 ---
 
 ## 1. Executive Summary & Repository State
 
-Nuvilo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. All development phases (**Phases 0 through 8**, **UI/UX Pro Max Stages 1 & 2**, **Bug Remediation**, and the **Pre-Merge 200+ Regression Suite**) have been completed, verified on physical/emulated Android 17 (API 37), and fast-forward merged directly into `main`.
+Nuvilo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. Development through **Phases 0 through 9** (including **Room Schema v4**, **Intelligent Real-World Packaging**, **Decoupled Consumption**, **Discrete FEFO Shelf-Life Simulation**, **Haptic-First Feedback**, **7 Notification Channels**, and the **Pre-Merge 200+ Regression Suite**) has been completed, verified on physical/emulated Android 17 (API 37).
 
 ### Active Branch & Git Cleanliness
-- **Branch**: `main`
-- **Working Tree**: Clean (`git status` reports 0 untracked / 0 unstaged files).
-- **Remote Synchronization**: Fully synchronized with `origin/main`.
-- **Merged Branches**: All topic branches (`chore/1-phase-07-release-hardening`, `feat/3-premium-ui-ux-overhaul`, `chore/5-uiux-pro-max-foundation`, `feat/6-uiux-pro-max-implementation`, `test/8-pre-merge-regression-200`) are 100% merged into `main`.
+- **Branch**: `feat/16-intelligent-medication-inventory` (Feature branch for Phase 9, Issue #16)
+- **Base Branch**: `main`
+- **Room Database Schema**: Version 4 (`MIGRATION_3_4`) with packaging and package lifecycle tracking.
+- **Backup Schema**: Version 4 (`BackupDataV4`) with bidirectional compatibility (v1, v2, v3, v4).
 
 ---
 
@@ -28,8 +28,8 @@ Before any PR, branch, or release claim, all quality gates must pass. As of comm
 | Quality Gate | Gradle Task | Target / Environment | Count / Result | Pass Rate | Status |
 | :--- | :--- | :--- | :---: | :---: | :---: |
 | **JVM Unit Tests** | `.\gradlew.bat testDebugUnitTest` | OpenJDK 21 (Android Studio JBR) | **136 / 136** | 100.0% | **PASSED** |
-| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest` | `emulator-5554` (Android 17 / API 37) | **151 / 151** | 100.0% | **PASSED** |
-| **Grand Total Automated Tests** | — | **JVM + Android Instrumentation** | **287 / 287** | **100.0%** | **PASSED** |
+| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest` | `emulator-5554` (Android 17 / API 37) | **159 / 159** | 100.0% | **PASSED** |
+| **Grand Total Automated Tests** | — | **JVM + Android Instrumentation** | **295 / 295** | **100.0%** | **PASSED** |
 | **Static Analysis / Lint** | `.\gradlew.bat lintDebug` | 119 active checks | **0 Errors** | 100.0% | **PASSED** |
 | **Release Build & Shrinking** | `.\gradlew.bat assembleRelease` | R8 Minification + ProGuard | APK Generated | Zero Issues | **PASSED** |
 
@@ -176,6 +176,8 @@ If tasked with continuing work, the following areas represent natural high-value
 | [`TESTING.md`](TESTING.md) | Testing strategy, instrumentation guides, and test execution commands. |
 | [`docs/testing/pre-merge/`](docs/testing/pre-merge/) | Pre-merge QA deliverables (`TEST_RESULTS.md`, `TEST_CASE_CATALOG.md`, `BUGS_FOUND.md`, `TEST_COVERAGE.md`). |
 | [`docs/ui-ux-audit/`](docs/ui-ux-audit/) | Complete Phase 8 & Stage 2 UI/UX audit, design system specs, and before/after screenshots. |
+| [`docs/phase9/`](docs/phase9/) | Phase 9 specifications and reports (`IMPLEMENTATION_REPORT.md`, `UX_VERIFICATION.md`, `KNOWN_LIMITATIONS.md`, `DOMAIN_MODEL_DESIGN.md`). |
+| [`docs/screenshots/phase9/`](docs/screenshots/phase9/) | 12 verified Phase 9 Light and Dark screenshots on Google Pixel 10 Pro (API 37). |
 | [`design-system/novelo/MASTER.md`](design-system/novelo/MASTER.md) | Master design system tokens, typography scales, and component specifications. |
 | [`website-handoff/`](website-handoff/) | Official website, Lovable master prompt, verified privacy policy specification, and visual asset suite. |
 | [`store-assets/google-play/`](store-assets/google-play/) | Google Play Store marketing campaign (phone/tablet screenshots, feature graphic, and Next.js editor project). |

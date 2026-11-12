@@ -140,11 +140,13 @@ Nuvilo enforces strict Android IPC security policies across all background recei
 - Every pending intent targets an explicit component (`Intent(context, TargetReceiver::class.java)`), preventing Intent Redirection and Intent Hijacking vulnerabilities.
 - Stable, deterministic request codes prevent pending intent collision across medication occurrences.
 
-### Notification Privacy Masking
+### Notification Privacy Masking & Granular Channels
 - When Notification Privacy Mode is enabled in settings (`isPrivacyModeEnabled = true`), Nuvilo masks sensitive health details:
   - **Masked Title**: `"Medication Reminder"` (replaces drug name).
   - **Masked Body**: `"It's time for your scheduled medication."` (replaces form, dosage, and stock balance).
 - This prevents shoulder-surfing disclosure and unauthorized viewing of sensitive treatments on the lock screen.
+- **7 Granular System Channels (`NotificationChannelRegistry`)**: Notifications are partitioned into 7 distinct system channels (`medication_reminders`, `urgent_dose_alerts`, `critical_low_stock`, `restock_followups`, `batch_expiry`, `refill_prescriptions`, `security_backups`). Medication reminders default to high importance with Silent · Vibrate, ensuring reminders reach the user in noisy environments without involuntary sound disclosure.
+- **Backup Data v4 Integrity**: Schema v4 encrypted exports maintain PBKDF2-HMAC-SHA256 (100,000 iterations) + AES-256-GCM authenticated encryption, rejecting corrupted or tampered payloads prior to SQLite ingestion.
 
 ---
 
