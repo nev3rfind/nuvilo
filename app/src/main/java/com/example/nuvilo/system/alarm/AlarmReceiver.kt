@@ -54,14 +54,21 @@ class AlarmReceiver : BroadcastReceiver() {
                     return@launch
                 }
 
+                val consumption = container.consumptionCalculator.calculateOccurrenceConsumption(
+                    medication = medication,
+                    baseScheduleQuantity = quantity
+                )
+                val effectiveQuantity = consumption.quantity
+                val effectiveUnit = consumption.unit
+
                 // If AUTO_ASSUME, record assumed dose adherence in database idempotently
                 if (recordingMode == RecordingMode.AUTO_ASSUME) {
                     container.repository.recordDose(
                         occurrenceId = occurrenceId,
                         medicationId = medicationId,
                         scheduledEpochMs = scheduledEpochMs,
-                        quantity = quantity,
-                        unit = unit,
+                        quantity = effectiveQuantity,
+                        unit = effectiveUnit,
                         status = DoseStatus.ASSUMED,
                         recordedEpochMs = scheduledEpochMs,
                         notes = "Assumed adherence recorded per schedule"
@@ -84,13 +91,15 @@ class AlarmReceiver : BroadcastReceiver() {
                     medicationName = medication.name,
                     medicationStrength = medication.strength,
                     scheduledEpochMs = scheduledEpochMs,
-                    doseQuantity = quantity,
-                    unit = unit,
+                    doseQuantity = effectiveQuantity,
+                    unit = effectiveUnit,
                     isPrivacyMasked = preferences.isNotificationPrivacyMasked,
                     stockBalance = stockBalance,
                     hasPendingOrder = hasPendingOrder,
                     pendingOrderQuantity = pendingOrderQuantity,
-                    pendingOrderNotes = pendingOrderNotes
+                    pendingOrderNotes = pendingOrderNotes,
+                    medication = medication,
+                    prefs = preferences
                 )
             } finally {
                 pendingResult?.finish()
