@@ -9,6 +9,8 @@ import com.example.nuvilo.data.mapper.toDomain
 import com.example.nuvilo.data.mapper.toEntity
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
+import com.example.nuvilo.domain.model.DepletionReason
+import com.example.nuvilo.domain.model.EarlyDepletionOutcome
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MovementType
 import com.example.nuvilo.domain.model.PackageStatus
@@ -17,6 +19,7 @@ import com.example.nuvilo.domain.model.Prescription
 import com.example.nuvilo.domain.model.PrescriptionEvent
 import com.example.nuvilo.domain.model.PrescriptionEventType
 import com.example.nuvilo.domain.model.PrescriptionStatus
+import com.example.nuvilo.domain.model.ReopenDepletionOutcome
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.ScheduleDefinition
 import com.example.nuvilo.domain.model.StockBalance
@@ -164,6 +167,35 @@ interface StockRepository {
         discardAfterOpeningDays: Int?,
         notes: String?
     ): Result<StockLot>
+
+    suspend fun depletePackage(
+        lotId: String,
+        reason: DepletionReason,
+        userNote: String? = null,
+        nowEpochMs: Long = System.currentTimeMillis()
+    ): Result<EarlyDepletionOutcome>
+
+    suspend fun depletePackage(
+        lotId: String,
+        reason: String,
+        userNote: String? = null,
+        nowEpochMs: Long = System.currentTimeMillis()
+    ): Result<EarlyDepletionOutcome>
+
+    suspend fun reopenDepletedPackage(
+        lotId: String,
+        reason: String = "Accidental package depletion reversal",
+        nowEpochMs: Long = System.currentTimeMillis()
+    ): Result<ReopenDepletionOutcome>
+
+    suspend fun getStagedNextPackage(
+        medicationId: String,
+        nowEpochMs: Long = System.currentTimeMillis()
+    ): StockLot?
+
+    fun observeStagedNextPackage(
+        medicationId: String
+    ): Flow<StockLot?>
 }
 
 class NoveloRepositoryImpl(
@@ -802,6 +834,90 @@ class NoveloRepositoryImpl(
             updated
         }
     }
+
+    override suspend fun depletePackage(
+        lotId: String,
+        reason: DepletionReason,
+        userNote: String?,
+        nowEpochMs: Long
+    ): Result<EarlyDepletionOutcome> = runCatching {
+        database.withTransaction {
+            val entity = stockLotDao.getLotById(lotId) ?: throw IllegalArgumentException("Package not found: $lotId")
+            val currentLot = entity.toDomain()
+            val allLots = stockLotDao.getLotsForMedication(currentLot.medicationId).map { it.toDomain() }
+
+            val outcome = stockCalculator.depletePackageEarly(
+                lot = currentLot,
+                reason = reason,
+                userNote = userNote,
+                availableLots = allLots,
+                nowEpochMs = nowEpochMs
+            )
+
+            stockLotDao.updateLot(outcome.depletedLot.toEntity())
+            outcome.compensatingEntry?.let { entry ->
+                stockLedgerDao.insertMovement(entry.toEntity())
+            }
+
+            outcome
+        }
+    }
+
+    override suspend fun depletePackage(
+        lotId: String,
+        reason: String,
+        userNote: String?,
+        nowEpochMs: Long
+    ): Result<EarlyDepletionOutcome> {
+        val parsedReason = DepletionReason.fromCodeOrName(reason)
+        return depletePackage(lotId, parsedReason, userNote, nowEpochMs)
+    }
+
+    override suspend fun reopenDepletedPackage(
+        lotId: String,
+        reason: String,
+        nowEpochMs: Long
+    ): Result<ReopenDepletionOutcome> = runCatching {
+        database.withTransaction {
+            val entity = stockLotDao.getLotById(lotId) ?: throw IllegalArgumentException("Package not found: $lotId")
+            val currentLot = entity.toDomain()
+
+            // Find the last WASTAGE movement for this lot
+            val movements = stockLedgerDao.getMovementsForMedication(currentLot.medicationId)
+            val depletionEntry = movements
+                .filter { it.lotId == lotId && it.movementType == MovementType.WASTAGE.name }
+                .maxByOrNull { it.timestampEpochMs }
+                ?.toDomain()
+
+            val outcome = stockCalculator.reopenDepletedPackage(
+                lot = currentLot,
+                depletionLedgerEntry = depletionEntry,
+                reason = reason,
+                nowEpochMs = nowEpochMs
+            )
+
+            stockLotDao.updateLot(outcome.reopenedLot.toEntity())
+            stockLedgerDao.insertMovement(outcome.reversalEntry.toEntity())
+
+            outcome
+        }
+    }
+
+    override suspend fun getStagedNextPackage(
+        medicationId: String,
+        nowEpochMs: Long
+    ): StockLot? {
+        val lots = stockLotDao.getLotsForMedication(medicationId).map { it.toDomain() }
+        return stockCalculator.findStagedNextPackage(lots, nowEpochMs)
+    }
+
+    override fun observeStagedNextPackage(
+        medicationId: String
+    ): Flow<StockLot?> =
+        stockLotDao.observeLotsForMedication(medicationId).map { entities ->
+            val lots = entities.map { it.toDomain() }
+            stockCalculator.findStagedNextPackage(lots)
+        }
 
     override fun observePrescriptionsForMedication(medicationId: String): Flow<List<Prescription>> =
         prescriptionDao.observePrescriptionsForMedication(medicationId).map { list -> list.map { it.toDomain() } }

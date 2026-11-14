@@ -99,6 +99,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.adherence.AdherenceSummary
 import com.example.nuvilo.domain.model.AdministrationProfile
 import com.example.nuvilo.domain.model.AdministrationSite
+import com.example.nuvilo.domain.model.DepletionReason
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.GelTrackingMode
@@ -164,6 +165,8 @@ fun MedicationDetailScreen(
     var showAdjustDialog by rememberSaveable { mutableStateOf(false) }
     var lotToRecount by remember { mutableStateOf<StockLot?>(null) }
     var lotToDiscard by remember { mutableStateOf<StockLot?>(null) }
+    var lotToDeplete by remember { mutableStateOf<StockLot?>(null) }
+    var lotToReopen by remember { mutableStateOf<StockLot?>(null) }
     var lotToEditDetails by remember { mutableStateOf<StockLot?>(null) }
     var showEditMedicationDialog by rememberSaveable { mutableStateOf(false) }
     var showEditScheduleDialog by rememberSaveable { mutableStateOf(false) }
@@ -301,6 +304,17 @@ fun MedicationDetailScreen(
                         val activeRx = uiState.prescriptions.firstOrNull {
                             it.effectiveStatus(todayEpochDay) == PrescriptionStatus.ACTIVE
                         } ?: uiState.prescriptions.firstOrNull()
+                        val activeOpenLot = uiState.supplyForecast?.activeOpenedPackage
+                            ?: uiState.lots.firstOrNull { it.packageStatus == PackageStatus.OPENED && it.remainingQuantity.isPositive() }
+                        val unopenedCount = uiState.lots.count { it.packageStatus == PackageStatus.UNOPENED && it.remainingQuantity.isPositive() }
+                        val educationalInsight = uiState.earlyDepletedLots.firstOrNull()?.let { depleted ->
+                            val pkgSingular = med.packagingConfig?.packageType?.displayName ?: "package"
+                            val initial = depleted.initialQuantity.toDisplayString()
+                            val consumed = (depleted.initialQuantity - depleted.remainingQuantity).toDisplayString()
+                            val unit = depleted.unit.abbreviation
+                            "A previous $pkgSingular finished earlier than estimated ($consumed of $initial $unit recorded). Eye drops and topical medications can vary due to dispenser dynamics, double-squeezing, or missed drops. Nuvilo records variance honestly without penalising your adherence."
+                        }
+
                         MedicationHeroAndStockCard(
                             medication = med,
                             balance = uiState.stockBalance,
@@ -308,24 +322,28 @@ fun MedicationDetailScreen(
                             adherenceSummary = uiState.medicationAdherenceSummary,
                             primaryPrescription = activeRx,
                             nextUnopenedLot = nextUnopenedFefoLot,
+                            stagedNextLot = uiState.stagedNextPackage ?: nextUnopenedFefoLot,
+                            unopenedCount = unopenedCount,
+                            educationalInsight = educationalInsight,
                             onEditMedicationClick = { showEditMedicationDialog = true },
                             onRestockClick = { showRestockDialog = true },
                             onAdjustClick = {
-                                val openLot = uiState.supplyForecast?.activeOpenedPackage
-                                    ?: uiState.lots.firstOrNull { it.packageStatus == PackageStatus.OPENED && it.remainingQuantity.isPositive() }
-                                if (openLot != null) {
-                                    lotToRecount = openLot
+                                if (activeOpenLot != null) {
+                                    lotToRecount = activeOpenLot
                                 } else {
                                     showAdjustDialog = true
                                 }
                             },
-                            onOpenNextPackageClick = nextUnopenedFefoLot?.let { lot ->
+                            onDepleteOpenedClick = activeOpenLot?.let { openLot ->
+                                { lotToDeplete = openLot }
+                            },
+                            onOpenNextPackageClick = (uiState.stagedNextPackage ?: nextUnopenedFefoLot)?.let { lot ->
                                 {
                                     nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_OPENED)
                                     viewModel.openPackage(lot.id)
                                 }
                             },
-                            onDiscardOpenedClick = uiState.supplyForecast?.activeOpenedPackage?.let { openLot ->
+                            onDiscardOpenedClick = activeOpenLot?.let { openLot ->
                                 { lotToDiscard = openLot }
                             },
                             onRequestRepeatClick = if (activeRx != null && activeRx.canRequestRepeat(todayEpochDay)) {
@@ -400,6 +418,7 @@ fun MedicationDetailScreen(
                             },
                             onRecountLotClick = { lot -> lotToRecount = lot },
                             onDiscardLotClick = { lot -> lotToDiscard = lot },
+                            onReopenLotClick = { lot -> lotToReopen = lot },
                             onEditLotClick = { lot -> lotToEditDetails = lot }
                         )
                     }
@@ -531,6 +550,36 @@ fun MedicationDetailScreen(
         )
     }
 
+    val currentLotToDeplete = lotToDeplete
+    if (currentLotToDeplete != null && med != null) {
+        val unopenedCount = uiState.lots.count { it.packageStatus == PackageStatus.UNOPENED && it.remainingQuantity.isPositive() && it.id != currentLotToDeplete.id }
+        EarlyPackageDepletionDialog(
+            medication = med,
+            lot = currentLotToDeplete,
+            unopenedCount = unopenedCount,
+            onDismiss = { lotToDeplete = null },
+            onConfirm = { reason, userNote ->
+                nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_DEPLETED)
+                viewModel.depletePackage(currentLotToDeplete.id, reason, userNote)
+                lotToDeplete = null
+            }
+        )
+    }
+
+    val currentLotToReopen = lotToReopen
+    if (currentLotToReopen != null && med != null) {
+        ReopenPackageDialog(
+            medication = med,
+            lot = currentLotToReopen,
+            onDismiss = { lotToReopen = null },
+            onConfirm = { reason ->
+                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                viewModel.reopenDepletedPackage(currentLotToReopen.id, reason)
+                lotToReopen = null
+            }
+        )
+    }
+
     val currentLotToEdit = lotToEditDetails
     if (currentLotToEdit != null && med != null) {
         EditPackageDetailsDialog(
@@ -642,9 +691,13 @@ private fun MedicationHeroAndStockCard(
     adherenceSummary: AdherenceSummary?,
     primaryPrescription: Prescription? = null,
     nextUnopenedLot: StockLot? = null,
+    stagedNextLot: StockLot? = null,
+    unopenedCount: Int = 0,
+    educationalInsight: String? = null,
     onEditMedicationClick: () -> Unit,
     onRestockClick: () -> Unit,
     onAdjustClick: () -> Unit,
+    onDepleteOpenedClick: (() -> Unit)? = null,
     onOpenNextPackageClick: (() -> Unit)? = null,
     onDiscardOpenedClick: (() -> Unit)? = null,
     onRequestRepeatClick: (() -> Unit)? = null
@@ -1164,12 +1217,197 @@ private fun MedicationHeroAndStockCard(
                         }
                     }
 
+                    if (onDepleteOpenedClick != null && hasOpenedPack) {
+                        OutlinedButton(
+                            onClick = onDepleteOpenedClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small,
+                            border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.7f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = semantic.warning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Mark $pkgSingular as finished",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = semantic.warning,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    if (educationalInsight != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "Intelligent Consumption Insight",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = educationalInsight,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (!hasOpenedPack && stagedNextLot != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Inventory,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "Next $pkgSingular Ready",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Surface(
+                                        shape = NoveloPillShape,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                    ) {
+                                        Text(
+                                            text = "Ready to Open",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                                val nextLabel = stagedNextLot.packageLabel ?: stagedNextLot.lotNumber?.let { "Lot #$it" } ?: "Next $pkgSingular"
+                                val expStr = stagedNextLot.expiryDateEpochMs?.let {
+                                    Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+                                } ?: "No expiry"
+                                Text(
+                                    text = "$nextLabel (${stagedNextLot.initialQuantity.toDisplayString()} ${stagedNextLot.unit.abbreviation}) · Exp: $expStr",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (onOpenNextPackageClick != null) {
+                                    FilledTonalButton(
+                                        onClick = onOpenNextPackageClick,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 44.dp),
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Icon(Icons.Default.Inventory, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Open Next $pkgSingular", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!hasOpenedPack && unopenedCount == 0 && medication.packagingConfig != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = semantic.missedContainer,
+                            border = BorderStroke(1.dp, semantic.missedBorder)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = semantic.missed,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "No unopened ${pkgPlural.lowercase()} remaining.",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = semantic.missed
+                                    )
+                                }
+                                Text(
+                                    text = "Current usable supply is 0 ${medication.effectiveConsumptionUnit.abbreviation}. Add new $pkgPlural to resume scheduled tracking.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Button(
+                                    onClick = onRestockClick,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 44.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = semantic.missed),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Add $pkgPlural", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
                     if (onOpenNextPackageClick != null || onDiscardOpenedClick != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            if (onOpenNextPackageClick != null && nextUnopenedLot != null) {
+                            if (onOpenNextPackageClick != null && nextUnopenedLot != null && hasOpenedPack) {
                                 FilledTonalButton(
                                     onClick = onOpenNextPackageClick,
                                     modifier = Modifier
@@ -1415,6 +1653,7 @@ private fun CollapsibleBatchLotsSection(
     onOpenLotClick: (StockLot) -> Unit = {},
     onRecountLotClick: (StockLot) -> Unit = {},
     onDiscardLotClick: (StockLot) -> Unit = {},
+    onReopenLotClick: (StockLot) -> Unit = {},
     onEditLotClick: (StockLot) -> Unit = {}
 ) {
     val chevronRotation by animateFloatAsState(
@@ -1498,6 +1737,7 @@ private fun CollapsibleBatchLotsSection(
                                 onOpenClick = { onOpenLotClick(lot) },
                                 onRecountClick = { onRecountLotClick(lot) },
                                 onDiscardClick = { onDiscardLotClick(lot) },
+                                onReopenClick = { onReopenLotClick(lot) },
                                 onEditClick = { onEditLotClick(lot) }
                             )
                         }
@@ -1616,6 +1856,7 @@ private fun StockLotRow(
     onOpenClick: () -> Unit = {},
     onRecountClick: () -> Unit = {},
     onDiscardClick: () -> Unit = {},
+    onReopenClick: () -> Unit = {},
     onEditClick: () -> Unit = {}
 ) {
     val semantic = MaterialTheme.noveloColors
@@ -1723,6 +1964,35 @@ private fun StockLotRow(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
+                }
+            }
+
+            if (lot.packageStatus == PackageStatus.EMPTY && lot.depletionReason != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        shape = NoveloPillShape,
+                        color = semantic.assumedContainer,
+                        border = BorderStroke(1.dp, semantic.assumedBorder)
+                    ) {
+                        Text(
+                            text = "Depleted Early: ${lot.depletionReason ?: "Finished"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = semantic.assumed,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                    TextButton(
+                        onClick = onReopenClick,
+                        modifier = Modifier.heightIn(min = 40.dp)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reopen / Undo", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
 
@@ -3178,6 +3448,249 @@ fun DiscardPackageDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = semantic.missed)
             ) {
                 Text("Confirm Discard")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun EarlyPackageDepletionDialog(
+    medication: Medication,
+    lot: StockLot,
+    unopenedCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (reason: DepletionReason, userNote: String?) -> Unit
+) {
+    val semantic = MaterialTheme.noveloColors
+    val pkgType = lot.packageType ?: medication.packagingConfig?.packageType ?: PackageType.CUSTOM
+    val pkgSingular = pkgType.displayName
+    val pkgLabel = lot.packageLabel ?: lot.lotNumber?.let { "Lot #$it" } ?: "Current $pkgSingular"
+
+    var selectedReason by remember { mutableStateOf(DepletionReason.EMPTY_NO_DROPS_LEFT) }
+    var userNote by rememberSaveable { mutableStateOf("") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val initialQtyStr = "${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}"
+    val remainingQtyStr = "${lot.remainingQuantity.toDisplayString()} ${lot.unit.abbreviation}"
+    val consumedRaw = (lot.initialQuantity.rawScaledValue - lot.remainingQuantity.rawScaledValue).coerceAtLeast(0L)
+    val consumedQtyStr = "${ScaledQuantity(consumedRaw).toDisplayString()} ${lot.unit.abbreviation}"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Has this $pkgSingular run out?",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Disclaimer Banner
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "This action updates package inventory. It does not record a medication dose and does not change your adherence history.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Inventory Detail Card
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "${medication.name} · $pkgLabel",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Original estimated capacity:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(initialQtyStr, style = MaterialTheme.typography.bodySmall.tabular, fontWeight = FontWeight.SemiBold)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Doses recorded consumed:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(consumedQtyStr, style = MaterialTheme.typography.bodySmall.tabular, fontWeight = FontWeight.SemiBold)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Estimated remaining to write off:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(remainingQtyStr, style = MaterialTheme.typography.bodySmall.tabular, fontWeight = FontWeight.Bold, color = semantic.warning)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Unopened packages available:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = if (unopenedCount > 0) "$unopenedCount unopened available" else "No unopened remaining",
+                                style = MaterialTheme.typography.bodySmall.tabular,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (unopenedCount > 0) MaterialTheme.colorScheme.primary else semantic.warning
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Reason for finishing package:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DepletionReason.entries.forEach { reason ->
+                        FilterChip(
+                            selected = selectedReason == reason,
+                            onClick = { selectedReason = reason },
+                            label = { Text(reason.displayName) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = userNote,
+                    onValueChange = { userNote = it },
+                    label = { Text("Optional note (e.g. leakage, dispenser variation)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!isSubmitting) {
+                        isSubmitting = true
+                        onConfirm(selectedReason, userNote.trim().ifBlank { null })
+                    }
+                },
+                enabled = !isSubmitting,
+                colors = ButtonDefaults.buttonColors(containerColor = semantic.warning)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Confirm Finished")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun ReopenPackageDialog(
+    medication: Medication,
+    lot: StockLot,
+    onDismiss: () -> Unit,
+    onConfirm: (reason: String) -> Unit
+) {
+    val pkgType = lot.packageType ?: medication.packagingConfig?.packageType ?: PackageType.CUSTOM
+    val pkgSingular = pkgType.displayName
+    val pkgLabel = lot.packageLabel ?: lot.lotNumber?.let { "Lot #$it" } ?: pkgSingular
+    var reasonNote by rememberSaveable { mutableStateOf("Accidental finish marked in error") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Reopen $pkgLabel?",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "This $pkgSingular was marked finished (${lot.depletionReason ?: "depleted"}). Reopening it will restore the written-off balance and reactivate it for dosing.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "A compensating ledger adjustment will be logged to maintain an auditable balance trail. Adherence and dose history remain unchanged.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = reasonNote,
+                    onValueChange = { reasonNote = it },
+                    label = { Text("Correction Note") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!isSubmitting) {
+                        isSubmitting = true
+                        onConfirm(reasonNote.trim().ifBlank { "Accidental finish reversal" })
+                    }
+                },
+                enabled = !isSubmitting
+            ) {
+                Text("Reopen $pkgSingular")
             }
         },
         dismissButton = {

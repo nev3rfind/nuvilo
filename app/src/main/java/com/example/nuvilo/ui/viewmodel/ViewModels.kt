@@ -26,11 +26,13 @@ import com.example.nuvilo.domain.adherence.HistoryDateFilter
 import com.example.nuvilo.domain.adherence.MonthlyCalendarData
 import com.example.nuvilo.domain.adherence.ResolvedDoseOccurrence
 import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.DepletionReason
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
+import com.example.nuvilo.domain.model.PackageStatus
 import com.example.nuvilo.domain.model.PackageType
 import com.example.nuvilo.domain.model.PackagingConfig
 import com.example.nuvilo.domain.model.Prescription
@@ -601,7 +603,9 @@ data class MedicationDetailUiState(
     val medicationAdherenceSummary: AdherenceSummary? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
-    val actionSuccessMessage: String? = null
+    val actionSuccessMessage: String? = null,
+    val stagedNextPackage: StockLot? = null,
+    val earlyDepletedLots: List<StockLot> = emptyList()
 )
 
 private data class CoreMedData(
@@ -714,6 +718,9 @@ class MedicationDetailViewModel(
             )
 
             val today = LocalDate.now(zoneId)
+            val stagedNext = stockCalculator.findStagedNextPackage(core.lots, nowMs)
+            val earlyDepleted = core.lots.filter { it.packageStatus == PackageStatus.EMPTY && it.depletionReason != null }
+
             val fullHistory = adherenceCalculator.buildMedicationDoseHistory(
                 medication = med,
                 schedules = medSchedules,
@@ -749,7 +756,9 @@ class MedicationDetailViewModel(
                 historyDateFilter = extra.dateFilter,
                 historyOutcomeFilter = extra.outcomeFilter,
                 medicationAdherenceSummary = adherenceSummary,
-                isLoading = false
+                isLoading = false,
+                stagedNextPackage = stagedNext,
+                earlyDepletedLots = earlyDepleted
             )
         }
     }
@@ -938,6 +947,43 @@ class MedicationDetailViewModel(
                 _actionSuccessMessage.value = "Package details updated"
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to update package details"
+            }
+        }
+    }
+
+    fun depletePackage(
+        lotId: String,
+        reason: DepletionReason,
+        userNote: String? = null
+    ) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.depletePackage(lotId, reason, userNote)
+            if (result.isSuccess) {
+                val outcome = result.getOrNull()
+                val pkgName = outcome?.depletedLot?.packageLabel ?: "Package"
+                val wastage = outcome?.compensatingEntry?.quantity?.toDisplayString() ?: "0"
+                _actionSuccessMessage.value = "$pkgName marked as finished ($wastage ${outcome?.depletedLot?.unit?.abbreviation ?: "units"} written off)"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to mark package as finished"
+            }
+        }
+    }
+
+    fun reopenDepletedPackage(
+        lotId: String,
+        reason: String = "Accidental package depletion reversal"
+    ) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.reopenDepletedPackage(lotId, reason)
+            if (result.isSuccess) {
+                val outcome = result.getOrNull()
+                val pkgName = outcome?.reopenedLot?.packageLabel ?: "Package"
+                val restored = outcome?.reopenedLot?.remainingQuantity?.toDisplayString() ?: "0"
+                _actionSuccessMessage.value = "$pkgName reopened ($restored ${outcome?.reopenedLot?.unit?.abbreviation ?: "units"} restored)"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to reopen package"
             }
         }
     }

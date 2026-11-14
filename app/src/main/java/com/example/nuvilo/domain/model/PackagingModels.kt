@@ -87,3 +87,48 @@ data class AdministrationProfile(
     val rightEyeQuantity: ScaledQuantity? = null,
     val containersPerAdministration: ScaledQuantity? = null
 )
+
+/**
+ * Structured clinical / patient reasons for marking a package as depleted early.
+ */
+enum class DepletionReason(val displayName: String, val ledgerReasonCode: String) {
+    EMPTY_NO_DROPS_LEFT("Bottle is completely empty", "BOTTLE_EMPTY"),
+    EXCESSIVE_DISPENSING("Multiple drops / accidental spillage", "EXCESSIVE_DISPENSING"),
+    LEAKING_OR_DAMAGED("Dropper damaged or bottle leaking", "BOTTLE_DAMAGED"),
+    CONTAMINATED("Tip touched eye / contaminated", "CONTAMINATED"),
+    LOST_OR_DISCARDED("Lost or discarded", "LOST_DISCARDED"),
+    OTHER("Other reason", "OTHER");
+
+    companion object {
+        fun fromCodeOrName(codeOrName: String?): DepletionReason {
+            if (codeOrName.isNullOrBlank()) return OTHER
+            return entries.find {
+                it.ledgerReasonCode.equals(codeOrName, ignoreCase = true) ||
+                it.name.equals(codeOrName, ignoreCase = true) ||
+                it.displayName.equals(codeOrName, ignoreCase = true)
+            } ?: OTHER
+        }
+    }
+}
+
+/**
+ * Result of early package depletion:
+ * - [depletedLot]: The updated package lot now in EMPTY state with remaining quantity zeroed.
+ * - [compensatingEntry]: Compensating WASTAGE ledger entry writing off remaining unharvested units (null if remaining was already 0).
+ * - [stagedNextLot]: Next unopened FEFO lot ready for unsealing (not yet opened until confirmed).
+ */
+data class EarlyDepletionOutcome(
+    val depletedLot: StockLot,
+    val compensatingEntry: StockLedgerEntry?,
+    val stagedNextLot: StockLot?
+)
+
+/**
+ * Result of reversing an early package depletion:
+ * - [reopenedLot]: The restored package lot back in OPENED state with previous balance restored.
+ * - [reversalEntry]: Compensating ADJUSTMENT_IN ledger entry restoring the written-off balance.
+ */
+data class ReopenDepletionOutcome(
+    val reopenedLot: StockLot,
+    val reversalEntry: StockLedgerEntry
+)

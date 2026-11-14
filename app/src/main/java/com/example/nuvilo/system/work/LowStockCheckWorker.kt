@@ -50,6 +50,9 @@ class LowStockCheckWorker(
                 )
 
                 val isLowStock = forecast.isLowStock || balance.isLowStock
+                val unopenedLots = lots.filter { it.packageStatus == PackageStatus.UNOPENED && it.remainingQuantity.isPositive() }
+                val nextLot = unopenedLots.firstOrNull()
+
                 if (isLowStock) {
                     if (!alreadyNotifiedIds.contains(med.id)) {
                         val prescriptions = container.repository.observePrescriptionsForMedication(med.id).first()
@@ -69,12 +72,15 @@ class LowStockCheckWorker(
                             hasPendingOrder = hasPendingOrder,
                             pendingOrderQuantity = pendingQuantity,
                             isPrivacyMasked = preferences.isNotificationPrivacyMasked,
-                            precision = forecast.precision
+                            precision = forecast.precision,
+                            unopenedPackagesCount = unopenedLots.size,
+                            nextPackageLabel = nextLot?.packageLabel ?: nextLot?.lotNumber
                         )
                         container.userPreferencesRepository.markLowStockNotified(med.id)
                     }
                 } else {
                     if (alreadyNotifiedIds.contains(med.id)) {
+                        container.notificationHelper.cancelLowStockNotification(med.id)
                         container.userPreferencesRepository.clearLowStockNotified(med.id)
                     }
                 }
@@ -128,12 +134,16 @@ class LowStockCheckWorker(
                 }
             }
 
-            // Clear stale expiry / discard deduplication keys once packages are closed/replaced
+            // Clear stale expiry / discard deduplication keys and cancel system notifications once packages are closed/replaced
             for (staleKey in preferences.expiringLotNotifiedKeys - activeExpiryKeys) {
                 container.userPreferencesRepository.clearLotExpiryNotified(staleKey)
+                val lotId = staleKey.removePrefix("exp_").substringBeforeLast("_")
+                container.notificationHelper.cancelExpiryNotification(lotId)
             }
             for (staleKey in preferences.discardLotNotifiedKeys - activeDiscardKeys) {
                 container.userPreferencesRepository.clearLotDiscardNotified(staleKey)
+                val lotId = staleKey.removePrefix("disc_").substringBeforeLast("_")
+                container.notificationHelper.cancelDiscardNotification(lotId)
             }
 
             return Result.success()

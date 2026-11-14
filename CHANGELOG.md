@@ -8,6 +8,18 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 9 Critical Addendum: Early Package Depletion, Intelligent Container Transitions & 5-Agent Swarm Audit (Refs #16)**:
+  - **Early Package Depletion Accounting**: Implemented `depletePackageEarly` in `StockLedgerCalculator` and `NoveloRepository`, allowing users to mark an opened container finished ahead of theoretical zero capacity without faking dose administrations. Unused units (e.g. 60 drops) are written off strictly as `MovementType.WASTAGE`. Dose events table and adherence history remain 100% untouched.
+  - **Option B Zero-Schema-Bump Persistence**: Preserved Room Database Schema v4 by encoding structured depletion reasons and timestamps in existing `discard_reason` and `discarded_at_epoch_ms` columns (`DEPLETED[reasonCode]: userNote`), guaranteeing 100% compatibility with PBKDF2 + AES-256-GCM encrypted backups (`BackupDataV4`).
+  - **Next Bottle FEFO Staging**: Implemented `findStagedNextPackage(...)` displaying the next eligible unopened container with a "Ready to Open" badge and manual "Open Next Bottle" CTA, preventing premature automatic unsealing and software-physical desynchronization.
+  - **"No unopened bottles remaining" Alert**: Added zero-runway alert card with immediate "Add Bottles" primary CTA when all packages are depleted.
+  - **Accidental Depletion Reversal Workflow**: Implemented `reopenDepletedPackage` with compensating `MovementType.ADJUSTMENT_IN` entry, safely restoring container state and balance without deleting audit records.
+  - **Educational Consumption Insights**: Added neutral, non-judgmental insight banner explaining dropper bottle physics, dispenser variations, and spillage without clinical stigmatization.
+  - **Haptic Feedback & Real-Time Drawer Sync**: Added `NuviloHapticEvent.PACKAGE_DEPLETED` (`[0, 60, 40, 90]` waveform) and created `SupplyNotificationSync` to update Android notification drawers immediately upon container depletion/recount without waiting for periodic WorkManager intervals.
+  - **5-Agent Swarm Parallel Audit**: Executed multi-agent evaluation across Domain Invariants (`AGENT_1_DOMAIN_AUDIT.md`), Inventory Accounting (`AGENT_2_INVENTORY_REPORT.md`), Notifications & Haptics (`AGENT_3_NOTIFICATIONS_HAPTICS_REPORT.md`), UI/UX Accessibility (`AGENT_4_UI_UX_AUDIT.md`), and Quality Assurance (`AGENT_5_QA_REPORT.md`).
+  - **Comprehensive Acceptance Test**: Added `Phase9EarlyDepletionAcceptanceTest` verifying the full Hydro Forte 300+300 drop acceptance scenario, zero synthetic dose fabrication, adherence invariance, and reversal.
+
+### Added
 - **Phase 9: Intelligent Medication Consumption, Real-World Packaging, Stock Management & Haptic-First Notifications (Refs #16)**:
   - **Decoupled Purchase Units & Consumption Model**: Added `PackagingConfig` and `AdministrationProfile` cleanly distinguishing purchase packages (`PackageType`: multi-dose bottles, single-dose container boxes, blister packs, tubes, inhalers, vials) from consumption units (`StockUnit`: drops, containers, grams, applications, tablets, millilitres) with zero arbitrary density conversions.
   - **Ophthalmic Regimen Decoupling**: Decoupled treated eye(s) (`LEFT_EYE`, `RIGHT_EYE`, `BOTH_EYES`, `CUSTOM`) from single-dose container deductions (`containersPerAdministration`) so treating both eyes deducts exactly 1 container (or user-configured count) rather than erroneously doubling deductions. Multi-dose eye drops support asymmetric drop counts per eye (`leftEyeQuantity` + `rightEyeQuantity`).

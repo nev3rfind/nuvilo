@@ -74,4 +74,26 @@ class NuviloHapticsControllerTest {
         val high = HapticPolicyEvaluator.patternFor(NuviloHapticEvent.DOSE_TAKEN, HapticIntensity.HIGH)
         assertTrue(high[1] > low[1])
     }
+
+    @Test
+    fun packageDepletedEvent_producesDistinctDecelerationWaveform() {
+        val controller = RecordingNuviloHapticController(
+            settings = HapticSettings(enabled = true, intensity = HapticIntensity.MEDIUM),
+            systemHapticsEnabled = true,
+            hasVibrator = true
+        )
+
+        controller.perform(NuviloHapticEvent.PACKAGE_DEPLETED)
+        assertEquals(listOf(NuviloHapticEvent.PACKAGE_DEPLETED), controller.recordedEvents)
+
+        val pattern = HapticPolicyEvaluator.patternFor(NuviloHapticEvent.PACKAGE_DEPLETED, HapticIntensity.MEDIUM)
+        assertEquals(4, pattern.size)
+        assertEquals(0L, pattern[0])
+        // Assertive initial pulse (base + 20)
+        assertTrue(pattern[1] >= 45L)
+        // Mid delay
+        assertEquals(45L, pattern[2])
+        // Lower settling drop (base / 2)
+        assertTrue(pattern[3] < pattern[1])
+    }
 }

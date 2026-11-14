@@ -14,7 +14,11 @@
 2. **Single Active Opened Package Per Medication**:
    - The current FEFO consumption model maintains at most one currently `OPENED` package per medication at a time.
    - When an opened package is emptied or discarded, the next eligible unopened package is automatically or manually transitioned to `OPENED`. Simultaneous multiple open bottles of the same medication (e.g., one bottle kept at home and another at work) are tracked under the combined opened pool until future multi-site tracking is introduced.
-3. **Hardware Vibrator Differences**:
+3. **Early Package Depletion Accounting Boundary**:
+   - When an opened bottle is marked as depleted early (e.g. 240 drops consumed of 300 theoretical capacity), the remaining 60 drops are accounted for as a package wastage adjustment (`MovementType.WASTAGE`). The system does not attempt to distribute these 60 drops retrospectively across past dose events, which protects adherence records from synthetic alteration.
+4. **Manual Physical Next-Bottle Opening**:
+   - The next eligible unopened package is staged as "Ready to Open", but the app never automatically unseals it until the user taps "Open Next Bottle". This intentional constraint prevents software inventory drift if the patient delays starting the new bottle.
+5. **Hardware Vibrator Differences**:
    - On Android devices running Android 10 (API 29) or lower, or budget devices lacking `Vibrator.areAllPrimitivesSupported(...)` / amplitude control, haptic feedback falls back to standard `VibrationEffect.createOneShot` or `VibrationEffect.createWaveform` durations without variable tactile amplitudes.
 
 ---

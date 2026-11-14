@@ -123,7 +123,12 @@ class NotificationHelper(private val context: Context) {
         pendingOrderQuantity: ScaledQuantity? = null,
         pendingOrderNotes: String? = null,
         medication: Medication? = null,
-        prefs: UserPreferences? = null
+        prefs: UserPreferences? = null,
+        activePackageLabel: String? = null,
+        activePackageRemaining: ScaledQuantity? = null,
+        unopenedPackagesCount: Int = 0,
+        isNextPackageStaged: Boolean = false,
+        stagedPackageLabel: String? = null
     ) {
         if (!areNotificationsEnabled()) return
 
@@ -211,10 +216,15 @@ class NotificationHelper(private val context: Context) {
             } else {
                 "${doseQuantity.toDisplayString()} ${unit.abbreviation}"
             }
+            val packageTag = when {
+                isNextPackageStaged -> " · Next pack staged"
+                activePackageLabel != null -> " · $activePackageLabel"
+                else -> ""
+            }
             val remainingPart = if (stockBalance != null) {
                 " · Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
             } else ""
-            "Take $instruction$remainingPart"
+            "Take $instruction$packageTag$remainingPart"
         }
 
         val reminderCategory = com.example.nuvilo.system.notification.NuviloNotificationCategory.MEDICATION_REMINDERS
@@ -246,7 +256,10 @@ class NotificationHelper(private val context: Context) {
             val subText = NotificationTextBuilder.buildSubText(
                 stockBalance = stockBalance,
                 unit = unit,
-                hasPendingOrder = hasPendingOrder
+                hasPendingOrder = hasPendingOrder,
+                activePackageLabel = activePackageLabel,
+                unopenedPackagesCount = unopenedPackagesCount,
+                isNextPackageStaged = isNextPackageStaged
             )
             subText?.let { builder.setSubText(it) }
 
@@ -259,7 +272,12 @@ class NotificationHelper(private val context: Context) {
                 hasPendingOrder = hasPendingOrder,
                 pendingOrderQuantity = pendingOrderQuantity,
                 pendingOrderNotes = pendingOrderNotes,
-                medication = medication
+                medication = medication,
+                activePackageLabel = activePackageLabel,
+                activePackageRemaining = activePackageRemaining,
+                unopenedPackagesCount = unopenedPackagesCount,
+                isNextPackageStaged = isNextPackageStaged,
+                stagedPackageLabel = stagedPackageLabel
             )
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
@@ -276,7 +294,11 @@ class NotificationHelper(private val context: Context) {
         hasPendingOrder: Boolean = false,
         pendingOrderQuantity: ScaledQuantity? = null,
         isPrivacyMasked: Boolean = false,
-        precision: TrackingPrecision? = null
+        precision: TrackingPrecision? = null,
+        isDepletedEarly: Boolean = false,
+        depletedPackageLabel: String? = null,
+        unopenedPackagesCount: Int = 0,
+        nextPackageLabel: String? = null
     ) {
         if (!areNotificationsEnabled()) return
 
@@ -301,7 +323,11 @@ class NotificationHelper(private val context: Context) {
             hasPendingOrder = hasPendingOrder,
             pendingOrderQuantity = pendingOrderQuantity,
             isPrivacyMasked = isPrivacyMasked,
-            precision = precision
+            precision = precision,
+            isDepletedEarly = isDepletedEarly,
+            depletedPackageLabel = depletedPackageLabel,
+            unopenedPackagesCount = unopenedPackagesCount,
+            nextPackageLabel = nextPackageLabel
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_LOW_STOCK_ID)
@@ -316,6 +342,22 @@ class NotificationHelper(private val context: Context) {
             .build()
 
         notificationManager.notify(notificationId, notification)
+    }
+
+    fun cancelLowStockNotification(medicationId: String) {
+        notificationManager.cancel(("low_stock_" + medicationId).hashCode())
+    }
+
+    fun cancelExpiryNotification(lotId: String) {
+        notificationManager.cancel(("expiry_" + lotId).hashCode())
+    }
+
+    fun cancelDiscardNotification(lotId: String) {
+        notificationManager.cancel(("discard_" + lotId).hashCode())
+    }
+
+    fun cancelDoseReminderNotification(occurrenceId: String) {
+        notificationManager.cancel(occurrenceId.hashCode())
     }
 
     fun showExpiryWarningNotification(
@@ -433,10 +475,15 @@ object NotificationTextBuilder {
     fun buildSubText(
         stockBalance: StockBalance?,
         unit: StockUnit,
-        hasPendingOrder: Boolean
+        hasPendingOrder: Boolean,
+        activePackageLabel: String? = null,
+        unopenedPackagesCount: Int = 0,
+        isNextPackageStaged: Boolean = false
     ): String? {
         return when {
             hasPendingOrder -> "GP Order Pending · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
+            isNextPackageStaged -> "Next pack ready · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
+            activePackageLabel != null && stockBalance != null -> "$activePackageLabel · ${stockBalance.currentBalance.toDisplayString()} left"
             stockBalance != null -> "${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
             else -> null
         }
@@ -451,7 +498,12 @@ object NotificationTextBuilder {
         hasPendingOrder: Boolean = false,
         pendingOrderQuantity: ScaledQuantity? = null,
         pendingOrderNotes: String? = null,
-        medication: Medication? = null
+        medication: Medication? = null,
+        activePackageLabel: String? = null,
+        activePackageRemaining: ScaledQuantity? = null,
+        unopenedPackagesCount: Int = 0,
+        isNextPackageStaged: Boolean = false,
+        stagedPackageLabel: String? = null
     ): String {
         val instructionLine = if (medication != null) {
             buildDoseInstructionLine(medication, doseQuantity)
@@ -463,6 +515,15 @@ object NotificationTextBuilder {
             if (stockBalance != null) {
                 val runwayText = stockBalance.daysRemaining?.let { "approx. $it days runway" } ?: "supply unmetered"
                 append("\n📦 Remaining Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} ($runwayText)")
+
+                if (isNextPackageStaged) {
+                    val label = stagedPackageLabel ?: "Next unopened pack"
+                    val reserveStr = if (unopenedPackagesCount > 1) " (${unopenedPackagesCount - 1} further in reserve)" else " (Last pack)"
+                    append("\n📦 Package Status: $label staged & ready to open$reserveStr")
+                } else if (activePackageLabel != null && activePackageRemaining != null) {
+                    val reserveStr = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed pack(s) in reserve" else " · Last container in stock"
+                    append("\n📦 In-Use Package: $activePackageLabel (${activePackageRemaining.toDisplayString()} ${unit.abbreviation} left in container$reserveStr)")
+                }
 
                 if (hasPendingOrder) {
                     val qtyStr = pendingOrderQuantity?.let { "${it.toDisplayString()} ${unit.abbreviation}" } ?: "Repeat"
@@ -603,22 +664,66 @@ object NotificationTextBuilder {
         hasPendingOrder: Boolean = false,
         pendingOrderQuantity: ScaledQuantity? = null,
         isPrivacyMasked: Boolean = false,
-        precision: TrackingPrecision? = null
+        precision: TrackingPrecision? = null,
+        isDepletedEarly: Boolean = false,
+        depletedPackageLabel: String? = null,
+        unopenedPackagesCount: Int = 0,
+        nextPackageLabel: String? = null
     ): AlertMessagePayload {
         if (isPrivacyMasked) {
+            val title = if (isDepletedEarly) "Medication Supply Notice" else "Medication Low-Stock Notice"
+            val body = if (isDepletedEarly) {
+                "A tracked medication package finished earlier than expected. Open Nuvilo to review remaining supply."
+            } else {
+                "One of your tracked medications is running low on supply. Open Nuvilo to review."
+            }
             return AlertMessagePayload(
-                title = "Medication Low-Stock Notice",
-                body = "One of your tracked medications is running low on supply. Open Nuvilo to review.",
+                title = title,
+                body = body,
                 channelId = NotificationChannelIds.LOW_STOCK_ALERTS
             )
         }
+
+        if (isDepletedEarly) {
+            val packName = depletedPackageLabel ?: "Package"
+            if (unopenedPackagesCount == 0 || !currentBalance.isPositive()) {
+                val title = "Urgent Supply Exhausted: $medicationName"
+                val body = buildString {
+                    append("$packName finished earlier than estimated. Zero sealed packages remain in reserve (0 ${unit.abbreviation} left).")
+                    if (hasPendingOrder) {
+                        val qtyStr = pendingOrderQuantity?.let { " for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
+                        append("\nA repeat order$qtyStr is already pending with your GP/pharmacy.")
+                    } else {
+                        append("\nRequest an urgent repeat prescription immediately.")
+                    }
+                }
+                return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
+            } else {
+                val nextName = nextPackageLabel ?: "Next unopened pack"
+                val prefix = if (precision == TrackingPrecision.ESTIMATED || precision == TrackingPrecision.APPROXIMATE) "approx. " else ""
+                val daysText = if (daysRemaining != null) " (~$prefix$daysRemaining days runway remaining)" else ""
+                val title = "Package Depleted Early: $medicationName"
+                val body = buildString {
+                    append("$packName ran out earlier than estimated. $nextName is staged and ready to open ($unopenedPackagesCount sealed pack(s) in reserve$daysText).")
+                    if (hasPendingOrder) {
+                        val qtyStr = pendingOrderQuantity?.let { " for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
+                        append("\nRepeat order$qtyStr is pending.")
+                    } else if (daysRemaining != null && daysRemaining <= 7) {
+                        append("\nSupply runway is low. Consider requesting your repeat prescription soon.")
+                    }
+                }
+                return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
+            }
+        }
+
         val prefix = if (precision == TrackingPrecision.ESTIMATED || precision == TrackingPrecision.APPROXIMATE) {
             "approx. "
         } else ""
         val daysText = if (daysRemaining != null) " (${prefix}$daysRemaining days left)" else ""
+        val reserveText = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed pack(s) in reserve" else ""
         val title = "Low Stock: $medicationName"
         val body = buildString {
-            append("Supply for $medicationName is running low: ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText.")
+            append("Supply for $medicationName is running low: ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText$reserveText.")
             if (hasPendingOrder) {
                 val qtyStr = pendingOrderQuantity?.let { " for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
                 append("\nA repeat order$qtyStr is currently pending. Tap to review or record collection.")

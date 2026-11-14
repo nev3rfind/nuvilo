@@ -25,6 +25,7 @@ enum class NuviloHapticEvent {
     DOSE_SKIPPED,
     DOSE_SNOOZED,
     PACKAGE_OPENED,
+    PACKAGE_DEPLETED,
     RESTOCK_SAVED,
     RECOUNT_SAVED,
     PACKAGE_DISCARDED,
@@ -72,6 +73,7 @@ object HapticPolicyEvaluator {
             NuviloHapticEvent.RESTOCK_SAVED,
             NuviloHapticEvent.RECOUNT_SAVED -> longArrayOf(0L, base)
             NuviloHapticEvent.PACKAGE_OPENED -> longArrayOf(0L, base, 45L, base)
+            NuviloHapticEvent.PACKAGE_DEPLETED -> longArrayOf(0L, (base + 20L), 45L, (base / 2).coerceAtLeast(10L))
             NuviloHapticEvent.PACKAGE_DISCARDED,
             NuviloHapticEvent.WARNING_CONFIRMED -> longArrayOf(0L, (base + 15L), 40L, (base + 15L))
             NuviloHapticEvent.TEST_HAPTIC -> longArrayOf(0L, base, 50L, base)

@@ -154,45 +154,79 @@ fun DoseOccurrence.toEntity(): DoseEventEntity = DoseEventEntity(
     correctedAtEpochMs = correctedAtEpochMs
 )
 
-fun StockLotEntity.toDomain(): StockLot = StockLot(
-    id = id,
-    medicationId = medicationId,
-    lotNumber = lotNumber,
-    initialQuantity = ScaledQuantity(initialQuantityRaw),
-    remainingQuantity = ScaledQuantity(remainingQuantityRaw),
-    unit = runCatching { StockUnit.valueOf(unit) }.getOrDefault(StockUnit.OTHER),
-    expiryDateEpochMs = expiryDateEpochMs,
-    createdAtEpochMs = createdAtEpochMs,
-    notes = notes,
-    packageType = packageType?.let { runCatching { PackageType.valueOf(it) }.getOrNull() },
-    packageLabel = packageLabel,
-    packageStatus = runCatching { PackageStatus.valueOf(packageStatus) }.getOrDefault(PackageStatus.UNOPENED),
-    openedAtEpochMs = openedAtEpochMs,
-    discardAfterOpeningDays = discardAfterOpeningDays,
-    discardAfterOpeningEpochMs = discardAfterOpeningEpochMs,
-    discardedAtEpochMs = discardedAtEpochMs,
-    discardReason = discardReason
-)
+fun StockLotEntity.toDomain(): StockLot {
+    val isDepletedPrefix = discardReason?.startsWith("DEPLETED[") == true
+    val (isDepleted, parsedReason, parsedNote) = if (packageStatus == PackageStatus.EMPTY.name && isDepletedPrefix) {
+        val afterPrefix = discardReason!!.removePrefix("DEPLETED[")
+        val closeBracket = afterPrefix.indexOf(']')
+        if (closeBracket != -1) {
+            val code = afterPrefix.substring(0, closeBracket)
+            val note = afterPrefix.substring(closeBracket + 1).removePrefix(": ").trim().takeIf { it.isNotBlank() }
+            Triple(true, code, note)
+        } else {
+            Triple(true, null, discardReason)
+        }
+    } else if (packageStatus == PackageStatus.EMPTY.name && discardedAtEpochMs != null) {
+        Triple(true, null, discardReason)
+    } else {
+        Triple(false, null, null)
+    }
 
-fun StockLot.toEntity(): StockLotEntity = StockLotEntity(
-    id = id,
-    medicationId = medicationId,
-    lotNumber = lotNumber,
-    initialQuantityRaw = initialQuantity.rawScaledValue,
-    remainingQuantityRaw = remainingQuantity.rawScaledValue,
-    unit = unit.name,
-    expiryDateEpochMs = expiryDateEpochMs,
-    createdAtEpochMs = createdAtEpochMs,
-    notes = notes,
-    packageType = packageType?.name,
-    packageLabel = packageLabel,
-    packageStatus = packageStatus.name,
-    openedAtEpochMs = openedAtEpochMs,
-    discardAfterOpeningDays = discardAfterOpeningDays,
-    discardAfterOpeningEpochMs = discardAfterOpeningEpochMs,
-    discardedAtEpochMs = discardedAtEpochMs,
-    discardReason = discardReason
-)
+    return StockLot(
+        id = id,
+        medicationId = medicationId,
+        lotNumber = lotNumber,
+        initialQuantity = ScaledQuantity(initialQuantityRaw),
+        remainingQuantity = ScaledQuantity(remainingQuantityRaw),
+        unit = runCatching { StockUnit.valueOf(unit) }.getOrDefault(StockUnit.OTHER),
+        expiryDateEpochMs = expiryDateEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        notes = notes,
+        packageType = packageType?.let { runCatching { PackageType.valueOf(it) }.getOrNull() },
+        packageLabel = packageLabel,
+        packageStatus = runCatching { PackageStatus.valueOf(packageStatus) }.getOrDefault(PackageStatus.UNOPENED),
+        openedAtEpochMs = openedAtEpochMs,
+        discardAfterOpeningDays = discardAfterOpeningDays,
+        discardAfterOpeningEpochMs = discardAfterOpeningEpochMs,
+        discardedAtEpochMs = if (!isDepleted) discardedAtEpochMs else null,
+        discardReason = if (!isDepleted) discardReason else null,
+        depletedAtEpochMs = if (isDepleted) discardedAtEpochMs else null,
+        depletionReason = parsedReason,
+        depletionNote = parsedNote
+    )
+}
+
+fun StockLot.toEntity(): StockLotEntity {
+    val isEarlyDepleted = packageStatus == PackageStatus.EMPTY && (depletedAtEpochMs != null || depletionReason != null)
+    val entityDiscardEpoch = if (isEarlyDepleted) depletedAtEpochMs else discardedAtEpochMs
+    val entityDiscardReason = if (isEarlyDepleted) {
+        val code = depletionReason ?: "OTHER"
+        val note = depletionNote?.let { ": $it" } ?: ""
+        "DEPLETED[$code]$note"
+    } else {
+        discardReason
+    }
+
+    return StockLotEntity(
+        id = id,
+        medicationId = medicationId,
+        lotNumber = lotNumber,
+        initialQuantityRaw = initialQuantity.rawScaledValue,
+        remainingQuantityRaw = remainingQuantity.rawScaledValue,
+        unit = unit.name,
+        expiryDateEpochMs = expiryDateEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        notes = notes,
+        packageType = packageType?.name,
+        packageLabel = packageLabel,
+        packageStatus = packageStatus.name,
+        openedAtEpochMs = openedAtEpochMs,
+        discardAfterOpeningDays = discardAfterOpeningDays,
+        discardAfterOpeningEpochMs = discardAfterOpeningEpochMs,
+        discardedAtEpochMs = entityDiscardEpoch,
+        discardReason = entityDiscardReason
+    )
+}
 
 fun StockLedgerEntryEntity.toDomain(): StockLedgerEntry = StockLedgerEntry(
     id = id,

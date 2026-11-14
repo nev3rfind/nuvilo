@@ -18,6 +18,13 @@ Nuvilo is a native Android, offline-first personal medication tracking and stock
 - **Base Branch**: `main`
 - **Room Database Schema**: Version 4 (`MIGRATION_3_4`) with packaging and package lifecycle tracking.
 - **Backup Schema**: Version 4 (`BackupDataV4`) with bidirectional compatibility (v1, v2, v3, v4).
+- **Phase 9 Addendum Architecture**:
+  - *Early Package Depletion*: Allows marking an opened container finished ahead of theoretical zero capacity (`depletePackageEarly`), writing off remaining drops strictly as `MovementType.WASTAGE` with zero synthetic dose fabrication.
+  - *Option B Persistence Mapping*: Preserves Room Schema v4 by encoding structured depletion reasons and notes in `discard_reason` (`DEPLETED[code]: note`) and `discarded_at_epoch_ms`.
+  - *Intelligent Container Staging*: Next eligible unopened package selected via FEFO (`findStagedNextPackage`) and staged as "Ready to Open" without premature auto-opening.
+  - *Accidental Depletion Reversal*: `reopenDepletedPackage` applies compensating `MovementType.ADJUSTMENT_IN` and restores container balance and state.
+  - *Five-Agent Swarm Audit Suite*: Conducted parallel evaluations across Domain Invariants (`AGENT_1_DOMAIN_AUDIT.md`), Inventory Accounting (`AGENT_2_INVENTORY_REPORT.md`), Notifications & Haptics (`AGENT_3_NOTIFICATIONS_HAPTICS_REPORT.md`), UI/UX Accessibility (`AGENT_4_UI_UX_AUDIT.md`), and Quality Assurance (`AGENT_5_QA_REPORT.md`).
+  - *Acceptance Test*: Created `Phase9EarlyDepletionAcceptanceTest.kt` verifying the full Hydro Forte 300+300 drop scenario, early depletion write-off, and accidental reversal.
 
 ---
 

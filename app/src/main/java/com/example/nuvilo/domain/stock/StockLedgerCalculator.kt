@@ -1,6 +1,10 @@
 package com.example.nuvilo.domain.stock
 
+import com.example.nuvilo.domain.model.DepletionReason
+import com.example.nuvilo.domain.model.EarlyDepletionOutcome
 import com.example.nuvilo.domain.model.MovementType
+import com.example.nuvilo.domain.model.PackageStatus
+import com.example.nuvilo.domain.model.ReopenDepletionOutcome
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockLedgerEntry
@@ -332,6 +336,132 @@ class StockLedgerCalculator {
             updatedLot = updatedLot,
             wastageEntry = null,
             ledgerEntry = ledgerEntry
+        )
+    }
+
+    /**
+     * Identifies the next eligible unopened package according to FEFO policy.
+     * Staged for display ("Ready to Open") without auto-opening until confirmed.
+     */
+    fun findStagedNextPackage(
+        lots: List<StockLot>,
+        nowEpochMs: Long = System.currentTimeMillis()
+    ): StockLot? {
+        return lots
+            .filter { it.packageStatus == PackageStatus.UNOPENED }
+            .filter { it.expiryDateEpochMs == null || it.expiryDateEpochMs > nowEpochMs }
+            .sortedWith(
+                compareBy<StockLot>(
+                    { it.expiryDateEpochMs ?: Long.MAX_VALUE },
+                    { it.createdAtEpochMs }
+                )
+            )
+            .firstOrNull()
+    }
+
+    /**
+     * Marks an opened package as finished early (Early Package Depletion).
+     *
+     * Invariants:
+     * 1. Preserves original capacity ([initialQuantity]) and consumed history.
+     * 2. Writes off remaining unharvested units as compensating [MovementType.WASTAGE] with explicit depletion reason/note.
+     * 3. Transitions packageStatus to [PackageStatus.EMPTY] with [depletedAtEpochMs], [depletionReason], [depletionNote].
+     * 4. Queries next eligible unopened FEFO lot as [stagedNextLot] (remains UNOPENED until confirmed).
+     * 5. Zero dose fabrication: Dose records and adherence remain 100% untouched.
+     */
+    fun depletePackageEarly(
+        lot: StockLot,
+        reason: DepletionReason,
+        userNote: String? = null,
+        availableLots: List<StockLot> = emptyList(),
+        nowEpochMs: Long = System.currentTimeMillis(),
+        movementId: String = java.util.UUID.randomUUID().toString()
+    ): EarlyDepletionOutcome {
+        check(lot.packageStatus != PackageStatus.EMPTY) { "Package is already empty" }
+        check(lot.packageStatus != PackageStatus.DISCARDED) { "Cannot deplete a discarded package" }
+
+        val wastedQty = lot.remainingQuantity
+        val noteSuffix = if (!userNote.isNullOrBlank()) " ($userNote)" else ""
+        val reasonText = "Early package depletion [${reason.ledgerReasonCode}]: ${reason.displayName}$noteSuffix"
+
+        val updatedLot = lot.copy(
+            remainingQuantity = ScaledQuantity.ZERO,
+            packageStatus = PackageStatus.EMPTY,
+            depletedAtEpochMs = nowEpochMs,
+            depletionReason = reason.ledgerReasonCode,
+            depletionNote = userNote?.takeIf { it.isNotBlank() }
+        )
+
+        val wastageEntry = if (wastedQty.isPositive()) {
+            StockLedgerEntry(
+                id = movementId,
+                medicationId = lot.medicationId,
+                timestampEpochMs = nowEpochMs,
+                movementType = MovementType.WASTAGE,
+                quantity = wastedQty,
+                unit = lot.unit,
+                reason = reasonText,
+                lotId = lot.id,
+                isEstimate = true
+            )
+        } else null
+
+        val stagedNext = findStagedNextPackage(availableLots.filter { it.id != lot.id }, nowEpochMs)
+
+        return EarlyDepletionOutcome(
+            depletedLot = updatedLot,
+            compensatingEntry = wastageEntry,
+            stagedNextLot = stagedNext
+        )
+    }
+
+    /**
+     * Reversal workflow if a package was accidentally marked as finished.
+     *
+     * Invariants:
+     * 1. Reverts package status from [PackageStatus.EMPTY] back to [PackageStatus.OPENED].
+     * 2. Restores the previously written-off balance.
+     * 3. Records a compensating [MovementType.ADJUSTMENT_IN] ledger movement.
+     * 4. Clears depletion audit fields.
+     */
+    fun reopenDepletedPackage(
+        lot: StockLot,
+        depletionLedgerEntry: StockLedgerEntry? = null,
+        reason: String = "Accidental depletion correction",
+        nowEpochMs: Long = System.currentTimeMillis(),
+        movementId: String = java.util.UUID.randomUUID().toString(),
+        restoredQuantity: ScaledQuantity? = null,
+        reversalReason: String? = null
+    ): ReopenDepletionOutcome {
+        check(lot.packageStatus == PackageStatus.EMPTY) { "Only empty packages can be reopened" }
+
+        val actualReason = reversalReason ?: reason
+        val restoredQty = restoredQuantity
+            ?: depletionLedgerEntry?.quantity
+            ?: lot.initialQuantity
+        val updatedLot = lot.copy(
+            remainingQuantity = restoredQty,
+            packageStatus = PackageStatus.OPENED,
+            depletedAtEpochMs = null,
+            depletionReason = null,
+            depletionNote = null
+        )
+
+        val reversalEntry = StockLedgerEntry(
+            id = movementId,
+            medicationId = lot.medicationId,
+            timestampEpochMs = nowEpochMs,
+            movementType = MovementType.ADJUSTMENT_IN,
+            quantity = restoredQty,
+            unit = lot.unit,
+            reason = "Reversal of early package depletion: $actualReason",
+            lotId = lot.id,
+            isEstimate = depletionLedgerEntry?.isEstimate ?: true
+        )
+
+        return ReopenDepletionOutcome(
+            reopenedLot = updatedLot,
+            reversalEntry = reversalEntry
         )
     }
 }

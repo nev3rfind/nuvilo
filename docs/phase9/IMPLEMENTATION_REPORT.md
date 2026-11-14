@@ -101,7 +101,47 @@ Under Phase 9, Nuvilo cleanly separates:
 
 ---
 
-## 4. Verification Evidence
+## 4. Phase 9 Addendum: Early Package Depletion & Intelligent Container Replacement
+
+### 4.1 Real-World Physical Depletion vs Theoretical Capacity
+Real-world medication packages often run out before theoretical zero capacity due to dropper dynamics, dispenser leakage, multiple drops falling, or container damage.
+The Addendum introduces **Early Package Depletion**:
+- Explicit **"Mark bottle as finished"** action available on the opened container card.
+- **"Has this bottle run out?" Modal (`EarlyPackageDepletionDialog`)**: Shows original capacity, doses consumed, remaining drops to be written off, and unopened count. Includes mandatory clinical disclaimer: *"This action updates package inventory. It does not record a medication dose and does not change your adherence history."*
+- Selectable reason chips (`EMPTY_NO_DROPS_LEFT`, `EXCESSIVE_DISPENSING`, `LEAKING_OR_DAMAGED`, `CONTAMINATED`, `LOST_OR_DISCARDED`, `OTHER`) and optional user note.
+- **Zero Dose Fabrication**: The written-off drops are appended strictly as `MovementType.WASTAGE` to the immutable ledger. The `dose_events` table is completely untouched, preserving 100% adherence accuracy.
+
+### 4.2 Next Bottle FEFO Staging
+- Upon depleting the active container, the next eligible unopened package is selected via `findStagedNextPackage(...)`.
+- It is displayed with a **"Ready to Open"** badge and an explicit **"Open Next Bottle"** action.
+- The next physical bottle is **never** auto-opened until the patient physically confirms opening it.
+- If no unopened bottles remain, the UI displays: **"No unopened bottles remaining."** with 0 usable drops and an immediate "Add Bottles" primary action.
+
+### 4.3 Accidental Depletion Correction & Educational Insights
+- Accidental depletion can be undone via `reopenDepletedPackage(...)` in the batch lots section, which logs an auditable compensating `MovementType.ADJUSTMENT_IN` ledger entry and restores the container to `OPENED` status with its previous balance.
+- An **Educational Consumption Insight** card explains dispenser variability and dropper physics neutrally without penalising patient adherence.
+
+### 4.4 Option B Persistence Mapping (Zero Schema Migration Risk)
+To preserve encrypted backups (`BackupDataV4`), avoid database migration churn, and maintain 100% backward compatibility, early depletion metadata is stored within Room Schema v4:
+- `package_status = 'EMPTY'`
+- `discarded_at_epoch_ms = depletedAtEpochMs`
+- `discard_reason = "DEPLETED[reasonCode]: userNote"`
+Mappers (`Mappers.kt`) automatically deserialize this into `StockLot.depletedAtEpochMs`, `depletionReason`, and `depletionNote`.
+
+---
+
+## 5. Multi-Agent Swarm Audit Reports
+
+All 5 specialist agents conducted comprehensive parallel evaluations:
+1. `docs/phase9/AGENT_1_DOMAIN_AUDIT.md`: Domain Safety & Invariants Audit (Passed)
+2. `docs/phase9/AGENT_2_INVENTORY_REPORT.md`: Inventory Accounting & Stock Ledger Report (Passed)
+3. `docs/phase9/AGENT_3_NOTIFICATIONS_HAPTICS_REPORT.md`: Notification Channels & Haptic Feedback Report (Passed)
+4. `docs/phase9/AGENT_4_UI_UX_AUDIT.md`: UI/UX & Design System Accessibility Audit (Passed)
+5. `docs/phase9/AGENT_5_QA_REPORT.md`: Quality Assurance & Regression Verification Report (Passed)
+
+---
+
+## 6. Verification Evidence
 
 | Test Suite | Tests Run | Failures | Skipped | Status |
 |---|---|---|---|---|

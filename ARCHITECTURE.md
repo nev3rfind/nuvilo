@@ -107,8 +107,14 @@ com.example.nuvilo/ (or com.novelo.app)
 │   │   └── AdherenceCalculator.kt # Pure Kotlin adherence math, deterministic occurrence resolution & DST handling
 │   ├── prescription/
 │   │   └── PrescriptionManager.kt # Domain state machine for repeat requests & collection decrements
+│   ├── stock/
+│   │   ├── StockLedgerCalculator.kt # Immutable ledger math, FEFO allocation, early depletion & reversal
+│   │   ├── ConsumptionCalculator.kt # Decoupled ophthalmic regimen & package consumption calculator
+│   │   ├── SupplyForecastCalculator.kt # Discrete day-by-day FEFO future supply simulator
+│   │   └── UnitIntegrityValidator.kt # Dimensional integrity guardrail
 │   ├── model/                    # Pure Kotlin domain data classes
 │   │   ├── DomainModels.kt       # Medication, Schedule, DoseEvent, StockLot, Prescription, PrescriptionEvent
+│   │   ├── PackagingModels.kt    # PackageType, PackageStatus, DepletionReason, AdministrationProfile
 │   │   ├── Enums.kt              # PrescriptionStatus, PrescriptionEventType, MovementType, DoseStatus
 │   │   └── ScaledQuantity.kt     # Exact scaled integer math (no floating point)
 │   ├── repository/               # Domain repository interfaces
@@ -129,7 +135,9 @@ com.example.nuvilo/ (or com.novelo.app)
 │   ├── receiver/
 │   │   └── BootAndChangeReceiver.kt # Reconciles alarms on boot, timezone, time set
 │   └── work/
-│       └── StockCheckWorker.kt   # WorkManager for daily low-stock evaluations
+│       ├── StockCheckWorker.kt   # WorkManager for daily low-stock evaluations
+│       ├── LowStockCheckWorker.kt # Scheduled low-stock runway evaluator
+│       └── SupplyNotificationSync.kt # Real-time notification drawer sync on package events
 └── ui/
     ├── common/                   # Reusable Design System components
     │   ├── TopAppBar.kt

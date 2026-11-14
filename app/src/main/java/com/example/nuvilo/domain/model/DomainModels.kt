@@ -38,7 +38,10 @@ data class StockLot(
     val discardAfterOpeningDays: Int? = null,
     val discardAfterOpeningEpochMs: Long? = null,
     val discardedAtEpochMs: Long? = null,
-    val discardReason: String? = null
+    val discardReason: String? = null,
+    val depletedAtEpochMs: Long? = null,
+    val depletionReason: String? = null,
+    val depletionNote: String? = null
 ) {
     val effectiveDiscardAfterOpeningEpochMs: Long?
         get() = discardAfterOpeningEpochMs ?: if (openedAtEpochMs != null && discardAfterOpeningDays != null) {
