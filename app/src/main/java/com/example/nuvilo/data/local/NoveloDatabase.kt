@@ -30,7 +30,7 @@ import com.example.nuvilo.data.local.entity.StockLotEntity
         PrescriptionEntity::class,
         PrescriptionEventEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class NoveloDatabase : RoomDatabase() {
@@ -127,13 +127,65 @@ abstract class NoveloDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val nowMs = System.currentTimeMillis()
+                db.execSQL("ALTER TABLE medications ADD COLUMN package_type TEXT")
+                db.execSQL("ALTER TABLE medications ADD COLUMN contents_per_package_raw INTEGER")
+                db.execSQL("ALTER TABLE medications ADD COLUMN net_content_label TEXT")
+                db.execSQL("ALTER TABLE medications ADD COLUMN discard_after_opening_days INTEGER")
+                db.execSQL("ALTER TABLE medications ADD COLUMN tracking_precision TEXT NOT NULL DEFAULT 'UNKNOWN'")
+                db.execSQL("ALTER TABLE medications ADD COLUMN gel_tracking_mode TEXT")
+                db.execSQL("ALTER TABLE medications ADD COLUMN administration_site TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL("ALTER TABLE medications ADD COLUMN left_eye_quantity_raw INTEGER")
+                db.execSQL("ALTER TABLE medications ADD COLUMN right_eye_quantity_raw INTEGER")
+                db.execSQL("ALTER TABLE medications ADD COLUMN containers_per_admin_raw INTEGER")
+                db.execSQL("ALTER TABLE medications ADD COLUMN low_stock_days_threshold INTEGER")
+
+                db.execSQL(
+                    """
+                    UPDATE medications
+                    SET tracking_precision = CASE
+                        WHEN form IN ('DROPS', 'INHALER_PUFFS', 'TOPICAL_CREAM') THEN 'ESTIMATED'
+                        ELSE 'EXACT'
+                    END
+                    """.trimIndent()
+                )
+
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN package_type TEXT")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN package_label TEXT")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN package_status TEXT NOT NULL DEFAULT 'UNOPENED'")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN opened_at_epoch_ms INTEGER")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN discard_after_opening_days INTEGER")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN discard_after_opening_epoch_ms INTEGER")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN discarded_at_epoch_ms INTEGER")
+                db.execSQL("ALTER TABLE stock_lots ADD COLUMN discard_reason TEXT")
+
+                db.execSQL(
+                    """
+                    UPDATE stock_lots
+                    SET package_status = CASE
+                        WHEN remaining_quantity_raw <= 0 THEN 'EMPTY'
+                        WHEN expiry_date_epoch_ms IS NOT NULL AND expiry_date_epoch_ms <= $nowMs THEN 'EXPIRED'
+                        WHEN remaining_quantity_raw < initial_quantity_raw THEN 'OPENED'
+                        ELSE 'UNOPENED'
+                    END,
+                    opened_at_epoch_ms = CASE
+                        WHEN remaining_quantity_raw > 0 AND remaining_quantity_raw < initial_quantity_raw THEN created_at_epoch_ms
+                        ELSE NULL
+                    END
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun create(context: Context): NoveloDatabase {
             return Room.databaseBuilder(
                 context.applicationContext,
                 NoveloDatabase::class.java,
                 DATABASE_NAME
             )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
         }
 
@@ -143,7 +195,7 @@ abstract class NoveloDatabase : RoomDatabase() {
                 NoveloDatabase::class.java
             )
             .allowMainThreadQueries()
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
         }
     }

@@ -97,11 +97,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.adherence.AdherenceSummary
+import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.AdministrationSite
+import com.example.nuvilo.domain.model.DepletionReason
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
+import com.example.nuvilo.domain.model.GelTrackingMode
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
+import com.example.nuvilo.domain.model.PackageStatus
+import com.example.nuvilo.domain.model.PackageType
+import com.example.nuvilo.domain.model.PackagingConfig
 import com.example.nuvilo.domain.model.Prescription
 import com.example.nuvilo.domain.model.PrescriptionEvent
 import com.example.nuvilo.domain.model.PrescriptionStatus
@@ -113,12 +120,18 @@ import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.model.TrackingPrecision
+import com.example.nuvilo.domain.stock.SupplyForecast
 import com.example.nuvilo.ui.components.DoseStatusBadge
+import com.example.nuvilo.ui.components.PackageStatusChip
 import com.example.nuvilo.ui.components.ScheduleConfigurationContent
 import com.example.nuvilo.ui.components.StockBadge
+import com.example.nuvilo.ui.components.TrackingPrecisionBadge
 import com.example.nuvilo.ui.components.defaultStockUnitForForm
 import com.example.nuvilo.ui.components.formatMinuteOfDay
 import com.example.nuvilo.ui.components.parseAccentColor
+import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
+import com.example.nuvilo.ui.haptics.NuviloHapticEvent
 import com.example.nuvilo.ui.theme.MedicationAccentSwatches
 import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
@@ -146,9 +159,15 @@ fun MedicationDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val nuviloHaptics = LocalNuviloHaptics.current
 
     var showRestockDialog by rememberSaveable { mutableStateOf(false) }
     var showAdjustDialog by rememberSaveable { mutableStateOf(false) }
+    var lotToRecount by remember { mutableStateOf<StockLot?>(null) }
+    var lotToDiscard by remember { mutableStateOf<StockLot?>(null) }
+    var lotToDeplete by remember { mutableStateOf<StockLot?>(null) }
+    var lotToReopen by remember { mutableStateOf<StockLot?>(null) }
+    var lotToEditDetails by remember { mutableStateOf<StockLot?>(null) }
     var showEditMedicationDialog by rememberSaveable { mutableStateOf(false) }
     var showEditScheduleDialog by rememberSaveable { mutableStateOf(false) }
     var doseToCorrect by remember { mutableStateOf<DoseOccurrence?>(null) }
@@ -252,10 +271,24 @@ fun MedicationDetailScreen(
                 }
             }
             else -> {
+                val nowEpochMs = System.currentTimeMillis()
                 val activeFefoLotId = uiState.lots
-                    .filter { it.remainingQuantity.isPositive() }
+                    .filter { lot ->
+                        val discardAt = lot.effectiveDiscardAfterOpeningEpochMs
+                        (lot.packageStatus == PackageStatus.OPENED || lot.packageStatus == PackageStatus.UNOPENED) &&
+                            lot.remainingQuantity.isPositive() &&
+                            (lot.expiryDateEpochMs == null || lot.expiryDateEpochMs >= nowEpochMs) &&
+                            (discardAt == null || discardAt >= nowEpochMs)
+                    }
+                    .minWithOrNull(
+                        compareBy<StockLot> { if (it.packageStatus == PackageStatus.OPENED) 0 else 1 }
+                            .thenBy { it.expiryDateEpochMs ?: Long.MAX_VALUE }
+                            .thenBy { it.createdAtEpochMs }
+                    )?.id
+
+                val nextUnopenedFefoLot = uiState.lots
+                    .filter { it.packageStatus == PackageStatus.UNOPENED && it.remainingQuantity.isPositive() }
                     .minWithOrNull(compareBy<StockLot> { it.expiryDateEpochMs ?: Long.MAX_VALUE }.thenBy { it.createdAtEpochMs })
-                    ?.id
 
                 LazyColumn(
                     modifier = Modifier
@@ -271,14 +304,48 @@ fun MedicationDetailScreen(
                         val activeRx = uiState.prescriptions.firstOrNull {
                             it.effectiveStatus(todayEpochDay) == PrescriptionStatus.ACTIVE
                         } ?: uiState.prescriptions.firstOrNull()
+                        val activeOpenLot = uiState.supplyForecast?.activeOpenedPackage
+                            ?: uiState.lots.firstOrNull { it.packageStatus == PackageStatus.OPENED && it.remainingQuantity.isPositive() }
+                        val unopenedCount = uiState.lots.count { it.packageStatus == PackageStatus.UNOPENED && it.remainingQuantity.isPositive() }
+                        val educationalInsight = uiState.earlyDepletedLots.firstOrNull()?.let { depleted ->
+                            val pkgSingular = med.packagingConfig?.packageType?.displayName ?: "package"
+                            val initial = depleted.initialQuantity.toDisplayString()
+                            val consumed = (depleted.initialQuantity - depleted.remainingQuantity).toDisplayString()
+                            val unit = depleted.unit.abbreviation
+                            "A previous $pkgSingular finished earlier than estimated ($consumed of $initial $unit recorded). Eye drops and topical medications can vary due to dispenser dynamics, double-squeezing, or missed drops. Nuvilo records variance honestly without penalising your adherence."
+                        }
+
                         MedicationHeroAndStockCard(
                             medication = med,
                             balance = uiState.stockBalance,
+                            supplyForecast = uiState.supplyForecast,
                             adherenceSummary = uiState.medicationAdherenceSummary,
                             primaryPrescription = activeRx,
+                            nextUnopenedLot = nextUnopenedFefoLot,
+                            stagedNextLot = uiState.stagedNextPackage ?: nextUnopenedFefoLot,
+                            unopenedCount = unopenedCount,
+                            educationalInsight = educationalInsight,
                             onEditMedicationClick = { showEditMedicationDialog = true },
                             onRestockClick = { showRestockDialog = true },
-                            onAdjustClick = { showAdjustDialog = true },
+                            onAdjustClick = {
+                                if (activeOpenLot != null) {
+                                    lotToRecount = activeOpenLot
+                                } else {
+                                    showAdjustDialog = true
+                                }
+                            },
+                            onDepleteOpenedClick = activeOpenLot?.let { openLot ->
+                                { lotToDeplete = openLot }
+                            },
+                            onOpenNextPackageClick = (uiState.stagedNextPackage ?: nextUnopenedFefoLot)?.let { lot ->
+                                {
+                                    nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_OPENED)
+                                    viewModel.openPackage(lot.id)
+                                }
+                            },
+                            onDiscardOpenedClick = activeOpenLot?.let { openLot ->
+                                { lotToDiscard = openLot }
+                            },
                             onRequestRepeatClick = if (activeRx != null && activeRx.canRequestRepeat(todayEpochDay)) {
                                 { rxForRepeatRequest = activeRx }
                             } else if (activeRx == null) {
@@ -344,7 +411,15 @@ fun MedicationDetailScreen(
                             activeFefoLotId = activeFefoLotId,
                             expanded = lotsExpanded,
                             onToggleExpand = { lotsExpanded = !lotsExpanded },
-                            onAddBatchClick = { showRestockDialog = true }
+                            onAddBatchClick = { showRestockDialog = true },
+                            onOpenLotClick = { lot ->
+                                nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_OPENED)
+                                viewModel.openPackage(lot.id)
+                            },
+                            onRecountLotClick = { lot -> lotToRecount = lot },
+                            onDiscardLotClick = { lot -> lotToDiscard = lot },
+                            onReopenLotClick = { lot -> lotToReopen = lot },
+                            onEditLotClick = { lot -> lotToEditDetails = lot }
                         )
                     }
 
@@ -366,7 +441,8 @@ fun MedicationDetailScreen(
         EditMedicationDialog(
             medication = med,
             onDismiss = { showEditMedicationDialog = false },
-            onConfirm = { name, strength, form, unit, threshold, mode, notes, colorHex ->
+            onConfirmWithPackaging = { name, strength, form, unit, threshold, mode, notes, colorHex, packagingConfig, administrationProfile, lowStockDaysThreshold ->
+                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                 viewModel.updateMedication(
                     name = name,
                     strength = strength,
@@ -375,7 +451,10 @@ fun MedicationDetailScreen(
                     lowStockThresholdStr = threshold,
                     recordingMode = mode,
                     notes = notes,
-                    colorTagHex = colorHex
+                    colorTagHex = colorHex,
+                    packagingConfig = packagingConfig,
+                    administrationProfile = administrationProfile,
+                    lowStockDaysThreshold = lowStockDaysThreshold
                 )
                 showEditMedicationDialog = false
             }
@@ -385,9 +464,10 @@ fun MedicationDetailScreen(
     if (showEditScheduleDialog && med != null) {
         EditScheduleDialog(
             existingSchedule = uiState.schedules.firstOrNull(),
-            stockUnit = med.stockUnit,
+            stockUnit = med.effectiveConsumptionUnit,
             onDismiss = { showEditScheduleDialog = false },
             onConfirm = { times, daysOfWeek, doseQty, instructions ->
+                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                 viewModel.saveSchedule(
                     existingSchedule = uiState.schedules.firstOrNull(),
                     targetTimesMinuteOfDay = times,
@@ -405,7 +485,22 @@ fun MedicationDetailScreen(
             medication = med,
             currentBalance = uiState.stockBalance?.currentBalance ?: ScaledQuantity.ZERO,
             onDismiss = { showRestockDialog = false },
+            onConfirmPackages = { packageCount, contentsPerPackage, consumptionUnit, packageType, discardDays, lotNumber, expiryEpoch, notes ->
+                nuviloHaptics.perform(NuviloHapticEvent.RESTOCK_SAVED)
+                viewModel.restockPackages(
+                    packageCount = packageCount,
+                    contentsPerPackage = contentsPerPackage,
+                    consumptionUnit = consumptionUnit,
+                    packageType = packageType,
+                    discardAfterOpeningDays = discardDays,
+                    lotNumber = lotNumber,
+                    expiryDateEpochMs = expiryEpoch,
+                    notes = notes
+                )
+                showRestockDialog = false
+            },
             onConfirm = { qty, lotNumber, expiryEpoch, notes ->
+                nuviloHaptics.perform(NuviloHapticEvent.RESTOCK_SAVED)
                 viewModel.restock(qty, lotNumber, expiryEpoch, notes)
                 showRestockDialog = false
             }
@@ -420,8 +515,87 @@ fun MedicationDetailScreen(
             lots = uiState.lots,
             onDismiss = { showAdjustDialog = false },
             onConfirm = { targetBal, reason, targetLotId ->
+                nuviloHaptics.perform(NuviloHapticEvent.RECOUNT_SAVED)
                 viewModel.adjustStock(targetBal, reason, targetLotId)
                 showAdjustDialog = false
+            }
+        )
+    }
+
+    val currentLotToRecount = lotToRecount
+    if (currentLotToRecount != null && med != null) {
+        RecountOpenedPackageDialog(
+            medication = med,
+            openedLot = currentLotToRecount,
+            onDismiss = { lotToRecount = null },
+            onConfirm = { observedRemaining, reason ->
+                nuviloHaptics.perform(NuviloHapticEvent.RECOUNT_SAVED)
+                viewModel.recountOpenedPackage(currentLotToRecount.id, observedRemaining, reason)
+                lotToRecount = null
+            }
+        )
+    }
+
+    val currentLotToDiscard = lotToDiscard
+    if (currentLotToDiscard != null && med != null) {
+        DiscardPackageDialog(
+            medication = med,
+            lot = currentLotToDiscard,
+            onDismiss = { lotToDiscard = null },
+            onConfirm = { reason ->
+                nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_DISCARDED)
+                viewModel.discardPackage(currentLotToDiscard.id, reason)
+                lotToDiscard = null
+            }
+        )
+    }
+
+    val currentLotToDeplete = lotToDeplete
+    if (currentLotToDeplete != null && med != null) {
+        val unopenedCount = uiState.lots.count { it.packageStatus == PackageStatus.UNOPENED && it.remainingQuantity.isPositive() && it.id != currentLotToDeplete.id }
+        EarlyPackageDepletionDialog(
+            medication = med,
+            lot = currentLotToDeplete,
+            unopenedCount = unopenedCount,
+            onDismiss = { lotToDeplete = null },
+            onConfirm = { reason, userNote ->
+                nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_DEPLETED)
+                viewModel.depletePackage(currentLotToDeplete.id, reason, userNote)
+                lotToDeplete = null
+            }
+        )
+    }
+
+    val currentLotToReopen = lotToReopen
+    if (currentLotToReopen != null && med != null) {
+        ReopenPackageDialog(
+            medication = med,
+            lot = currentLotToReopen,
+            onDismiss = { lotToReopen = null },
+            onConfirm = { reason ->
+                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                viewModel.reopenDepletedPackage(currentLotToReopen.id, reason)
+                lotToReopen = null
+            }
+        )
+    }
+
+    val currentLotToEdit = lotToEditDetails
+    if (currentLotToEdit != null && med != null) {
+        EditPackageDetailsDialog(
+            lot = currentLotToEdit,
+            onDismiss = { lotToEditDetails = null },
+            onConfirm = { label, lotNum, expiryMs, discardDays, notes ->
+                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                viewModel.updatePackageDetails(
+                    lotId = currentLotToEdit.id,
+                    packageLabel = label,
+                    lotNumber = lotNum,
+                    expiryDateEpochMs = expiryMs,
+                    discardAfterOpeningDays = discardDays,
+                    notes = notes
+                )
+                lotToEditDetails = null
             }
         )
     }
@@ -508,15 +682,24 @@ fun MedicationDetailScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MedicationHeroAndStockCard(
     medication: Medication,
     balance: StockBalance?,
+    supplyForecast: SupplyForecast? = null,
     adherenceSummary: AdherenceSummary?,
     primaryPrescription: Prescription? = null,
+    nextUnopenedLot: StockLot? = null,
+    stagedNextLot: StockLot? = null,
+    unopenedCount: Int = 0,
+    educationalInsight: String? = null,
     onEditMedicationClick: () -> Unit,
     onRestockClick: () -> Unit,
     onAdjustClick: () -> Unit,
+    onDepleteOpenedClick: (() -> Unit)? = null,
+    onOpenNextPackageClick: (() -> Unit)? = null,
+    onDiscardOpenedClick: (() -> Unit)? = null,
     onRequestRepeatClick: (() -> Unit)? = null
 ) {
     val semantic = MaterialTheme.noveloColors
@@ -719,7 +902,8 @@ private fun MedicationHeroAndStockCard(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            if (balance.daysRemaining != null) {
+                            val daysLeft = supplyForecast?.daysOfSupply ?: balance.daysRemaining
+                            if (daysLeft != null) {
                                 Surface(
                                     shape = MaterialTheme.shapes.extraSmall,
                                     color = if (isWarning) semantic.warningContainer else MaterialTheme.colorScheme.primaryContainer,
@@ -729,7 +913,7 @@ private fun MedicationHeroAndStockCard(
                                     )
                                 ) {
                                     Text(
-                                        text = "~${balance.daysRemaining} day(s) supply",
+                                        text = "~$daysLeft day(s) supply",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isWarning) semantic.warning else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -737,7 +921,9 @@ private fun MedicationHeroAndStockCard(
                                     )
                                 }
                             }
-                            if (balance.isEstimate) {
+                            if (supplyForecast != null) {
+                                TrackingPrecisionBadge(precision = supplyForecast.precision)
+                            } else if (balance.isEstimate) {
                                 Surface(
                                     shape = MaterialTheme.shapes.extraSmall,
                                     color = semantic.assumedContainer
@@ -750,6 +936,116 @@ private fun MedicationHeroAndStockCard(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
+                            }
+                        }
+                    }
+
+                    // Contextual Package-Level Summary & Active Opened Bottle Progress
+                    if (supplyForecast != null && (supplyForecast.openedPackagesCount > 0 || supplyForecast.unopenedPackagesCount > 0 || supplyForecast.activeOpenedPackage != null)) {
+                        val pkgPlural = medication.packagingConfig?.packageType?.pluralName?.lowercase() ?: "packages"
+                        val pkgSingular = medication.packagingConfig?.packageType?.displayName ?: "Package"
+                        val activeOpen = supplyForecast.activeOpenedPackage
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Package Overview ($pkgPlural)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "${supplyForecast.openedPackagesCount} open · ${supplyForecast.unopenedPackagesCount} sealed",
+                                        style = MaterialTheme.typography.labelMedium.tabular,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                if (activeOpen != null) {
+                                    val openLabel = activeOpen.packageLabel ?: activeOpen.lotNumber ?: "Current $pkgSingular"
+                                    val initialRaw = activeOpen.initialQuantity.rawScaledValue.coerceAtLeast(1L)
+                                    val fraction = (activeOpen.remainingQuantity.rawScaledValue.toFloat() / initialRaw.toFloat()).coerceIn(0f, 1f)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = openLabel,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${activeOpen.remainingQuantity.toDisplayString()} / ${activeOpen.initialQuantity.toDisplayString()} ${activeOpen.unit.abbreviation}",
+                                            style = MaterialTheme.typography.bodySmall.tabular,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    LinearProgressIndicator(
+                                        progress = { fraction },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(6.dp)
+                                            .clip(NoveloPillShape)
+                                    )
+                                    val discardDaysLeft = supplyForecast.daysUntilActivePackageDiscard
+                                    if (discardDaysLeft != null) {
+                                        val isUrgentDiscard = discardDaysLeft <= 3
+                                        Text(
+                                            text = if (discardDaysLeft <= 0) {
+                                                "After-opening discard limit reached — replace and discard safely."
+                                            } else {
+                                                "After-opening limit: discard in $discardDaysLeft day(s)"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isUrgentDiscard) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isUrgentDiscard) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (supplyForecast?.needsAttentionForExpiredOrOpenLimit == true) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = semantic.warningContainer,
+                            border = BorderStroke(1.dp, semantic.warningBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "Expired or post-opening discard warning",
+                                    tint = semantic.warning,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "One or more packs are expired or past their opened discard limit and excluded from usable runway.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = semantic.warning
+                                )
                             }
                         }
                     }
@@ -882,6 +1178,10 @@ private fun MedicationHeroAndStockCard(
                         }
                     }
 
+                    val pkgSingular = medication.packagingConfig?.packageType?.displayName ?: "Pack"
+                    val pkgPlural = medication.packagingConfig?.packageType?.pluralName ?: "Supply"
+                    val hasOpenedPack = supplyForecast?.activeOpenedPackage != null
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -895,7 +1195,10 @@ private fun MedicationHeroAndStockCard(
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Restock Supply", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                text = if (medication.packagingConfig != null) "Add $pkgPlural" else "Restock Supply",
+                                style = MaterialTheme.typography.labelLarge
+                            )
                         }
 
                         OutlinedButton(
@@ -907,7 +1210,229 @@ private fun MedicationHeroAndStockCard(
                         ) {
                             Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Recount / Adjust", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                text = if (hasOpenedPack) "Recount Open $pkgSingular" else "Recount / Adjust",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
+
+                    if (onDepleteOpenedClick != null && hasOpenedPack) {
+                        OutlinedButton(
+                            onClick = onDepleteOpenedClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small,
+                            border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.7f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = semantic.warning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Mark $pkgSingular as finished",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = semantic.warning,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    if (educationalInsight != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "Intelligent Consumption Insight",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = educationalInsight,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (!hasOpenedPack && stagedNextLot != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Inventory,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "Next $pkgSingular Ready",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Surface(
+                                        shape = NoveloPillShape,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                    ) {
+                                        Text(
+                                            text = "Ready to Open",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                                val nextLabel = stagedNextLot.packageLabel ?: stagedNextLot.lotNumber?.let { "Lot #$it" } ?: "Next $pkgSingular"
+                                val expStr = stagedNextLot.expiryDateEpochMs?.let {
+                                    Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+                                } ?: "No expiry"
+                                Text(
+                                    text = "$nextLabel (${stagedNextLot.initialQuantity.toDisplayString()} ${stagedNextLot.unit.abbreviation}) · Exp: $expStr",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (onOpenNextPackageClick != null) {
+                                    FilledTonalButton(
+                                        onClick = onOpenNextPackageClick,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 44.dp),
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Icon(Icons.Default.Inventory, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Open Next $pkgSingular", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!hasOpenedPack && unopenedCount == 0 && medication.packagingConfig != null) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = semantic.missedContainer,
+                            border = BorderStroke(1.dp, semantic.missedBorder)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = semantic.missed,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "No unopened ${pkgPlural.lowercase()} remaining.",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = semantic.missed
+                                    )
+                                }
+                                Text(
+                                    text = "Current usable supply is 0 ${medication.effectiveConsumptionUnit.abbreviation}. Add new $pkgPlural to resume scheduled tracking.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Button(
+                                    onClick = onRestockClick,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 44.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = semantic.missed),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Add $pkgPlural", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    if (onOpenNextPackageClick != null || onDiscardOpenedClick != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (onOpenNextPackageClick != null && nextUnopenedLot != null && hasOpenedPack) {
+                                FilledTonalButton(
+                                    onClick = onOpenNextPackageClick,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text("Open Next $pkgSingular", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                            if (onDiscardOpenedClick != null && hasOpenedPack) {
+                                OutlinedButton(
+                                    onClick = onDiscardOpenedClick,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = "Discard Open $pkgSingular",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = semantic.warning
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1124,7 +1649,12 @@ private fun CollapsibleBatchLotsSection(
     activeFefoLotId: String?,
     expanded: Boolean,
     onToggleExpand: () -> Unit,
-    onAddBatchClick: () -> Unit
+    onAddBatchClick: () -> Unit,
+    onOpenLotClick: (StockLot) -> Unit = {},
+    onRecountLotClick: (StockLot) -> Unit = {},
+    onDiscardLotClick: (StockLot) -> Unit = {},
+    onReopenLotClick: (StockLot) -> Unit = {},
+    onEditLotClick: (StockLot) -> Unit = {}
 ) {
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -1203,7 +1733,12 @@ private fun CollapsibleBatchLotsSection(
                         lots.forEach { lot ->
                             StockLotRow(
                                 lot = lot,
-                                isActiveFefoLot = lot.id == activeFefoLotId
+                                isActiveFefoLot = lot.id == activeFefoLotId,
+                                onOpenClick = { onOpenLotClick(lot) },
+                                onRecountClick = { onRecountLotClick(lot) },
+                                onDiscardClick = { onDiscardLotClick(lot) },
+                                onReopenClick = { onReopenLotClick(lot) },
+                                onEditClick = { onEditLotClick(lot) }
                             )
                         }
                     }
@@ -1313,10 +1848,16 @@ private fun CollapsibleStockLedgerSection(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StockLotRow(
     lot: StockLot,
-    isActiveFefoLot: Boolean = false
+    isActiveFefoLot: Boolean = false,
+    onOpenClick: () -> Unit = {},
+    onRecountClick: () -> Unit = {},
+    onDiscardClick: () -> Unit = {},
+    onReopenClick: () -> Unit = {},
+    onEditClick: () -> Unit = {}
 ) {
     val semantic = MaterialTheme.noveloColors
     val expiryStr = lot.expiryDateEpochMs?.let {
@@ -1328,6 +1869,10 @@ private fun StockLotRow(
         daysToExpiry <= 30
     } ?: false
 
+    val discardCutoffStr = lot.effectiveDiscardAfterOpeningEpochMs?.let {
+        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
@@ -1337,69 +1882,160 @@ private fun StockLotRow(
             color = if (isActiveFefoLot) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = lot.lotNumber?.let { "Lot #$it" } ?: "Unnumbered Batch",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (isActiveFefoLot) {
-                        Surface(
-                            shape = NoveloPillShape,
-                            color = semantic.takenContainer,
-                            border = BorderStroke(1.dp, semantic.takenBorder)
-                        ) {
-                            Text(
-                                text = "✓ Active FEFO Lot",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = semantic.taken,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = lot.packageLabel ?: lot.lotNumber?.let { "Lot #$it" } ?: "Unnumbered Batch",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        PackageStatusChip(status = lot.packageStatus)
+                        if (isActiveFefoLot) {
+                            Surface(
+                                shape = NoveloPillShape,
+                                color = semantic.takenContainer,
+                                border = BorderStroke(1.dp, semantic.takenBorder)
+                            ) {
+                                Text(
+                                    text = "✓ Active FEFO",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = semantic.taken,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                         }
                     }
-                }
-                Text(
-                    text = "Remaining: ${lot.remainingQuantity.toDisplayString()} of ${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}",
-                    style = MaterialTheme.typography.bodySmall.tabular,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (lot.notes != null) {
                     Text(
-                        text = lot.notes,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "Remaining: ${lot.remainingQuantity.toDisplayString()} of ${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}",
+                        style = MaterialTheme.typography.bodySmall.tabular,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (discardCutoffStr != null) {
+                        Text(
+                            text = "Discard opened pack by: $discardCutoffStr",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = semantic.warning
+                        )
+                    }
+                    if (!lot.lotNumber.isNullOrBlank()) {
+                        Text(
+                            text = "Lot: ${lot.lotNumber}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (lot.notes != null) {
+                        Text(
+                            text = lot.notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = NoveloPillShape,
+                    color = if (isExpiringSoon) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, if (isExpiringSoon) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Text(
+                        text = "Exp: $expiryStr",
+                        style = MaterialTheme.typography.labelSmall.tabular,
+                        color = if (isExpiringSoon) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
                 }
             }
 
-            Surface(
-                shape = NoveloPillShape,
-                color = if (isExpiringSoon) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, if (isExpiringSoon) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Text(
-                    text = "Exp: $expiryStr",
-                    style = MaterialTheme.typography.labelSmall.tabular,
-                    color = if (isExpiringSoon) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                )
+            if (lot.packageStatus == PackageStatus.EMPTY && lot.depletionReason != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        shape = NoveloPillShape,
+                        color = semantic.assumedContainer,
+                        border = BorderStroke(1.dp, semantic.assumedBorder)
+                    ) {
+                        Text(
+                            text = "Depleted Early: ${lot.depletionReason ?: "Finished"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = semantic.assumed,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                    TextButton(
+                        onClick = onReopenClick,
+                        modifier = Modifier.heightIn(min = 40.dp)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reopen / Undo", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            if (lot.packageStatus == PackageStatus.UNOPENED || lot.packageStatus == PackageStatus.OPENED) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (lot.packageStatus == PackageStatus.UNOPENED) {
+                        FilledTonalButton(
+                            onClick = onOpenClick,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Text("Open Pack", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    if (lot.packageStatus == PackageStatus.OPENED) {
+                        OutlinedButton(
+                            onClick = onRecountClick,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            shape = MaterialTheme.shapes.small,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Text("Recount Pack", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onDiscardClick,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = MaterialTheme.shapes.small,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text("Discard", style = MaterialTheme.typography.labelMedium, color = semantic.warning)
+                    }
+                    TextButton(
+                        onClick = onEditClick,
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) {
+                        Text("Edit Info", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
     }
@@ -1567,20 +2203,126 @@ fun EditMedicationDialog(
         recordingMode: RecordingMode,
         notes: String,
         colorTagHex: String
-    ) -> Unit
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onConfirmWithPackaging: ((
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        lowStockThreshold: String,
+        recordingMode: RecordingMode,
+        notes: String,
+        colorTagHex: String,
+        packagingConfig: PackagingConfig?,
+        administrationProfile: AdministrationProfile,
+        lowStockDaysThreshold: Int?
+    ) -> Unit)? = null
 ) {
+    val existingPackaging = medication.packagingConfig
+    val existingAdmin = medication.administrationProfile
+
     var name by rememberSaveable { mutableStateOf(medication.name) }
     var strength by rememberSaveable { mutableStateOf(medication.strength) }
     var selectedFormName by rememberSaveable { mutableStateOf(medication.form.name) }
     var selectedUnitName by rememberSaveable { mutableStateOf(medication.stockUnit.name) }
     var lowStockThresholdStr by rememberSaveable { mutableStateOf(medication.lowStockThreshold.toDisplayString()) }
+    var lowStockDaysStr by rememberSaveable { mutableStateOf(medication.lowStockDaysThreshold?.toString() ?: "") }
     var selectedModeName by rememberSaveable { mutableStateOf(medication.recordingMode.name) }
     var notes by rememberSaveable { mutableStateOf(medication.notes) }
     var selectedColorHex by rememberSaveable { mutableStateOf(medication.colorTagHex) }
 
+    var selectedPackageTypeName by rememberSaveable {
+        mutableStateOf(
+            existingPackaging?.packageType?.name ?: when (medication.form) {
+                MedicationForm.DROPS -> PackageType.BOTTLE.name
+                MedicationForm.TOPICAL_CREAM -> PackageType.TUBE.name
+                MedicationForm.INHALER_PUFFS -> PackageType.INHALER.name
+                MedicationForm.LIQUID_ML -> PackageType.BOTTLE.name
+                MedicationForm.PATCH -> PackageType.PATCH_BOX.name
+                MedicationForm.INJECTION -> PackageType.VIAL.name
+                else -> PackageType.BLISTER_PACK.name
+            }
+        )
+    }
+    var contentsPerPackageStr by rememberSaveable {
+        mutableStateOf(existingPackaging?.contentsPerPackage?.toDisplayString() ?: "")
+    }
+    var netContentLabel by rememberSaveable { mutableStateOf(existingPackaging?.netContentLabel ?: "") }
+    var discardAfterOpeningDaysStr by rememberSaveable {
+        mutableStateOf(existingPackaging?.discardAfterOpeningDays?.toString() ?: "")
+    }
+    var gelTrackingModeName by rememberSaveable {
+        mutableStateOf(existingPackaging?.gelTrackingMode?.name ?: GelTrackingMode.ESTIMATED_APPLICATIONS.name)
+    }
+    var adminSiteName by rememberSaveable { mutableStateOf(existingAdmin.site.name) }
+    var leftEyeQtyStr by rememberSaveable {
+        mutableStateOf(existingAdmin.leftEyeQuantity?.toDisplayString() ?: "1")
+    }
+    var rightEyeQtyStr by rememberSaveable {
+        mutableStateOf(existingAdmin.rightEyeQuantity?.toDisplayString() ?: "1")
+    }
+    var containersPerAdminStr by rememberSaveable {
+        mutableStateOf(existingAdmin.containersPerAdministration?.toDisplayString() ?: "1")
+    }
+
     val selectedForm = runCatching { MedicationForm.valueOf(selectedFormName) }.getOrDefault(medication.form)
     val selectedUnit = runCatching { StockUnit.valueOf(selectedUnitName) }.getOrDefault(medication.stockUnit)
     val selectedMode = runCatching { RecordingMode.valueOf(selectedModeName) }.getOrDefault(medication.recordingMode)
+    val selectedPackageType = runCatching { PackageType.valueOf(selectedPackageTypeName) }
+        .getOrDefault(existingPackaging?.packageType ?: PackageType.CUSTOM)
+    val selectedGelMode = runCatching { GelTrackingMode.valueOf(gelTrackingModeName) }
+        .getOrDefault(GelTrackingMode.ESTIMATED_APPLICATIONS)
+    val selectedAdminSite = runCatching { AdministrationSite.valueOf(adminSiteName) }
+        .getOrDefault(AdministrationSite.NONE)
+
+    val parsedContents = contentsPerPackageStr.trim().takeIf { it.isNotEmpty() }?.let {
+        runCatching { ScaledQuantity.fromDisplayString(it) }.getOrNull()?.takeIf { q -> q.isPositive() }
+    }
+    val effectiveConsumptionUnit = when {
+        selectedForm == MedicationForm.DROPS &&
+            (selectedPackageType == PackageType.BOX_SINGLE_DOSE || selectedPackageType == PackageType.SINGLE_DOSE_UNIT) ->
+            StockUnit.CONTAINERS
+        selectedForm == MedicationForm.DROPS -> StockUnit.DROPS
+        selectedForm == MedicationForm.TOPICAL_CREAM && selectedGelMode == GelTrackingMode.ESTIMATED_APPLICATIONS ->
+            StockUnit.APPLICATIONS
+        selectedForm == MedicationForm.TOPICAL_CREAM && selectedGelMode == GelTrackingMode.GRAMS ->
+            StockUnit.GRAMS
+        selectedForm == MedicationForm.TOPICAL_CREAM && selectedGelMode == GelTrackingMode.TUBE_COUNT_ONLY ->
+            StockUnit.BOTTLES
+        else -> selectedUnit
+    }
+    val effectivePrecision = when {
+        selectedForm == MedicationForm.TOPICAL_CREAM && selectedGelMode == GelTrackingMode.TUBE_COUNT_ONLY ->
+            TrackingPrecision.UNKNOWN
+        selectedForm == MedicationForm.TOPICAL_CREAM && selectedGelMode == GelTrackingMode.ESTIMATED_APPLICATIONS ->
+            if (parsedContents != null) TrackingPrecision.ESTIMATED else TrackingPrecision.UNKNOWN
+        selectedForm == MedicationForm.TOPICAL_CREAM && selectedGelMode == GelTrackingMode.GRAMS ->
+            TrackingPrecision.APPROXIMATE
+        selectedForm == MedicationForm.DROPS &&
+            selectedPackageType == PackageType.BOTTLE ->
+            if (parsedContents != null) TrackingPrecision.ESTIMATED else TrackingPrecision.UNKNOWN
+        effectiveConsumptionUnit in setOf(
+            StockUnit.TABLETS, StockUnit.CAPSULES, StockUnit.CONTAINERS, StockUnit.PATCHES, StockUnit.PUFFS
+        ) -> TrackingPrecision.EXACT
+        else -> if (parsedContents != null) TrackingPrecision.APPROXIMATE else TrackingPrecision.EXACT
+    }
+
+    val packageChoices = remember(selectedForm) {
+        when (selectedForm) {
+            MedicationForm.DROPS -> listOf(
+                PackageType.BOTTLE,
+                PackageType.BOX_SINGLE_DOSE,
+                PackageType.SINGLE_DOSE_UNIT
+            )
+            MedicationForm.TOPICAL_CREAM -> listOf(PackageType.TUBE, PackageType.JAR, PackageType.CUSTOM)
+            MedicationForm.INHALER_PUFFS -> listOf(PackageType.INHALER, PackageType.CUSTOM)
+            MedicationForm.LIQUID_ML -> listOf(PackageType.BOTTLE, PackageType.VIAL, PackageType.CUSTOM)
+            MedicationForm.PATCH -> listOf(PackageType.PATCH_BOX, PackageType.CUSTOM)
+            MedicationForm.INJECTION -> listOf(PackageType.VIAL, PackageType.CUSTOM)
+            else -> listOf(PackageType.BLISTER_PACK, PackageType.BOTTLE, PackageType.CUSTOM)
+        }
+    }
+
     val isValid = name.isNotBlank() && strength.isNotBlank()
 
     AlertDialog(
@@ -1621,20 +2363,192 @@ fun EditMedicationDialog(
                             onClick = {
                                 selectedFormName = form.name
                                 selectedUnitName = defaultStockUnitForForm(form).name
+                                selectedPackageTypeName = when (form) {
+                                    MedicationForm.DROPS -> PackageType.BOTTLE.name
+                                    MedicationForm.TOPICAL_CREAM -> PackageType.TUBE.name
+                                    MedicationForm.INHALER_PUFFS -> PackageType.INHALER.name
+                                    MedicationForm.LIQUID_ML -> PackageType.BOTTLE.name
+                                    MedicationForm.PATCH -> PackageType.PATCH_BOX.name
+                                    MedicationForm.INJECTION -> PackageType.VIAL.name
+                                    else -> PackageType.BLISTER_PACK.name
+                                }
+                                if (form != MedicationForm.DROPS) {
+                                    adminSiteName = AdministrationSite.NONE.name
+                                } else if (selectedAdminSite == AdministrationSite.NONE) {
+                                    adminSiteName = AdministrationSite.BOTH_EYES.name
+                                }
                             },
                             label = { Text(form.displayName) }
                         )
                     }
                 }
 
-                OutlinedTextField(
-                    value = lowStockThresholdStr,
-                    onValueChange = { lowStockThresholdStr = it },
-                    label = { Text("Low-Stock Warning Threshold (${selectedUnit.abbreviation})") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (onConfirmWithPackaging != null) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                    Text("Packaging & Shelf Life", style = MaterialTheme.typography.labelLarge)
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        packageChoices.forEach { pkgType ->
+                            FilterChip(
+                                selected = selectedPackageType == pkgType,
+                                onClick = {
+                                    selectedPackageTypeName = pkgType.name
+                                    if (selectedForm == MedicationForm.DROPS) {
+                                        selectedUnitName = if (
+                                            pkgType == PackageType.BOX_SINGLE_DOSE ||
+                                            pkgType == PackageType.SINGLE_DOSE_UNIT
+                                        ) {
+                                            StockUnit.CONTAINERS.name
+                                        } else {
+                                            StockUnit.DROPS.name
+                                        }
+                                    }
+                                },
+                                label = { Text(pkgType.displayName) }
+                            )
+                        }
+                    }
+
+                    if (selectedForm == MedicationForm.TOPICAL_CREAM) {
+                        Text("Gel / Ointment Tracking Mode", style = MaterialTheme.typography.labelMedium)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            GelTrackingMode.entries.forEach { gelMode ->
+                                FilterChip(
+                                    selected = selectedGelMode == gelMode,
+                                    onClick = { gelTrackingModeName = gelMode.name },
+                                    label = { Text(gelMode.displayName) }
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = contentsPerPackageStr,
+                            onValueChange = { contentsPerPackageStr = it },
+                            label = { Text("Per ${selectedPackageType.displayName} (${effectiveConsumptionUnit.abbreviation})") },
+                            placeholder = { Text("Optional") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = discardAfterOpeningDaysStr,
+                            onValueChange = { discardAfterOpeningDaysStr = it },
+                            label = { Text("Discard Days") },
+                            placeholder = { Text("e.g. 28") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(0.75f)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = netContentLabel,
+                        onValueChange = { netContentLabel = it },
+                        label = { Text("Printed Package Size Label (Optional)") },
+                        placeholder = { Text("e.g. 10 ml bottle or 5 g tube") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (selectedForm == MedicationForm.DROPS) {
+                        Text("Ophthalmic Eye Selection", style = MaterialTheme.typography.labelMedium)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                AdministrationSite.LEFT_EYE,
+                                AdministrationSite.RIGHT_EYE,
+                                AdministrationSite.BOTH_EYES
+                            ).forEach { eyeSite ->
+                                FilterChip(
+                                    selected = selectedAdminSite == eyeSite,
+                                    onClick = { adminSiteName = eyeSite.name },
+                                    label = { Text(eyeSite.displayName) }
+                                )
+                            }
+                        }
+
+                        if (selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
+                            selectedPackageType == PackageType.SINGLE_DOSE_UNIT
+                        ) {
+                            OutlinedTextField(
+                                value = containersPerAdminStr,
+                                onValueChange = { containersPerAdminStr = it },
+                                label = { Text("Single-Dose Containers Used Per Administration") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (selectedAdminSite == AdministrationSite.LEFT_EYE ||
+                                    selectedAdminSite == AdministrationSite.BOTH_EYES
+                                ) {
+                                    OutlinedTextField(
+                                        value = leftEyeQtyStr,
+                                        onValueChange = { leftEyeQtyStr = it },
+                                        label = { Text("Left Eye (drops)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (selectedAdminSite == AdministrationSite.RIGHT_EYE ||
+                                    selectedAdminSite == AdministrationSite.BOTH_EYES
+                                ) {
+                                    OutlinedTextField(
+                                        value = rightEyeQtyStr,
+                                        onValueChange = { rightEyeQtyStr = it },
+                                        label = { Text("Right Eye (drops)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = lowStockThresholdStr,
+                        onValueChange = { lowStockThresholdStr = it },
+                        label = { Text("Low-Stock (${effectiveConsumptionUnit.abbreviation})") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (onConfirmWithPackaging != null) {
+                        OutlinedTextField(
+                            value = lowStockDaysStr,
+                            onValueChange = { lowStockDaysStr = it },
+                            label = { Text("Runway Days") },
+                            placeholder = { Text("e.g. 7") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.weight(0.75f)
+                        )
+                    }
+                }
 
                 Text("Visual Accent Tag", style = MaterialTheme.typography.labelMedium)
                 Row(
@@ -1687,16 +2601,73 @@ fun EditMedicationDialog(
             Button(
                 onClick = {
                     if (isValid) {
-                        onConfirm(
-                            name.trim(),
-                            strength.trim(),
-                            selectedForm,
-                            selectedUnit,
-                            lowStockThresholdStr,
-                            selectedMode,
-                            notes.trim(),
-                            selectedColorHex
-                        )
+                        val trimmedName = name.trim()
+                        val trimmedStrength = strength.trim()
+                        val trimmedNotes = notes.trim()
+                        if (onConfirmWithPackaging != null) {
+                            val updatedPackaging = PackagingConfig(
+                                packageType = selectedPackageType,
+                                consumptionUnit = effectiveConsumptionUnit,
+                                contentsPerPackage = parsedContents,
+                                netContentLabel = netContentLabel.trim().takeIf { it.isNotEmpty() },
+                                discardAfterOpeningDays = discardAfterOpeningDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
+                                trackingPrecision = effectivePrecision,
+                                gelTrackingMode = if (selectedForm == MedicationForm.TOPICAL_CREAM) selectedGelMode else null
+                            )
+                            val updatedAdmin = if (selectedForm == MedicationForm.DROPS) {
+                                val leftParsed = runCatching { ScaledQuantity.fromDisplayString(leftEyeQtyStr) }.getOrNull()
+                                    ?.takeIf { it.isPositive() }
+                                val rightParsed = runCatching { ScaledQuantity.fromDisplayString(rightEyeQtyStr) }.getOrNull()
+                                    ?.takeIf { it.isPositive() }
+                                val containerParsed = runCatching { ScaledQuantity.fromDisplayString(containersPerAdminStr) }.getOrNull()
+                                    ?.takeIf { it.isPositive() }
+                                AdministrationProfile(
+                                    site = if (selectedAdminSite == AdministrationSite.NONE) {
+                                        AdministrationSite.BOTH_EYES
+                                    } else {
+                                        selectedAdminSite
+                                    },
+                                    leftEyeQuantity = if (
+                                        selectedPackageType == PackageType.BOTTLE &&
+                                        (selectedAdminSite == AdministrationSite.LEFT_EYE || selectedAdminSite == AdministrationSite.BOTH_EYES)
+                                    ) leftParsed else null,
+                                    rightEyeQuantity = if (
+                                        selectedPackageType == PackageType.BOTTLE &&
+                                        (selectedAdminSite == AdministrationSite.RIGHT_EYE || selectedAdminSite == AdministrationSite.BOTH_EYES)
+                                    ) rightParsed else null,
+                                    containersPerAdministration = if (
+                                        selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
+                                        selectedPackageType == PackageType.SINGLE_DOSE_UNIT
+                                    ) containerParsed else null
+                                )
+                            } else {
+                                AdministrationProfile(site = AdministrationSite.NONE)
+                            }
+                            onConfirmWithPackaging(
+                                trimmedName,
+                                trimmedStrength,
+                                selectedForm,
+                                effectiveConsumptionUnit,
+                                lowStockThresholdStr,
+                                selectedMode,
+                                trimmedNotes,
+                                selectedColorHex,
+                                updatedPackaging,
+                                updatedAdmin,
+                                lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 }
+                            )
+                        } else {
+                            onConfirm(
+                                trimmedName,
+                                trimmedStrength,
+                                selectedForm,
+                                effectiveConsumptionUnit,
+                                lowStockThresholdStr,
+                                selectedMode,
+                                trimmedNotes,
+                                selectedColorHex
+                            )
+                        }
                     }
                 },
                 enabled = isValid
@@ -1813,6 +2784,7 @@ fun EditScheduleDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RestockDialog(
     medication: Medication,
@@ -1823,16 +2795,39 @@ fun RestockDialog(
         lotNumber: String?,
         expiryDateEpochMs: Long?,
         notes: String?
-    ) -> Unit
+    ) -> Unit = { _, _, _, _ -> },
+    onConfirmPackages: ((
+        packageCount: Int,
+        contentsPerPackage: ScaledQuantity,
+        consumptionUnit: StockUnit,
+        packageType: PackageType,
+        discardAfterOpeningDays: Int?,
+        lotNumber: String?,
+        expiryDateEpochMs: Long?,
+        notes: String?
+    ) -> Unit)? = null
 ) {
     val semantic = MaterialTheme.noveloColors
-    val defaultInitialQty = when (medication.stockUnit) {
-        StockUnit.DROPS -> "30"
+    val packaging = medication.packagingConfig
+    val packageAwareAvailable = onConfirmPackages != null && packaging != null
+    var usePackageMode by rememberSaveable { mutableStateOf(packageAwareAvailable) }
+
+    val consumptionUnit = medication.effectiveConsumptionUnit
+    val defaultInitialQty = when (consumptionUnit) {
+        StockUnit.DROPS -> "300"
+        StockUnit.CONTAINERS -> "30"
         StockUnit.ML -> "100"
         StockUnit.PUFFS -> "120"
         StockUnit.BOTTLES -> "1"
         StockUnit.PATCHES -> "7"
         else -> "28"
+    }
+    var packageCountStr by rememberSaveable { mutableStateOf("1") }
+    var contentsPerPackageStr by rememberSaveable {
+        mutableStateOf(packaging?.contentsPerPackage?.toDisplayString() ?: defaultInitialQty)
+    }
+    var discardDaysStr by rememberSaveable {
+        mutableStateOf(packaging?.discardAfterOpeningDays?.toString() ?: "")
     }
     var quantityStr by rememberSaveable { mutableStateOf(defaultInitialQty) }
     var lotNumber by rememberSaveable { mutableStateOf("") }
@@ -1840,8 +2835,9 @@ fun RestockDialog(
     var notes by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
-    val presets = when (medication.stockUnit) {
-        StockUnit.DROPS -> listOf("15", "30", "60")
+    val presets = when (consumptionUnit) {
+        StockUnit.DROPS -> listOf("150", "300", "600")
+        StockUnit.CONTAINERS -> listOf("30", "60", "200")
         StockUnit.ML -> listOf("50", "100", "150", "200")
         StockUnit.PUFFS -> listOf("60", "120", "200")
         StockUnit.BOTTLES -> listOf("1", "2", "3")
@@ -1849,9 +2845,24 @@ fun RestockDialog(
         else -> listOf("7", "14", "28", "56", "84")
     }
 
-    val parsedQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }.getOrNull()
-    val isValid = parsedQty != null && parsedQty.isPositive()
-    val newBalance = if (parsedQty != null) currentBalance + parsedQty else currentBalance
+    val parsedPackageCount = packageCountStr.trim().toIntOrNull()?.takeIf { it in 1..24 }
+    val parsedContentsPerPackage = runCatching { ScaledQuantity.fromDisplayString(contentsPerPackageStr) }
+        .getOrNull()?.takeIf { it.isPositive() }
+    val parsedDirectQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }
+        .getOrNull()?.takeIf { it.isPositive() }
+
+    val effectiveAddedQty = if (usePackageMode && packageAwareAvailable) {
+        if (parsedPackageCount != null && parsedContentsPerPackage != null) {
+            parsedContentsPerPackage * parsedPackageCount.toLong()
+        } else {
+            null
+        }
+    } else {
+        parsedDirectQty
+    }
+
+    val isValid = effectiveAddedQty != null && effectiveAddedQty.isPositive()
+    val newBalance = if (effectiveAddedQty != null) currentBalance + effectiveAddedQty else currentBalance
     val daysAhead = expiryDaysAheadStr.toLongOrNull() ?: 365L
     val computedExpiryDateStr = LocalDate.now().plusDays(daysAhead.coerceAtLeast(1L)).format(DATE_FORMATTER)
 
@@ -1867,13 +2878,35 @@ fun RestockDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Recording new supply for ${medication.name} (${medication.strength}). Appends an immutable RESTOCK entry and creates a FEFO batch lot.",
+                    text = if (usePackageMode && packageAwareAvailable && packaging != null) {
+                        "Add sealed ${packaging.packageType.pluralName.lowercase()} for ${medication.name} (${medication.strength}). Each package stays UNOPENED until you start using it."
+                    } else {
+                        "Recording new supply for ${medication.name} (${medication.strength}). Appends an immutable RESTOCK entry and creates a FEFO batch lot."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                if (packageAwareAvailable && packaging != null) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = usePackageMode,
+                            onClick = { usePackageMode = true },
+                            label = { Text("Add ${packaging.packageType.pluralName}") }
+                        )
+                        FilterChip(
+                            selected = !usePackageMode,
+                            onClick = { usePackageMode = false },
+                            label = { Text("Custom ${consumptionUnit.abbreviation} Amount") }
+                        )
+                    }
+                }
+
                 // Live Post-Restock Impact Preview
-                if (parsedQty != null && parsedQty.isPositive()) {
+                if (effectiveAddedQty != null && effectiveAddedQty.isPositive()) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         color = semantic.takenContainer,
@@ -1891,11 +2924,18 @@ fun RestockDialog(
                                 color = semantic.taken
                             )
                             Text(
-                                text = "${currentBalance.toDisplayString()} → ${newBalance.toDisplayString()} ${medication.stockUnit.abbreviation} (+${parsedQty.toDisplayString()})",
+                                text = "${currentBalance.toDisplayString()} → ${newBalance.toDisplayString()} ${consumptionUnit.abbreviation} (+${effectiveAddedQty.toDisplayString()})",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = semantic.taken
                             )
+                            if (usePackageMode && packageAwareAvailable && packaging != null && parsedPackageCount != null && parsedContentsPerPackage != null) {
+                                Text(
+                                    text = "$parsedPackageCount × ${packaging.packageType.displayName} (${parsedContentsPerPackage.toDisplayString()} ${consumptionUnit.abbreviation} each)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = semantic.taken
+                                )
+                            }
                             Text(
                                 text = "Batch Expiry: $computedExpiryDateStr",
                                 style = MaterialTheme.typography.labelSmall,
@@ -1905,25 +2945,72 @@ fun RestockDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = quantityStr,
-                    onValueChange = { quantityStr = it },
-                    label = { Text("Quantity Added (${medication.stockUnit.displayName}) *") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    presets.forEach { preset ->
-                        FilterChip(
-                            selected = quantityStr == preset,
-                            onClick = { quantityStr = preset },
-                            label = { Text("+$preset ${medication.stockUnit.abbreviation}") }
+                if (usePackageMode && packageAwareAvailable && packaging != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = packageCountStr,
+                            onValueChange = { packageCountStr = it },
+                            label = { Text("${packaging.packageType.pluralName} Added *") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(0.8f),
+                            singleLine = true
                         )
+                        OutlinedTextField(
+                            value = contentsPerPackageStr,
+                            onValueChange = { contentsPerPackageStr = it },
+                            label = { Text("${consumptionUnit.displayName} / ${packaging.packageType.displayName} *") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("1", "2", "3", "6").forEach { countPreset ->
+                            FilterChip(
+                                selected = packageCountStr == countPreset,
+                                onClick = { packageCountStr = countPreset },
+                                label = { Text("+$countPreset ${if (countPreset == "1") packaging.packageType.displayName else packaging.packageType.pluralName}") }
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = discardDaysStr,
+                        onValueChange = { discardDaysStr = it },
+                        label = { Text("Discard Window After Opening (Days, Optional)") },
+                        placeholder = { Text("e.g. 28 for eye drops") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = quantityStr,
+                        onValueChange = { quantityStr = it },
+                        label = { Text("Quantity Added (${consumptionUnit.displayName}) *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        presets.forEach { preset ->
+                            FilterChip(
+                                selected = quantityStr == preset,
+                                onClick = { quantityStr = preset },
+                                label = { Text("+$preset ${consumptionUnit.abbreviation}") }
+                            )
+                        }
                     }
                 }
 
@@ -1961,12 +3048,29 @@ fun RestockDialog(
                     if (isValid && !isSubmitting) {
                         isSubmitting = true
                         val expiryEpoch = System.currentTimeMillis() + (daysAhead * 24 * 60 * 60 * 1000)
-                        onConfirm(
-                            parsedQty!!,
-                            lotNumber.takeIf { it.isNotBlank() },
-                            expiryEpoch,
-                            notes.takeIf { it.isNotBlank() }
-                        )
+                        val cleanLot = lotNumber.takeIf { it.isNotBlank() }
+                        val cleanNotes = notes.takeIf { it.isNotBlank() }
+                        if (usePackageMode && onConfirmPackages != null && packaging != null &&
+                            parsedPackageCount != null && parsedContentsPerPackage != null
+                        ) {
+                            onConfirmPackages(
+                                parsedPackageCount,
+                                parsedContentsPerPackage,
+                                consumptionUnit,
+                                packaging.packageType,
+                                discardDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
+                                cleanLot,
+                                expiryEpoch,
+                                cleanNotes
+                            )
+                        } else {
+                            onConfirm(
+                                effectiveAddedQty!!,
+                                cleanLot,
+                                expiryEpoch,
+                                cleanNotes
+                            )
+                        }
                     }
                 },
                 enabled = isValid && !isSubmitting
@@ -2116,6 +3220,598 @@ fun AdjustStockDialog(
                 enabled = isValid && !isSubmitting
             ) {
                 Text("Save Adjustment")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun RecountOpenedPackageDialog(
+    medication: Medication,
+    openedLot: StockLot,
+    onDismiss: () -> Unit,
+    onConfirm: (observedRemaining: ScaledQuantity, reason: String) -> Unit
+) {
+    val semantic = MaterialTheme.noveloColors
+    val pkgType = openedLot.packageType ?: PackageType.CUSTOM
+    val unitLabel = openedLot.unit.displayName
+    val unitAbbr = openedLot.unit.abbreviation
+    val pkgLabel = openedLot.packageLabel ?: pkgType.displayName
+
+    var observedStr by rememberSaveable { mutableStateOf(openedLot.remainingQuantity.toDisplayString()) }
+    var reason by rememberSaveable { mutableStateOf("Physical recount of opened ${pkgType.displayName.lowercase()}") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val parsedObserved = runCatching { ScaledQuantity.fromDisplayString(observedStr) }
+        .getOrNull()?.takeIf { !it.isNegative() }
+    val delta = parsedObserved?.let { it - openedLot.remainingQuantity }
+    val isValid = parsedObserved != null && reason.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Recount Opened ${pkgType.displayName}",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Adjust remaining supply inside $pkgLabel (${medication.name}) only. Unopened packages remain untouched.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "$pkgLabel · Current Recorded: ${openedLot.remainingQuantity.toDisplayString()} / ${openedLot.initialQuantity.toDisplayString()} $unitAbbr",
+                            style = MaterialTheme.typography.labelMedium.tabular,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (delta != null && delta.rawScaledValue != 0L) {
+                            val sign = if (delta.isPositive()) "+" else ""
+                            Text(
+                                text = "Ledger Reconciliation: $sign${delta.toDisplayString()} $unitAbbr",
+                                style = MaterialTheme.typography.labelSmall.tabular,
+                                fontWeight = FontWeight.Bold,
+                                color = if (delta.isPositive()) semantic.taken else semantic.warning
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = observedStr,
+                    onValueChange = { observedStr = it },
+                    label = { Text("Observed Remaining in Opened ${pkgType.displayName} ($unitLabel) *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "Physical recount",
+                        "Extra drop or spill",
+                        "Nearly empty"
+                    ).forEach { preset ->
+                        FilterChip(
+                            selected = reason == preset,
+                            onClick = { reason = preset },
+                            label = { Text(preset) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text("Audit Reason *") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isValid && !isSubmitting) {
+                        isSubmitting = true
+                        onConfirm(parsedObserved!!, reason.trim())
+                    }
+                },
+                enabled = isValid && !isSubmitting
+            ) {
+                Text("Update Opened ${pkgType.displayName}")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DiscardPackageDialog(
+    medication: Medication,
+    lot: StockLot,
+    onDismiss: () -> Unit,
+    onConfirm: (reason: String) -> Unit
+) {
+    val semantic = MaterialTheme.noveloColors
+    val pkgType = lot.packageType ?: PackageType.CUSTOM
+    val pkgLabel = lot.packageLabel ?: pkgType.displayName
+    var reason by rememberSaveable { mutableStateOf("Opened past discard window") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Discard ${pkgType.displayName}",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = semantic.missedContainer,
+                    border = BorderStroke(1.dp, semantic.missedBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Wastage Ledger Deduction (-WASTAGE)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = semantic.missed
+                        )
+                        Text(
+                            text = "Discarding $pkgLabel (${medication.name}) writes off ${lot.remainingQuantity.toDisplayString()} ${lot.unit.abbreviation} and excludes this package from active doses. Other unopened packages remain active.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "Opened past discard window",
+                        "Contaminated / damaged",
+                        "Expired",
+                        "Finished early"
+                    ).forEach { preset ->
+                        FilterChip(
+                            selected = reason == preset,
+                            onClick = { reason = preset },
+                            label = { Text(preset) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text("Discard Reason *") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (reason.isNotBlank() && !isSubmitting) {
+                        isSubmitting = true
+                        onConfirm(reason.trim())
+                    }
+                },
+                enabled = reason.isNotBlank() && !isSubmitting,
+                colors = ButtonDefaults.buttonColors(containerColor = semantic.missed)
+            ) {
+                Text("Confirm Discard")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun EarlyPackageDepletionDialog(
+    medication: Medication,
+    lot: StockLot,
+    unopenedCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (reason: DepletionReason, userNote: String?) -> Unit
+) {
+    val semantic = MaterialTheme.noveloColors
+    val pkgType = lot.packageType ?: medication.packagingConfig?.packageType ?: PackageType.CUSTOM
+    val pkgSingular = pkgType.displayName
+    val pkgLabel = lot.packageLabel ?: lot.lotNumber?.let { "Lot #$it" } ?: "Current $pkgSingular"
+
+    var selectedReason by remember { mutableStateOf(DepletionReason.EMPTY_NO_DROPS_LEFT) }
+    var userNote by rememberSaveable { mutableStateOf("") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    val initialQtyStr = "${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}"
+    val remainingQtyStr = "${lot.remainingQuantity.toDisplayString()} ${lot.unit.abbreviation}"
+    val consumedRaw = (lot.initialQuantity.rawScaledValue - lot.remainingQuantity.rawScaledValue).coerceAtLeast(0L)
+    val consumedQtyStr = "${ScaledQuantity(consumedRaw).toDisplayString()} ${lot.unit.abbreviation}"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Has this $pkgSingular run out?",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Disclaimer Banner
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "This action updates package inventory. It does not record a medication dose and does not change your adherence history.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Inventory Detail Card
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "${medication.name} · $pkgLabel",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Original estimated capacity:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(initialQtyStr, style = MaterialTheme.typography.bodySmall.tabular, fontWeight = FontWeight.SemiBold)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Doses recorded consumed:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(consumedQtyStr, style = MaterialTheme.typography.bodySmall.tabular, fontWeight = FontWeight.SemiBold)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Estimated remaining to write off:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(remainingQtyStr, style = MaterialTheme.typography.bodySmall.tabular, fontWeight = FontWeight.Bold, color = semantic.warning)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Unopened packages available:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = if (unopenedCount > 0) "$unopenedCount unopened available" else "No unopened remaining",
+                                style = MaterialTheme.typography.bodySmall.tabular,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (unopenedCount > 0) MaterialTheme.colorScheme.primary else semantic.warning
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Reason for finishing package:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    DepletionReason.entries.forEach { reason ->
+                        FilterChip(
+                            selected = selectedReason == reason,
+                            onClick = { selectedReason = reason },
+                            label = { Text(reason.displayName) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = userNote,
+                    onValueChange = { userNote = it },
+                    label = { Text("Optional note (e.g. leakage, dispenser variation)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!isSubmitting) {
+                        isSubmitting = true
+                        onConfirm(selectedReason, userNote.trim().ifBlank { null })
+                    }
+                },
+                enabled = !isSubmitting,
+                colors = ButtonDefaults.buttonColors(containerColor = semantic.warning)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Confirm Finished")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun ReopenPackageDialog(
+    medication: Medication,
+    lot: StockLot,
+    onDismiss: () -> Unit,
+    onConfirm: (reason: String) -> Unit
+) {
+    val pkgType = lot.packageType ?: medication.packagingConfig?.packageType ?: PackageType.CUSTOM
+    val pkgSingular = pkgType.displayName
+    val pkgLabel = lot.packageLabel ?: lot.lotNumber?.let { "Lot #$it" } ?: pkgSingular
+    var reasonNote by rememberSaveable { mutableStateOf("Accidental finish marked in error") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Reopen $pkgLabel?",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "This $pkgSingular was marked finished (${lot.depletionReason ?: "depleted"}). Reopening it will restore the written-off balance and reactivate it for dosing.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "A compensating ledger adjustment will be logged to maintain an auditable balance trail. Adherence and dose history remain unchanged.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = reasonNote,
+                    onValueChange = { reasonNote = it },
+                    label = { Text("Correction Note") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!isSubmitting) {
+                        isSubmitting = true
+                        onConfirm(reasonNote.trim().ifBlank { "Accidental finish reversal" })
+                    }
+                },
+                enabled = !isSubmitting
+            ) {
+                Text("Reopen $pkgSingular")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditPackageDetailsDialog(
+    lot: StockLot,
+    onDismiss: () -> Unit,
+    onConfirm: (
+        packageLabel: String?,
+        lotNumber: String?,
+        expiryDateEpochMs: Long?,
+        discardAfterOpeningDays: Int?,
+        notes: String?
+    ) -> Unit
+) {
+    val initialDaysAhead = lot.expiryDateEpochMs?.let { exp ->
+        ((exp - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L).toString()
+    } ?: ""
+
+    var packageLabel by rememberSaveable { mutableStateOf(lot.packageLabel ?: "") }
+    var lotNumber by rememberSaveable { mutableStateOf(lot.lotNumber ?: "") }
+    var expiryDaysAheadStr by rememberSaveable { mutableStateOf(initialDaysAhead) }
+    var expiryEdited by rememberSaveable { mutableStateOf(false) }
+    var discardDaysStr by rememberSaveable { mutableStateOf(lot.discardAfterOpeningDays?.toString() ?: "") }
+    var notes by rememberSaveable { mutableStateOf(lot.notes ?: "") }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
+        title = {
+            Text(
+                text = "Edit ${(lot.packageType ?: PackageType.CUSTOM).displayName} Details",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = packageLabel,
+                    onValueChange = { packageLabel = it },
+                    label = { Text("Package Label (Optional)") },
+                    placeholder = { Text("e.g. Bottle #1 (Fridge)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = lotNumber,
+                    onValueChange = { lotNumber = it },
+                    label = { Text("Batch / Lot Number (Optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = expiryDaysAheadStr,
+                    onValueChange = {
+                        expiryDaysAheadStr = it
+                        expiryEdited = true
+                    },
+                    label = { Text("Expiry (Days from Today, Optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = discardDaysStr,
+                    onValueChange = { discardDaysStr = it },
+                    label = { Text("Discard After Opening (Days, Optional)") },
+                    placeholder = { Text("e.g. 28") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (Optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!isSubmitting) {
+                        isSubmitting = true
+                        val resolvedExpiry = if (!expiryEdited) {
+                            lot.expiryDateEpochMs
+                        } else {
+                            expiryDaysAheadStr.trim().toLongOrNull()?.let { days ->
+                                System.currentTimeMillis() + (days.coerceAtLeast(0L) * 86_400_000L)
+                            }
+                        }
+                        onConfirm(
+                            packageLabel.trim().takeIf { it.isNotEmpty() },
+                            lotNumber.trim().takeIf { it.isNotEmpty() },
+                            resolvedExpiry,
+                            discardDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
+                            notes.trim().takeIf { it.isNotEmpty() }
+                        )
+                    }
+                },
+                enabled = !isSubmitting
+            ) {
+                Text("Save Package")
             }
         },
         dismissButton = {

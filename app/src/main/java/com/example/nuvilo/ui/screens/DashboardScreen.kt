@@ -106,11 +106,12 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(bottom = 28.dp)
                     ) {
-                        if (uiState.lowStockCount > 0 || uiState.expiringPrescriptionsCount > 0) {
+                        if (uiState.lowStockCount > 0 || uiState.expiringPrescriptionsCount > 0 || uiState.discardWarningCount > 0) {
                             item(key = "alerts_banner", contentType = "alert_banner") {
                                 AlertBanner(
                                     lowStockCount = uiState.lowStockCount,
                                     expiringRxCount = uiState.expiringPrescriptionsCount,
+                                    discardWarningCount = uiState.discardWarningCount,
                                     onActionClick = onNavigateToMedications
                                 )
                             }
@@ -132,11 +133,12 @@ fun DashboardScreen(
                         contentPadding = PaddingValues(bottom = 28.dp)
                     ) {
                         // 1. Attention Alerts Banner
-                        if (uiState.lowStockCount > 0 || uiState.expiringPrescriptionsCount > 0) {
+                        if (uiState.lowStockCount > 0 || uiState.expiringPrescriptionsCount > 0 || uiState.discardWarningCount > 0) {
                             item(key = "alerts_banner", contentType = "alert_banner") {
                                 AlertBanner(
                                     lowStockCount = uiState.lowStockCount,
                                     expiringRxCount = uiState.expiringPrescriptionsCount,
+                                    discardWarningCount = uiState.discardWarningCount,
                                     onActionClick = onNavigateToMedications
                                 )
                             }
@@ -154,6 +156,7 @@ fun DashboardScreen(
                                         occurrence = hero.occurrence,
                                         medication = hero.medication,
                                         stockBalance = hero.stockBalance,
+                                        consumption = hero.consumption,
                                         onTakeClick = {
                                             viewModel.onTakeDose(hero.occurrence)
                                             scope.launch {
@@ -202,6 +205,7 @@ fun DashboardScreen(
                                     occurrence = item.occurrence,
                                     medication = item.medication,
                                     stockBalance = item.stockBalance,
+                                    consumption = item.consumption,
                                     onTakeClick = {
                                         viewModel.onTakeDose(item.occurrence)
                                         scope.launch {

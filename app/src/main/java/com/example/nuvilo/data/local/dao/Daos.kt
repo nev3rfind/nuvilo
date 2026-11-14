@@ -134,6 +134,9 @@ interface StockLotDao {
     @Query("SELECT * FROM stock_lots")
     suspend fun getAllLots(): List<StockLotEntity>
 
+    @Query("SELECT * FROM stock_lots ORDER BY expiry_date_epoch_ms ASC, created_at_epoch_ms ASC")
+    fun observeAllLots(): Flow<List<StockLotEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLots(lots: List<StockLotEntity>)
 

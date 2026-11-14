@@ -1,14 +1,17 @@
 package com.example.nuvilo.domain.stock
 
+import com.example.nuvilo.domain.model.DepletionReason
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
+import com.example.nuvilo.domain.model.PackageStatus
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -405,5 +408,99 @@ class StockLedgerCalculatorTest {
         assertEquals(50, puffsBalance.daysRemaining)
         assertTrue(puffsBalance.isEstimate)
         assertFalse(puffsBalance.isLowStock)
+    }
+
+    @Test
+    fun depletePackageEarly_writesOffRemainingAsWastage_marksEmpty_stagesNextUnopened() {
+        val nowMs = 1_000_000L
+        val bottleA = StockLot(
+            id = "bottleA",
+            medicationId = "med1",
+            lotNumber = "LOT-001",
+            initialQuantity = ScaledQuantity.ofWhole(300),
+            remainingQuantity = ScaledQuantity.ofWhole(60),
+            unit = StockUnit.DROPS,
+            packageStatus = PackageStatus.OPENED,
+            openedAtEpochMs = nowMs - 100_000L
+        )
+        val bottleB = StockLot(
+            id = "bottleB",
+            medicationId = "med1",
+            lotNumber = "LOT-002",
+            initialQuantity = ScaledQuantity.ofWhole(300),
+            remainingQuantity = ScaledQuantity.ofWhole(300),
+            unit = StockUnit.DROPS,
+            packageStatus = PackageStatus.UNOPENED,
+            expiryDateEpochMs = nowMs + 10_000_000L,
+            createdAtEpochMs = nowMs - 50_000L
+        )
+
+        val outcome = calculator.depletePackageEarly(
+            lot = bottleA,
+            reason = DepletionReason.EMPTY_NO_DROPS_LEFT,
+            userNote = "Dry after 120 doses",
+            nowEpochMs = nowMs,
+            availableLots = listOf(bottleA, bottleB)
+        )
+
+        assertEquals(PackageStatus.EMPTY, outcome.depletedLot.packageStatus)
+        assertEquals(ScaledQuantity.ZERO, outcome.depletedLot.remainingQuantity)
+        assertEquals(nowMs, outcome.depletedLot.depletedAtEpochMs)
+        assertEquals("BOTTLE_EMPTY", outcome.depletedLot.depletionReason)
+        assertEquals("Dry after 120 doses", outcome.depletedLot.depletionNote)
+
+        assertNotNull(outcome.compensatingEntry)
+        assertEquals(MovementType.WASTAGE, outcome.compensatingEntry?.movementType)
+        assertEquals(60_000L, outcome.compensatingEntry?.quantity?.rawScaledValue)
+        assertEquals("bottleA", outcome.compensatingEntry?.lotId)
+
+        assertNotNull(outcome.stagedNextLot)
+        assertEquals("bottleB", outcome.stagedNextLot?.id)
+        assertEquals(PackageStatus.UNOPENED, outcome.stagedNextLot?.packageStatus)
+    }
+
+    @Test
+    fun reopenDepletedPackage_restoresBalanceAndStatus_createsAdjustmentIn() {
+        val nowMs = 2_000_000L
+        val depletedBottle = StockLot(
+            id = "bottleA",
+            medicationId = "med1",
+            lotNumber = "LOT-001",
+            initialQuantity = ScaledQuantity.ofWhole(300),
+            remainingQuantity = ScaledQuantity.ZERO,
+            unit = StockUnit.DROPS,
+            packageStatus = PackageStatus.EMPTY,
+            depletedAtEpochMs = nowMs - 10_000L,
+            depletionReason = "BOTTLE_EMPTY",
+            depletionNote = "Dry"
+        )
+
+        val depletionEntry = StockLedgerEntry(
+            id = "entry-deplete",
+            medicationId = "med1",
+            lotId = "bottleA",
+            timestampEpochMs = nowMs - 10_000L,
+            movementType = MovementType.WASTAGE,
+            quantity = ScaledQuantity.ofWhole(60),
+            unit = StockUnit.DROPS,
+            reason = "DEPLETION: Dry",
+            isEstimate = true
+        )
+
+        val outcome = calculator.reopenDepletedPackage(
+            lot = depletedBottle,
+            depletionLedgerEntry = depletionEntry,
+            reason = "Found 1 extra day of drops",
+            nowEpochMs = nowMs
+        )
+
+        assertEquals(PackageStatus.OPENED, outcome.reopenedLot.packageStatus)
+        assertEquals(60_000L, outcome.reopenedLot.remainingQuantity.rawScaledValue)
+        assertNull(outcome.reopenedLot.depletedAtEpochMs)
+        assertNull(outcome.reopenedLot.depletionReason)
+
+        assertEquals(MovementType.ADJUSTMENT_IN, outcome.reversalEntry.movementType)
+        assertEquals(60_000L, outcome.reversalEntry.quantity.rawScaledValue)
+        assertEquals("bottleA", outcome.reversalEntry.lotId)
     }
 }

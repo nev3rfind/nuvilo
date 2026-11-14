@@ -6,12 +6,17 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.nuvilo.MainActivity
+import com.example.nuvilo.data.preferences.UserPreferences
+import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockBalance
+import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.model.TrackingPrecision
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -19,8 +24,8 @@ import java.time.format.DateTimeFormatter
 class NotificationHelper(private val context: Context) {
 
     companion object {
-        const val CHANNEL_REMINDERS_ID = "novelo_medication_reminders"
-        const val CHANNEL_LOW_STOCK_ID = "novelo_low_stock_alerts"
+        const val CHANNEL_REMINDERS_ID = NotificationChannelIds.MEDICATION_REMINDERS
+        const val CHANNEL_LOW_STOCK_ID = NotificationChannelIds.LOW_STOCK_ALERTS
         const val EXTRA_SELECTED_MEDICATION_ID = "selected_medication_id"
     }
 
@@ -34,29 +39,73 @@ class NotificationHelper(private val context: Context) {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
-    private fun createNotificationChannels() {
+    fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val remindersChannel = NotificationChannel(
-                CHANNEL_REMINDERS_ID,
-                "Medication Reminders",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Alerts for scheduled medication doses"
-                enableVibration(true)
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
+            val channels = NotificationChannelRegistry.allChannelSpecs().map { spec ->
+                NotificationChannel(
+                    spec.id,
+                    spec.name,
+                    spec.importanceLevel
+                ).apply {
+                    description = spec.description
+                    enableVibration(spec.defaultVibrationEnabled)
+                    if (spec.defaultSilent) {
+                        setSound(null, null)
+                    }
+                    lockscreenVisibility = if (spec.id == NotificationChannelIds.MEDICATION_REMINDERS ||
+                        spec.id == NotificationChannelIds.SECURITY_EVENTS
+                    ) {
+                        NotificationCompat.VISIBILITY_PRIVATE
+                    } else {
+                        NotificationCompat.VISIBILITY_PUBLIC
+                    }
+                }
             }
+            notificationManager.createNotificationChannels(channels)
+        }
+    }
 
-            val lowStockChannel = NotificationChannel(
-                CHANNEL_LOW_STOCK_ID,
-                "Low Stock Alerts",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Notifications when medication supply runs low"
-                enableVibration(false)
+    fun getChannelDiagnostics(prefs: UserPreferences = UserPreferences()): List<ChannelRuntimeDiagnostic> {
+        return NuviloNotificationCategory.entries.map { category ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val systemChannel = notificationManager.getNotificationChannel(category.channelId)
+                if (systemChannel != null) {
+                    ChannelRuntimeDiagnostic(
+                        category = category,
+                        isBlockedInSystem = systemChannel.importance == NotificationManager.IMPORTANCE_NONE,
+                        hasSoundInSystem = systemChannel.sound != null,
+                        hasVibrationInSystem = systemChannel.shouldVibrate()
+                    )
+                } else {
+                    ChannelRuntimeDiagnostic(
+                        category = category,
+                        isBlockedInSystem = false,
+                        hasSoundInSystem = prefs.isCategorySoundEnabled(category),
+                        hasVibrationInSystem = prefs.isCategoryVibrationEnabled(category)
+                    )
+                }
+            } else {
+                ChannelRuntimeDiagnostic(
+                    category = category,
+                    isBlockedInSystem = !areNotificationsEnabled(),
+                    hasSoundInSystem = prefs.isCategorySoundEnabled(category),
+                    hasVibrationInSystem = prefs.isCategoryVibrationEnabled(category)
+                )
             }
+        }
+    }
 
-            notificationManager.createNotificationChannel(remindersChannel)
-            notificationManager.createNotificationChannel(lowStockChannel)
+    fun buildChannelSettingsIntent(channelId: String): Intent {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+            }
+        } else {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra("app_package", context.packageName)
+                putExtra("app_uid", context.applicationInfo.uid)
+            }
         }
     }
 
@@ -72,7 +121,14 @@ class NotificationHelper(private val context: Context) {
         stockBalance: StockBalance?,
         hasPendingOrder: Boolean = false,
         pendingOrderQuantity: ScaledQuantity? = null,
-        pendingOrderNotes: String? = null
+        pendingOrderNotes: String? = null,
+        medication: Medication? = null,
+        prefs: UserPreferences? = null,
+        activePackageLabel: String? = null,
+        activePackageRemaining: ScaledQuantity? = null,
+        unopenedPackagesCount: Int = 0,
+        isNextPackageStaged: Boolean = false,
+        stagedPackageLabel: String? = null
     ) {
         if (!areNotificationsEnabled()) return
 
@@ -155,12 +211,23 @@ class NotificationHelper(private val context: Context) {
         val shortText = if (isPrivacyMasked) {
             "Time for your scheduled medication dose"
         } else {
+            val instruction = if (medication != null) {
+                NotificationTextBuilder.buildDoseInstructionLine(medication, doseQuantity)
+            } else {
+                "${doseQuantity.toDisplayString()} ${unit.abbreviation}"
+            }
+            val packageTag = when {
+                isNextPackageStaged -> " · Next pack staged"
+                activePackageLabel != null -> " · $activePackageLabel"
+                else -> ""
+            }
             val remainingPart = if (stockBalance != null) {
                 " · Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
             } else ""
-            "Take ${doseQuantity.toDisplayString()} ${unit.abbreviation}$remainingPart"
+            "Take $instruction$packageTag$remainingPart"
         }
 
+        val reminderCategory = com.example.nuvilo.system.notification.NuviloNotificationCategory.MEDICATION_REMINDERS
         val builder = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
@@ -174,11 +241,25 @@ class NotificationHelper(private val context: Context) {
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Skip", skipPendingIntent)
             .addAction(android.R.drawable.ic_popup_sync, "Snooze (15m)", snoozePendingIntent)
 
+        // Pre-O fallback for sound/vibration preferences (API 26+ channels are owned by the OS)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O && prefs != null) {
+            val soundOn = prefs.isCategorySoundEnabled(reminderCategory)
+            val vibOn = prefs.isCategoryVibrationEnabled(reminderCategory)
+            var defaults = 0
+            if (soundOn) defaults = defaults or NotificationCompat.DEFAULT_SOUND
+            if (vibOn) defaults = defaults or NotificationCompat.DEFAULT_VIBRATE
+            builder.setDefaults(defaults)
+            if (!soundOn && !vibOn) builder.setSilent(true)
+        }
+
         if (!isPrivacyMasked) {
             val subText = NotificationTextBuilder.buildSubText(
                 stockBalance = stockBalance,
                 unit = unit,
-                hasPendingOrder = hasPendingOrder
+                hasPendingOrder = hasPendingOrder,
+                activePackageLabel = activePackageLabel,
+                unopenedPackagesCount = unopenedPackagesCount,
+                isNextPackageStaged = isNextPackageStaged
             )
             subText?.let { builder.setSubText(it) }
 
@@ -190,7 +271,13 @@ class NotificationHelper(private val context: Context) {
                 stockBalance = stockBalance,
                 hasPendingOrder = hasPendingOrder,
                 pendingOrderQuantity = pendingOrderQuantity,
-                pendingOrderNotes = pendingOrderNotes
+                pendingOrderNotes = pendingOrderNotes,
+                medication = medication,
+                activePackageLabel = activePackageLabel,
+                activePackageRemaining = activePackageRemaining,
+                unopenedPackagesCount = unopenedPackagesCount,
+                isNextPackageStaged = isNextPackageStaged,
+                stagedPackageLabel = stagedPackageLabel
             )
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
@@ -205,7 +292,13 @@ class NotificationHelper(private val context: Context) {
         unit: StockUnit,
         daysRemaining: Int?,
         hasPendingOrder: Boolean = false,
-        pendingOrderQuantity: ScaledQuantity? = null
+        pendingOrderQuantity: ScaledQuantity? = null,
+        isPrivacyMasked: Boolean = false,
+        precision: TrackingPrecision? = null,
+        isDepletedEarly: Boolean = false,
+        depletedPackageLabel: String? = null,
+        unopenedPackagesCount: Int = 0,
+        nextPackageLabel: String? = null
     ) {
         if (!areNotificationsEnabled()) return
 
@@ -222,25 +315,27 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val daysText = if (daysRemaining != null) " (approx. $daysRemaining days left)" else ""
-        val title = "Low Stock: $medicationName"
-        val contentText = "Only ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText."
-
-        val bigText = buildString {
-            append("Supply for $medicationName is running low: only ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText.")
-            if (hasPendingOrder) {
-                val qtyStr = pendingOrderQuantity?.let { "for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
-                append("\n📋 A repeat order $qtyStr is currently pending with your GP/pharmacy. Tap to review or record restock upon collection.")
-            } else {
-                append("\n⚠️ Recommendation: Contact your GP surgery or submit a repeat prescription order now. Repeat requests typically take 2-3 working days to dispense.")
-            }
-        }
+        val alert = NotificationTextBuilder.buildLowStockAlert(
+            medicationName = medicationName,
+            currentBalance = currentBalance,
+            unit = unit,
+            daysRemaining = daysRemaining,
+            hasPendingOrder = hasPendingOrder,
+            pendingOrderQuantity = pendingOrderQuantity,
+            isPrivacyMasked = isPrivacyMasked,
+            precision = precision,
+            isDepletedEarly = isDepletedEarly,
+            depletedPackageLabel = depletedPackageLabel,
+            unopenedPackagesCount = unopenedPackagesCount,
+            nextPackageLabel = nextPackageLabel
+        )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_LOW_STOCK_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle(title)
-            .setContentText(contentText)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setContentTitle(alert.title)
+            .setContentText(alert.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(alert.body))
+            .setVisibility(if (isPrivacyMasked) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
             .setContentIntent(contentPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
@@ -249,10 +344,108 @@ class NotificationHelper(private val context: Context) {
         notificationManager.notify(notificationId, notification)
     }
 
-    fun showTestNotification() {
+    fun cancelLowStockNotification(medicationId: String) {
+        notificationManager.cancel(("low_stock_" + medicationId).hashCode())
+    }
+
+    fun cancelExpiryNotification(lotId: String) {
+        notificationManager.cancel(("expiry_" + lotId).hashCode())
+    }
+
+    fun cancelDiscardNotification(lotId: String) {
+        notificationManager.cancel(("discard_" + lotId).hashCode())
+    }
+
+    fun cancelDoseReminderNotification(occurrenceId: String) {
+        notificationManager.cancel(occurrenceId.hashCode())
+    }
+
+    fun showExpiryWarningNotification(
+        medication: Medication,
+        lot: StockLot,
+        daysUntilExpiry: Int,
+        isPrivacyMasked: Boolean
+    ) {
         if (!areNotificationsEnabled()) return
 
-        val notificationId = 99999
+        val notificationId = ("expiry_" + lot.id).hashCode()
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_SELECTED_MEDICATION_ID, medication.id)
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val payload = NotificationTextBuilder.buildExpiryAlert(
+            medication = medication,
+            lot = lot,
+            daysUntilExpiry = daysUntilExpiry,
+            isPrivacyMasked = isPrivacyMasked
+        )
+
+        val notification = NotificationCompat.Builder(context, payload.channelId)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(payload.title)
+            .setContentText(payload.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(payload.body))
+            .setVisibility(if (isPrivacyMasked) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(contentPendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(notificationId, notification)
+    }
+
+    fun showOpenedDiscardWarningNotification(
+        medication: Medication,
+        lot: StockLot,
+        daysUntilDiscard: Int,
+        isPrivacyMasked: Boolean
+    ) {
+        if (!areNotificationsEnabled()) return
+
+        val notificationId = ("discard_" + lot.id).hashCode()
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_SELECTED_MEDICATION_ID, medication.id)
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val payload = NotificationTextBuilder.buildOpenedDiscardAlert(
+            medication = medication,
+            lot = lot,
+            daysUntilDiscard = daysUntilDiscard,
+            isPrivacyMasked = isPrivacyMasked
+        )
+
+        val notification = NotificationCompat.Builder(context, payload.channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(payload.title)
+            .setContentText(payload.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(payload.body))
+            .setVisibility(if (isPrivacyMasked) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(contentPendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(notificationId, notification)
+    }
+
+    fun showTestNotification(category: NuviloNotificationCategory = NuviloNotificationCategory.MEDICATION_REMINDERS) {
+        if (!areNotificationsEnabled()) return
+
+        val notificationId = 99990 + category.ordinal
         val contentIntent = Intent(context, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(
             context,
@@ -261,10 +454,10 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS_ID)
+        val notification = NotificationCompat.Builder(context, category.channelId)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Nuvilo Reminder Test")
-            .setContentText("Notifications and reminder sound/vibration are working correctly.")
+            .setContentTitle("Nuvilo · ${category.title}")
+            .setContentText("Test notification delivered on the ${category.title} channel.")
             .setContentIntent(contentPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -282,10 +475,15 @@ object NotificationTextBuilder {
     fun buildSubText(
         stockBalance: StockBalance?,
         unit: StockUnit,
-        hasPendingOrder: Boolean
+        hasPendingOrder: Boolean,
+        activePackageLabel: String? = null,
+        unopenedPackagesCount: Int = 0,
+        isNextPackageStaged: Boolean = false
     ): String? {
         return when {
             hasPendingOrder -> "GP Order Pending · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
+            isNextPackageStaged -> "Next pack ready · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
+            activePackageLabel != null && stockBalance != null -> "$activePackageLabel · ${stockBalance.currentBalance.toDisplayString()} left"
             stockBalance != null -> "${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
             else -> null
         }
@@ -299,13 +497,33 @@ object NotificationTextBuilder {
         stockBalance: StockBalance?,
         hasPendingOrder: Boolean = false,
         pendingOrderQuantity: ScaledQuantity? = null,
-        pendingOrderNotes: String? = null
+        pendingOrderNotes: String? = null,
+        medication: Medication? = null,
+        activePackageLabel: String? = null,
+        activePackageRemaining: ScaledQuantity? = null,
+        unopenedPackagesCount: Int = 0,
+        isNextPackageStaged: Boolean = false,
+        stagedPackageLabel: String? = null
     ): String {
+        val instructionLine = if (medication != null) {
+            buildDoseInstructionLine(medication, doseQuantity)
+        } else {
+            "${doseQuantity.toDisplayString()} ${unit.abbreviation}"
+        }
         return buildString {
-            append("Take ${doseQuantity.toDisplayString()} ${unit.abbreviation} ($medicationStrength) · Scheduled for $scheduledTimeStr")
+            append("Take $instructionLine ($medicationStrength) · Scheduled for $scheduledTimeStr")
             if (stockBalance != null) {
                 val runwayText = stockBalance.daysRemaining?.let { "approx. $it days runway" } ?: "supply unmetered"
                 append("\n📦 Remaining Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} ($runwayText)")
+
+                if (isNextPackageStaged) {
+                    val label = stagedPackageLabel ?: "Next unopened pack"
+                    val reserveStr = if (unopenedPackagesCount > 1) " (${unopenedPackagesCount - 1} further in reserve)" else " (Last pack)"
+                    append("\n📦 Package Status: $label staged & ready to open$reserveStr")
+                } else if (activePackageLabel != null && activePackageRemaining != null) {
+                    val reserveStr = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed pack(s) in reserve" else " · Last container in stock"
+                    append("\n📦 In-Use Package: $activePackageLabel (${activePackageRemaining.toDisplayString()} ${unit.abbreviation} left in container$reserveStr)")
+                }
 
                 if (hasPendingOrder) {
                     val qtyStr = pendingOrderQuantity?.let { "${it.toDisplayString()} ${unit.abbreviation}" } ?: "Repeat"
@@ -323,5 +541,196 @@ object NotificationTextBuilder {
                 }
             }
         }
+    }
+
+    fun buildDoseInstructionLine(
+        medication: com.example.nuvilo.domain.model.Medication,
+        quantity: ScaledQuantity
+    ): String {
+        val unit = medication.effectiveConsumptionUnit
+        val admin = medication.administrationProfile
+        val pkg = medication.packagingConfig
+        if (pkg?.packageType == com.example.nuvilo.domain.model.PackageType.BOX_SINGLE_DOSE ||
+            pkg?.packageType == com.example.nuvilo.domain.model.PackageType.SINGLE_DOSE_UNIT ||
+            unit == StockUnit.CONTAINERS
+        ) {
+            val containerQty = admin.containersPerAdministration ?: quantity
+            val siteStr = when (admin.site) {
+                com.example.nuvilo.domain.model.AdministrationSite.LEFT_EYE -> "Left eye"
+                com.example.nuvilo.domain.model.AdministrationSite.RIGHT_EYE -> "Right eye"
+                com.example.nuvilo.domain.model.AdministrationSite.BOTH_EYES -> "Both eyes"
+                else -> null
+            }
+            return buildString {
+                append("${containerQty.toDisplayString()} ${unit.abbreviation}")
+                if (siteStr != null) append(" · $siteStr")
+            }
+        }
+        if (medication.form == com.example.nuvilo.domain.model.MedicationForm.DROPS &&
+            admin.site != com.example.nuvilo.domain.model.AdministrationSite.NONE &&
+            admin.site != com.example.nuvilo.domain.model.AdministrationSite.CUSTOM
+        ) {
+            return when (admin.site) {
+                com.example.nuvilo.domain.model.AdministrationSite.LEFT_EYE -> {
+                    val l = admin.leftEyeQuantity ?: quantity
+                    "${l.toDisplayString()} ${unit.abbreviation} · Left eye"
+                }
+                com.example.nuvilo.domain.model.AdministrationSite.RIGHT_EYE -> {
+                    val r = admin.rightEyeQuantity ?: quantity
+                    "${r.toDisplayString()} ${unit.abbreviation} · Right eye"
+                }
+                com.example.nuvilo.domain.model.AdministrationSite.BOTH_EYES -> {
+                    val l = admin.leftEyeQuantity ?: ScaledQuantity.ofWhole(1)
+                    val r = admin.rightEyeQuantity ?: ScaledQuantity.ofWhole(1)
+                    "${quantity.toDisplayString()} ${unit.abbreviation} · Both eyes (${l.toDisplayString()} left, ${r.toDisplayString()} right)"
+                }
+                else -> "${quantity.toDisplayString()} ${unit.abbreviation}"
+            }
+        }
+        return "${quantity.toDisplayString()} ${unit.abbreviation}"
+    }
+
+    data class AlertMessagePayload(
+        val title: String,
+        val body: String,
+        val channelId: String
+    )
+
+    fun buildExpiryAlert(
+        medication: com.example.nuvilo.domain.model.Medication,
+        lot: com.example.nuvilo.domain.model.StockLot,
+        daysUntilExpiry: Int,
+        isPrivacyMasked: Boolean
+    ): AlertMessagePayload {
+        if (isPrivacyMasked) {
+            val title = if (daysUntilExpiry <= 0) "Medication expiry notice" else "Upcoming expiry reminder"
+            val body = if (daysUntilExpiry <= 0) {
+                "One of your stored medication packs has reached its expiry date. Open Nuvilo to review."
+            } else {
+                "A stored medication pack expires in $daysUntilExpiry day(s). Open Nuvilo to check details."
+            }
+            return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.EXPIRY_WARNINGS)
+        }
+
+        val packLabel = lot.packageLabel ?: lot.lotNumber ?: (lot.packageType?.displayName ?: "Pack")
+        val title = if (daysUntilExpiry <= 0) {
+            "Expired Pack: ${medication.name}"
+        } else {
+            "Expiring Soon: ${medication.name}"
+        }
+        val body = if (daysUntilExpiry <= 0) {
+            "$packLabel (${lot.remainingQuantity.toDisplayString()} ${lot.unit.abbreviation}) has reached its expiry date. Replace before next dose."
+        } else {
+            "$packLabel expires in $daysUntilExpiry day(s) with ${lot.remainingQuantity.toDisplayString()} ${lot.unit.abbreviation} remaining."
+        }
+        return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.EXPIRY_WARNINGS)
+    }
+
+    fun buildOpenedDiscardAlert(
+        medication: com.example.nuvilo.domain.model.Medication,
+        lot: com.example.nuvilo.domain.model.StockLot,
+        daysUntilDiscard: Int,
+        isPrivacyMasked: Boolean
+    ): AlertMessagePayload {
+        if (isPrivacyMasked) {
+            val title = if (daysUntilDiscard <= 0) "Opened pack discard notice" else "Opened pack reminder"
+            val body = if (daysUntilDiscard <= 0) {
+                "An opened medication container has reached its post-opening discard window. Open Nuvilo to review."
+            } else {
+                "An opened medication container should be replaced within $daysUntilDiscard day(s)."
+            }
+            return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.OPENED_DISCARD_WARNINGS)
+        }
+
+        val packLabel = lot.packageLabel ?: (lot.packageType?.displayName ?: "Opened bottle")
+        val title = if (daysUntilDiscard <= 0) {
+            "Discard After Opening: ${medication.name}"
+        } else {
+            "Replace Opened Pack Soon: ${medication.name}"
+        }
+        val body = if (daysUntilDiscard <= 0) {
+            "$packLabel has reached its after-opening discard limit (${lot.discardAfterOpeningDays ?: 28} days). Discard safely and open your next sealed pack."
+        } else {
+            "$packLabel reaches its after-opening discard limit in $daysUntilDiscard day(s) (${lot.remainingQuantity.toDisplayString()} ${lot.unit.abbreviation} left)."
+        }
+        return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.OPENED_DISCARD_WARNINGS)
+    }
+
+    fun buildLowStockAlert(
+        medicationName: String,
+        currentBalance: ScaledQuantity,
+        unit: StockUnit,
+        daysRemaining: Int?,
+        hasPendingOrder: Boolean = false,
+        pendingOrderQuantity: ScaledQuantity? = null,
+        isPrivacyMasked: Boolean = false,
+        precision: TrackingPrecision? = null,
+        isDepletedEarly: Boolean = false,
+        depletedPackageLabel: String? = null,
+        unopenedPackagesCount: Int = 0,
+        nextPackageLabel: String? = null
+    ): AlertMessagePayload {
+        if (isPrivacyMasked) {
+            val title = if (isDepletedEarly) "Medication Supply Notice" else "Medication Low-Stock Notice"
+            val body = if (isDepletedEarly) {
+                "A tracked medication package finished earlier than expected. Open Nuvilo to review remaining supply."
+            } else {
+                "One of your tracked medications is running low on supply. Open Nuvilo to review."
+            }
+            return AlertMessagePayload(
+                title = title,
+                body = body,
+                channelId = NotificationChannelIds.LOW_STOCK_ALERTS
+            )
+        }
+
+        if (isDepletedEarly) {
+            val packName = depletedPackageLabel ?: "Package"
+            if (unopenedPackagesCount == 0 || !currentBalance.isPositive()) {
+                val title = "Urgent Supply Exhausted: $medicationName"
+                val body = buildString {
+                    append("$packName finished earlier than estimated. Zero sealed packages remain in reserve (0 ${unit.abbreviation} left).")
+                    if (hasPendingOrder) {
+                        val qtyStr = pendingOrderQuantity?.let { " for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
+                        append("\nA repeat order$qtyStr is already pending with your GP/pharmacy.")
+                    } else {
+                        append("\nRequest an urgent repeat prescription immediately.")
+                    }
+                }
+                return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
+            } else {
+                val nextName = nextPackageLabel ?: "Next unopened pack"
+                val prefix = if (precision == TrackingPrecision.ESTIMATED || precision == TrackingPrecision.APPROXIMATE) "approx. " else ""
+                val daysText = if (daysRemaining != null) " (~$prefix$daysRemaining days runway remaining)" else ""
+                val title = "Package Depleted Early: $medicationName"
+                val body = buildString {
+                    append("$packName ran out earlier than estimated. $nextName is staged and ready to open ($unopenedPackagesCount sealed pack(s) in reserve$daysText).")
+                    if (hasPendingOrder) {
+                        val qtyStr = pendingOrderQuantity?.let { " for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
+                        append("\nRepeat order$qtyStr is pending.")
+                    } else if (daysRemaining != null && daysRemaining <= 7) {
+                        append("\nSupply runway is low. Consider requesting your repeat prescription soon.")
+                    }
+                }
+                return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
+            }
+        }
+
+        val prefix = if (precision == TrackingPrecision.ESTIMATED || precision == TrackingPrecision.APPROXIMATE) {
+            "approx. "
+        } else ""
+        val daysText = if (daysRemaining != null) " (${prefix}$daysRemaining days left)" else ""
+        val reserveText = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed pack(s) in reserve" else ""
+        val title = "Low Stock: $medicationName"
+        val body = buildString {
+            append("Supply for $medicationName is running low: ${currentBalance.toDisplayString()} ${unit.abbreviation} left$daysText$reserveText.")
+            if (hasPendingOrder) {
+                val qtyStr = pendingOrderQuantity?.let { " for ${it.toDisplayString()} ${unit.abbreviation}" } ?: ""
+                append("\nA repeat order$qtyStr is currently pending. Tap to review or record collection.")
+            } else {
+                append("\nConsider requesting a repeat prescription soon.")
+            }
+        }
+        return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
     }
 }

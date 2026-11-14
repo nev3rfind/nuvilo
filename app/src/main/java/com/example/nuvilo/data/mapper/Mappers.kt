@@ -7,11 +7,17 @@ import com.example.nuvilo.data.local.entity.PrescriptionEventEntity
 import com.example.nuvilo.data.local.entity.ScheduleEntity
 import com.example.nuvilo.data.local.entity.StockLedgerEntryEntity
 import com.example.nuvilo.data.local.entity.StockLotEntity
+import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.AdministrationSite
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
+import com.example.nuvilo.domain.model.GelTrackingMode
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
+import com.example.nuvilo.domain.model.PackageStatus
+import com.example.nuvilo.domain.model.PackageType
+import com.example.nuvilo.domain.model.PackagingConfig
 import com.example.nuvilo.domain.model.Prescription
 import com.example.nuvilo.domain.model.PrescriptionEvent
 import com.example.nuvilo.domain.model.PrescriptionEventType
@@ -23,36 +29,80 @@ import com.example.nuvilo.domain.model.ScheduleType
 import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.model.TrackingPrecision
 
-fun MedicationEntity.toDomain(): Medication = Medication(
-    id = id,
-    name = name,
-    strength = strength,
-    form = runCatching { MedicationForm.valueOf(form) }.getOrDefault(MedicationForm.OTHER),
-    stockUnit = runCatching { StockUnit.valueOf(stockUnit) }.getOrDefault(StockUnit.OTHER),
-    openingStock = ScaledQuantity(openingStockRaw),
-    lowStockThreshold = ScaledQuantity(lowStockThresholdRaw),
-    recordingMode = runCatching { RecordingMode.valueOf(recordingMode) }.getOrDefault(RecordingMode.CONFIRM),
-    notes = notes,
-    colorTagHex = colorTagHex,
-    isArchived = isArchived,
-    createdAtEpochMs = createdAtEpochMs
-)
+fun MedicationEntity.toDomain(): Medication {
+    val parsedUnit = runCatching { StockUnit.valueOf(stockUnit) }.getOrDefault(StockUnit.OTHER)
+    val parsedPkgType = packageType?.let { runCatching { PackageType.valueOf(it) }.getOrNull() }
+    val parsedPrecision = runCatching { TrackingPrecision.valueOf(trackingPrecision) }.getOrDefault(TrackingPrecision.UNKNOWN)
+    val parsedGelMode = gelTrackingMode?.let { runCatching { GelTrackingMode.valueOf(it) }.getOrNull() }
+    val parsedSite = runCatching { AdministrationSite.valueOf(administrationSite) }.getOrDefault(AdministrationSite.NONE)
 
-fun Medication.toEntity(): MedicationEntity = MedicationEntity(
-    id = id,
-    name = name,
-    strength = strength,
-    form = form.name,
-    stockUnit = stockUnit.name,
-    openingStockRaw = openingStock.rawScaledValue,
-    lowStockThresholdRaw = lowStockThreshold.rawScaledValue,
-    recordingMode = recordingMode.name,
-    notes = notes,
-    colorTagHex = colorTagHex,
-    isArchived = isArchived,
-    createdAtEpochMs = createdAtEpochMs
-)
+    val pkgConfig = if (parsedPkgType != null || contentsPerPackageRaw != null || netContentLabel != null || discardAfterOpeningDays != null || parsedGelMode != null) {
+        PackagingConfig(
+            packageType = parsedPkgType ?: PackageType.CUSTOM,
+            consumptionUnit = parsedUnit,
+            contentsPerPackage = contentsPerPackageRaw?.let { ScaledQuantity(it) },
+            netContentLabel = netContentLabel,
+            discardAfterOpeningDays = discardAfterOpeningDays,
+            trackingPrecision = parsedPrecision,
+            gelTrackingMode = parsedGelMode
+        )
+    } else null
+
+    return Medication(
+        id = id,
+        name = name,
+        strength = strength,
+        form = runCatching { MedicationForm.valueOf(form) }.getOrDefault(MedicationForm.OTHER),
+        stockUnit = parsedUnit,
+        openingStock = ScaledQuantity(openingStockRaw),
+        lowStockThreshold = ScaledQuantity(lowStockThresholdRaw),
+        recordingMode = runCatching { RecordingMode.valueOf(recordingMode) }.getOrDefault(RecordingMode.CONFIRM),
+        notes = notes,
+        colorTagHex = colorTagHex,
+        isArchived = isArchived,
+        createdAtEpochMs = createdAtEpochMs,
+        packagingConfig = pkgConfig,
+        administrationProfile = AdministrationProfile(
+            site = parsedSite,
+            leftEyeQuantity = leftEyeQuantityRaw?.let { ScaledQuantity(it) },
+            rightEyeQuantity = rightEyeQuantityRaw?.let { ScaledQuantity(it) },
+            containersPerAdministration = containersPerAdminRaw?.let { ScaledQuantity(it) }
+        ),
+        lowStockDaysThreshold = lowStockDaysThreshold
+    )
+}
+
+fun Medication.toEntity(): MedicationEntity {
+    val pkg = packagingConfig
+    val effectivePrecision = pkg?.trackingPrecision?.name ?: if (form.isEstimatedConsumption) TrackingPrecision.ESTIMATED.name else TrackingPrecision.EXACT.name
+    return MedicationEntity(
+        id = id,
+        name = name,
+        strength = strength,
+        form = form.name,
+        stockUnit = effectiveConsumptionUnit.name,
+        openingStockRaw = openingStock.rawScaledValue,
+        lowStockThresholdRaw = lowStockThreshold.rawScaledValue,
+        recordingMode = recordingMode.name,
+        notes = notes,
+        colorTagHex = colorTagHex,
+        isArchived = isArchived,
+        createdAtEpochMs = createdAtEpochMs,
+        packageType = pkg?.packageType?.name,
+        contentsPerPackageRaw = pkg?.contentsPerPackage?.rawScaledValue,
+        netContentLabel = pkg?.netContentLabel,
+        discardAfterOpeningDays = pkg?.discardAfterOpeningDays,
+        trackingPrecision = effectivePrecision,
+        gelTrackingMode = pkg?.gelTrackingMode?.name,
+        administrationSite = administrationProfile.site.name,
+        leftEyeQuantityRaw = administrationProfile.leftEyeQuantity?.rawScaledValue,
+        rightEyeQuantityRaw = administrationProfile.rightEyeQuantity?.rawScaledValue,
+        containersPerAdminRaw = administrationProfile.containersPerAdministration?.rawScaledValue,
+        lowStockDaysThreshold = lowStockDaysThreshold
+    )
+}
 
 fun ScheduleEntity.toDomain(): ScheduleDefinition = ScheduleDefinition(
     id = id,
@@ -104,29 +154,79 @@ fun DoseOccurrence.toEntity(): DoseEventEntity = DoseEventEntity(
     correctedAtEpochMs = correctedAtEpochMs
 )
 
-fun StockLotEntity.toDomain(): StockLot = StockLot(
-    id = id,
-    medicationId = medicationId,
-    lotNumber = lotNumber,
-    initialQuantity = ScaledQuantity(initialQuantityRaw),
-    remainingQuantity = ScaledQuantity(remainingQuantityRaw),
-    unit = runCatching { StockUnit.valueOf(unit) }.getOrDefault(StockUnit.OTHER),
-    expiryDateEpochMs = expiryDateEpochMs,
-    createdAtEpochMs = createdAtEpochMs,
-    notes = notes
-)
+fun StockLotEntity.toDomain(): StockLot {
+    val isDepletedPrefix = discardReason?.startsWith("DEPLETED[") == true
+    val (isDepleted, parsedReason, parsedNote) = if (packageStatus == PackageStatus.EMPTY.name && isDepletedPrefix) {
+        val afterPrefix = discardReason!!.removePrefix("DEPLETED[")
+        val closeBracket = afterPrefix.indexOf(']')
+        if (closeBracket != -1) {
+            val code = afterPrefix.substring(0, closeBracket)
+            val note = afterPrefix.substring(closeBracket + 1).removePrefix(": ").trim().takeIf { it.isNotBlank() }
+            Triple(true, code, note)
+        } else {
+            Triple(true, null, discardReason)
+        }
+    } else if (packageStatus == PackageStatus.EMPTY.name && discardedAtEpochMs != null) {
+        Triple(true, null, discardReason)
+    } else {
+        Triple(false, null, null)
+    }
 
-fun StockLot.toEntity(): StockLotEntity = StockLotEntity(
-    id = id,
-    medicationId = medicationId,
-    lotNumber = lotNumber,
-    initialQuantityRaw = initialQuantity.rawScaledValue,
-    remainingQuantityRaw = remainingQuantity.rawScaledValue,
-    unit = unit.name,
-    expiryDateEpochMs = expiryDateEpochMs,
-    createdAtEpochMs = createdAtEpochMs,
-    notes = notes
-)
+    return StockLot(
+        id = id,
+        medicationId = medicationId,
+        lotNumber = lotNumber,
+        initialQuantity = ScaledQuantity(initialQuantityRaw),
+        remainingQuantity = ScaledQuantity(remainingQuantityRaw),
+        unit = runCatching { StockUnit.valueOf(unit) }.getOrDefault(StockUnit.OTHER),
+        expiryDateEpochMs = expiryDateEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        notes = notes,
+        packageType = packageType?.let { runCatching { PackageType.valueOf(it) }.getOrNull() },
+        packageLabel = packageLabel,
+        packageStatus = runCatching { PackageStatus.valueOf(packageStatus) }.getOrDefault(PackageStatus.UNOPENED),
+        openedAtEpochMs = openedAtEpochMs,
+        discardAfterOpeningDays = discardAfterOpeningDays,
+        discardAfterOpeningEpochMs = discardAfterOpeningEpochMs,
+        discardedAtEpochMs = if (!isDepleted) discardedAtEpochMs else null,
+        discardReason = if (!isDepleted) discardReason else null,
+        depletedAtEpochMs = if (isDepleted) discardedAtEpochMs else null,
+        depletionReason = parsedReason,
+        depletionNote = parsedNote
+    )
+}
+
+fun StockLot.toEntity(): StockLotEntity {
+    val isEarlyDepleted = packageStatus == PackageStatus.EMPTY && (depletedAtEpochMs != null || depletionReason != null)
+    val entityDiscardEpoch = if (isEarlyDepleted) depletedAtEpochMs else discardedAtEpochMs
+    val entityDiscardReason = if (isEarlyDepleted) {
+        val code = depletionReason ?: "OTHER"
+        val note = depletionNote?.let { ": $it" } ?: ""
+        "DEPLETED[$code]$note"
+    } else {
+        discardReason
+    }
+
+    return StockLotEntity(
+        id = id,
+        medicationId = medicationId,
+        lotNumber = lotNumber,
+        initialQuantityRaw = initialQuantity.rawScaledValue,
+        remainingQuantityRaw = remainingQuantity.rawScaledValue,
+        unit = unit.name,
+        expiryDateEpochMs = expiryDateEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        notes = notes,
+        packageType = packageType?.name,
+        packageLabel = packageLabel,
+        packageStatus = packageStatus.name,
+        openedAtEpochMs = openedAtEpochMs,
+        discardAfterOpeningDays = discardAfterOpeningDays,
+        discardAfterOpeningEpochMs = discardAfterOpeningEpochMs,
+        discardedAtEpochMs = entityDiscardEpoch,
+        discardReason = entityDiscardReason
+    )
+}
 
 fun StockLedgerEntryEntity.toDomain(): StockLedgerEntry = StockLedgerEntry(
     id = id,

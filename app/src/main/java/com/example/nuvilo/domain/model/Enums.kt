@@ -17,6 +17,8 @@ enum class StockUnit(val displayName: String, val abbreviation: String, val sing
     CAPSULES("Capsules", "cap", "Capsule"),
     ML("Millilitres", "ml", "Millilitre"),
     DROPS("Drops", "drops", "Drop"),
+    CONTAINERS("Containers", "cont", "Container"),
+    GRAMS("Grams", "g", "Gram"),
     PUFFS("Puffs", "puffs", "Puff"),
     APPLICATIONS("Applications", "app", "Application"),
     UNITS("Units", "IU", "Unit"),

@@ -54,14 +54,21 @@ class AlarmReceiver : BroadcastReceiver() {
                     return@launch
                 }
 
+                val consumption = container.consumptionCalculator.calculateOccurrenceConsumption(
+                    medication = medication,
+                    baseScheduleQuantity = quantity
+                )
+                val effectiveQuantity = consumption.quantity
+                val effectiveUnit = consumption.unit
+
                 // If AUTO_ASSUME, record assumed dose adherence in database idempotently
                 if (recordingMode == RecordingMode.AUTO_ASSUME) {
                     container.repository.recordDose(
                         occurrenceId = occurrenceId,
                         medicationId = medicationId,
                         scheduledEpochMs = scheduledEpochMs,
-                        quantity = quantity,
-                        unit = unit,
+                        quantity = effectiveQuantity,
+                        unit = effectiveUnit,
                         status = DoseStatus.ASSUMED,
                         recordedEpochMs = scheduledEpochMs,
                         notes = "Assumed adherence recorded per schedule"
@@ -78,19 +85,34 @@ class AlarmReceiver : BroadcastReceiver() {
                 val pendingOrderQuantity = if (hasPendingOrder) activeRx?.quantityPrescribed else null
                 val pendingOrderNotes = if (hasPendingOrder) activeRx?.notes else null
 
+                val lots = container.repository.observeLotsForMedication(medicationId).first()
+                val activeLot = lots.firstOrNull { it.packageStatus == com.example.nuvilo.domain.model.PackageStatus.OPENED }
+                val unopenedLots = lots.filter { it.packageStatus == com.example.nuvilo.domain.model.PackageStatus.UNOPENED }
+                val isNextStaged = activeLot == null && unopenedLots.isNotEmpty()
+                val activePackageLabel = activeLot?.packageLabel ?: activeLot?.lotNumber ?: activeLot?.packageType?.displayName
+                val activePackageRemaining = activeLot?.remainingQuantity
+                val stagedPackageLabel = if (isNextStaged) (unopenedLots.firstOrNull()?.packageLabel ?: unopenedLots.firstOrNull()?.lotNumber ?: "Next package") else null
+
                 container.notificationHelper.showDoseReminderNotification(
                     occurrenceId = occurrenceId,
                     medicationId = medicationId,
                     medicationName = medication.name,
                     medicationStrength = medication.strength,
                     scheduledEpochMs = scheduledEpochMs,
-                    doseQuantity = quantity,
-                    unit = unit,
+                    doseQuantity = effectiveQuantity,
+                    unit = effectiveUnit,
                     isPrivacyMasked = preferences.isNotificationPrivacyMasked,
                     stockBalance = stockBalance,
                     hasPendingOrder = hasPendingOrder,
                     pendingOrderQuantity = pendingOrderQuantity,
-                    pendingOrderNotes = pendingOrderNotes
+                    pendingOrderNotes = pendingOrderNotes,
+                    medication = medication,
+                    prefs = preferences,
+                    activePackageLabel = activePackageLabel,
+                    activePackageRemaining = activePackageRemaining,
+                    unopenedPackagesCount = unopenedLots.size,
+                    isNextPackageStaged = isNextStaged,
+                    stagedPackageLabel = stagedPackageLabel
                 )
             } finally {
                 pendingResult?.finish()

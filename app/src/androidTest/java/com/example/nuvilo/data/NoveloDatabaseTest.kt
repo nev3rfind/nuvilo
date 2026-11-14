@@ -421,7 +421,8 @@ class NoveloDatabaseTest {
             scheduledEpochMs = 1000L,
             quantity = ScaledQuantity.ofWhole(2),
             unit = StockUnit.CAPSULES,
-            status = DoseStatus.TAKEN
+            status = DoseStatus.TAKEN,
+            recordedEpochMs = 1000L
         )
 
         // LOT-SOON should have 3 remaining, LOT-LATER should still have 10
@@ -438,7 +439,8 @@ class NoveloDatabaseTest {
             scheduledEpochMs = 2000L,
             quantity = ScaledQuantity.ofWhole(4),
             unit = StockUnit.CAPSULES,
-            status = DoseStatus.TAKEN
+            status = DoseStatus.TAKEN,
+            recordedEpochMs = 2000L
         )
 
         val lotsAfterDose2 = repository.observeLotsForMedication("med_fefo").first()

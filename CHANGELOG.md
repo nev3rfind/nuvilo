@@ -8,6 +8,33 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 9 Critical Addendum: Early Package Depletion, Intelligent Container Transitions & 5-Agent Swarm Audit (Refs #16)**:
+  - **Early Package Depletion Accounting**: Implemented `depletePackageEarly` in `StockLedgerCalculator` and `NoveloRepository`, allowing users to mark an opened container finished ahead of theoretical zero capacity without faking dose administrations. Unused units (e.g. 60 drops) are written off strictly as `MovementType.WASTAGE`. Dose events table and adherence history remain 100% untouched.
+  - **Option B Zero-Schema-Bump Persistence**: Preserved Room Database Schema v4 by encoding structured depletion reasons and timestamps in existing `discard_reason` and `discarded_at_epoch_ms` columns (`DEPLETED[reasonCode]: userNote`), guaranteeing 100% compatibility with PBKDF2 + AES-256-GCM encrypted backups (`BackupDataV4`).
+  - **Next Bottle FEFO Staging**: Implemented `findStagedNextPackage(...)` displaying the next eligible unopened container with a "Ready to Open" badge and manual "Open Next Bottle" CTA, preventing premature automatic unsealing and software-physical desynchronization.
+  - **"No unopened bottles remaining" Alert**: Added zero-runway alert card with immediate "Add Bottles" primary CTA when all packages are depleted.
+  - **Accidental Depletion Reversal Workflow**: Implemented `reopenDepletedPackage` with compensating `MovementType.ADJUSTMENT_IN` entry, safely restoring container state and balance without deleting audit records.
+  - **Educational Consumption Insights**: Added neutral, non-judgmental insight banner explaining dropper bottle physics, dispenser variations, and spillage without clinical stigmatization.
+  - **Haptic Feedback & Real-Time Drawer Sync**: Added `NuviloHapticEvent.PACKAGE_DEPLETED` (`[0, 60, 40, 90]` waveform) and created `SupplyNotificationSync` to update Android notification drawers immediately upon container depletion/recount without waiting for periodic WorkManager intervals.
+  - **5-Agent Swarm Parallel Audit**: Executed multi-agent evaluation across Domain Invariants (`AGENT_1_DOMAIN_AUDIT.md`), Inventory Accounting (`AGENT_2_INVENTORY_REPORT.md`), Notifications & Haptics (`AGENT_3_NOTIFICATIONS_HAPTICS_REPORT.md`), UI/UX Accessibility (`AGENT_4_UI_UX_AUDIT.md`), and Quality Assurance (`AGENT_5_QA_REPORT.md`).
+  - **Comprehensive Acceptance Test**: Added `Phase9EarlyDepletionAcceptanceTest` verifying the full Hydro Forte 300+300 drop acceptance scenario, zero synthetic dose fabrication, adherence invariance, and reversal.
+
+### Added
+- **Phase 9: Intelligent Medication Consumption, Real-World Packaging, Stock Management & Haptic-First Notifications (Refs #16)**:
+  - **Decoupled Purchase Units & Consumption Model**: Added `PackagingConfig` and `AdministrationProfile` cleanly distinguishing purchase packages (`PackageType`: multi-dose bottles, single-dose container boxes, blister packs, tubes, inhalers, vials) from consumption units (`StockUnit`: drops, containers, grams, applications, tablets, millilitres) with zero arbitrary density conversions.
+  - **Ophthalmic Regimen Decoupling**: Decoupled treated eye(s) (`LEFT_EYE`, `RIGHT_EYE`, `BOTH_EYES`, `CUSTOM`) from single-dose container deductions (`containersPerAdministration`) so treating both eyes deducts exactly 1 container (or user-configured count) rather than erroneously doubling deductions. Multi-dose eye drops support asymmetric drop counts per eye (`leftEyeQuantity` + `rightEyeQuantity`).
+  - **Discrete Day-by-Day FEFO Supply Simulation**: Built `SupplyForecastCalculator` simulating future calendar consumption step-by-step using exact thousandths (`ScaledQuantity`, `Long`, zero `Float`/`Double`). Tracks opened package shelf-life (`discardAfterOpeningDays`, e.g., 28 days for multi-dose drops), automatically starts discard timers on the simulated day an unopened package is tapped, and quantifies expected unused units expiring or discarded.
+  - **Scoped Opened-Package Recount & Manual Discard**:
+    - `recountPackage`: Scopes physical counts to the currently opened package instance, generating compensating `ADJUSTMENT_IN`/`ADJUSTMENT_OUT` ledger entries while leaving unopened packages intact.
+    - `discardPackage`: Safely marks package status as `DISCARDED`, deducts remaining balance via an immutable `WASTAGE` ledger entry, and prompts for clinical discard reasons.
+  - **Room Database Schema v4 & Migration**: Incremented Room database schema to v4, added packaging and package lifecycle columns to `medications` and `stock_lots`, and provided automated migration `MIGRATION_3_4` inferring package statuses (`OPENED`, `UNOPENED`, `EMPTY`) with 100% data preservation.
+  - **Encrypted Backup & Restore v4**: Added `BackupDataV4` with full packaging metadata DTOs, maintaining bidirectional compatibility with v1, v2, and v3 backups.
+  - **Centralized Haptic Feedback Architecture**: Created `NuviloHaptics` and `RecordingNuviloHapticController` supporting 8 distinct tactile events (`DOSE_TAKEN`, `SELECTION_TICK`, `PACKAGE_OPENED`, etc.) and 3 user-configurable intensity levels (`Gentle`, `Balanced`, `Distinct`) with graceful fallback when hardware vibrator is unavailable.
+  - **7 Fine-Grained Android Notification Channels**: Registered dedicated system channels in `NotificationChannelRegistry` (`medication_reminders` with silent + vibration default, `urgent_dose_alerts`, `critical_low_stock`, `restock_followups`, `batch_expiry`, `refill_prescriptions`, `security_backups`) with in-app settings previews.
+  - **UI/UX & Documentation Deliverables**: Redesigned Add Medication wizard (Step 1 package selection, Step 2 site decoupling, Step 3 live package & shelf-life summary), Medication Detail hero cards, Recount and Discard dialogs, and Settings haptics card. Captured 12 genuine Light and Dark screenshots in `docs/screenshots/phase9/` and documented reports in `docs/phase9/` (`IMPLEMENTATION_REPORT.md`, `UX_VERIFICATION.md`, `KNOWN_LIMITATIONS.md`).
+
+
+### Added
 - **Official Website & Verified Privacy Policy Platform Specification (Refs #13)**:
   - Conducted comprehensive product functionality audit across all 22 genuine native Android features (`PRODUCT_FUNCTIONALITY_AUDIT.md`) detailing storage locations, cascade deletes, scaled integer math, and source code references.
   - Completed deep privacy and security data audit (`PRIVACY_DATA_AUDIT.md`) verifying zero-network architecture (`android.permission.INTERNET` absent in source and merged release manifest), PBKDF2 + AES-256-GCM cryptography, Room SQLite storage, DataStore preferences, and hardware-isolated `BiometricPrompt` operations.

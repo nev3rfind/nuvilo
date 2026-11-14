@@ -54,13 +54,30 @@ object CsvZipBackupManager {
 
         // 2. medications.csv
         val medRows = mutableListOf<List<String>>()
-        medRows.add(listOf("id", "name", "strength", "form", "stock_unit", "opening_stock_raw", "low_stock_threshold_raw", "recording_mode", "notes", "color_tag_hex", "is_archived", "created_at_epoch_ms"))
+        medRows.add(listOf(
+            "id", "name", "strength", "form", "stock_unit", "opening_stock_raw", "low_stock_threshold_raw",
+            "recording_mode", "notes", "color_tag_hex", "is_archived", "created_at_epoch_ms",
+            "package_type", "contents_per_package_raw", "net_content_label", "discard_after_opening_days",
+            "tracking_precision", "gel_tracking_mode", "administration_site",
+            "left_eye_quantity_raw", "right_eye_quantity_raw", "containers_per_admin_raw", "low_stock_days_threshold"
+        ))
         backup.medications.forEach { m ->
             medRows.add(listOf(
                 m.id, m.name, m.strength, m.form, m.stockUnit,
                 m.openingStockRaw.toString(), m.lowStockThresholdRaw.toString(),
                 m.recordingMode, m.notes, m.colorTagHex,
-                m.isArchived.toString(), m.createdAtEpochMs.toString()
+                m.isArchived.toString(), m.createdAtEpochMs.toString(),
+                m.packageType ?: NULL_TOKEN,
+                m.contentsPerPackageRaw?.toString() ?: NULL_TOKEN,
+                m.netContentLabel ?: NULL_TOKEN,
+                m.discardAfterOpeningDays?.toString() ?: NULL_TOKEN,
+                m.trackingPrecision,
+                m.gelTrackingMode ?: NULL_TOKEN,
+                m.administrationSite,
+                m.leftEyeQuantityRaw?.toString() ?: NULL_TOKEN,
+                m.rightEyeQuantityRaw?.toString() ?: NULL_TOKEN,
+                m.containersPerAdminRaw?.toString() ?: NULL_TOKEN,
+                m.lowStockDaysThreshold?.toString() ?: NULL_TOKEN
             ))
         }
         writeEntry("medications.csv", buildCsv(medRows))
@@ -94,13 +111,24 @@ object CsvZipBackupManager {
 
         // 5. stock_lots.csv
         val lotRows = mutableListOf<List<String>>()
-        lotRows.add(listOf("id", "medication_id", "lot_number", "initial_quantity_raw", "remaining_quantity_raw", "unit", "expiry_date_epoch_ms", "created_at_epoch_ms", "notes"))
+        lotRows.add(listOf(
+            "id", "medication_id", "lot_number", "initial_quantity_raw", "remaining_quantity_raw", "unit",
+            "expiry_date_epoch_ms", "created_at_epoch_ms", "notes",
+            "package_type", "package_label", "package_status", "opened_at_epoch_ms",
+            "discard_after_opening_days", "discard_after_opening_epoch_ms", "discarded_at_epoch_ms", "discard_reason"
+        ))
         backup.stockLots.forEach { l ->
             lotRows.add(listOf(
                 l.id, l.medicationId, l.lotNumber ?: NULL_TOKEN,
                 l.initialQuantityRaw.toString(), l.remainingQuantityRaw.toString(),
                 l.unit, l.expiryDateEpochMs?.toString() ?: NULL_TOKEN,
-                l.createdAtEpochMs.toString(), l.notes ?: NULL_TOKEN
+                l.createdAtEpochMs.toString(), l.notes ?: NULL_TOKEN,
+                l.packageType ?: NULL_TOKEN, l.packageLabel ?: NULL_TOKEN, l.packageStatus,
+                l.openedAtEpochMs?.toString() ?: NULL_TOKEN,
+                l.discardAfterOpeningDays?.toString() ?: NULL_TOKEN,
+                l.discardAfterOpeningEpochMs?.toString() ?: NULL_TOKEN,
+                l.discardedAtEpochMs?.toString() ?: NULL_TOKEN,
+                l.discardReason ?: NULL_TOKEN
             ))
         }
         writeEntry("stock_lots.csv", buildCsv(lotRows))
@@ -209,7 +237,18 @@ object CsvZipBackupManager {
                         notes = r.getOrElse(8) { "" },
                         colorTagHex = r.getOrElse(9) { "#005EB8" },
                         isArchived = r.getOrElse(10) { "false" }.toBoolean(),
-                        createdAtEpochMs = r.getOrElse(11) { System.currentTimeMillis().toString() }.toLong()
+                        createdAtEpochMs = r.getOrElse(11) { System.currentTimeMillis().toString() }.toLong(),
+                        packageType = parseNullableString(r.getOrNull(12)),
+                        contentsPerPackageRaw = parseNullableLong(r.getOrNull(13)),
+                        netContentLabel = parseNullableString(r.getOrNull(14)),
+                        discardAfterOpeningDays = parseNullableInt(r.getOrNull(15)),
+                        trackingPrecision = parseNullableString(r.getOrNull(16)) ?: "UNKNOWN",
+                        gelTrackingMode = parseNullableString(r.getOrNull(17)),
+                        administrationSite = parseNullableString(r.getOrNull(18)) ?: "NONE",
+                        leftEyeQuantityRaw = parseNullableLong(r.getOrNull(19)),
+                        rightEyeQuantityRaw = parseNullableLong(r.getOrNull(20)),
+                        containersPerAdminRaw = parseNullableLong(r.getOrNull(21)),
+                        lowStockDaysThreshold = parseNullableInt(r.getOrNull(22))
                     )
                 )
             }
@@ -279,7 +318,15 @@ object CsvZipBackupManager {
                         unit = r.getOrElse(5) { "TABLETS" },
                         expiryDateEpochMs = parseNullableLong(r.getOrNull(6)),
                         createdAtEpochMs = r.getOrElse(7) { System.currentTimeMillis().toString() }.toLong(),
-                        notes = parseNullableString(r.getOrNull(8))
+                        notes = parseNullableString(r.getOrNull(8)),
+                        packageType = parseNullableString(r.getOrNull(9)),
+                        packageLabel = parseNullableString(r.getOrNull(10)),
+                        packageStatus = parseNullableString(r.getOrNull(11)) ?: "UNOPENED",
+                        openedAtEpochMs = parseNullableLong(r.getOrNull(12)),
+                        discardAfterOpeningDays = parseNullableInt(r.getOrNull(13)),
+                        discardAfterOpeningEpochMs = parseNullableLong(r.getOrNull(14)),
+                        discardedAtEpochMs = parseNullableLong(r.getOrNull(15)),
+                        discardReason = parseNullableString(r.getOrNull(16))
                     )
                 )
             }
@@ -382,6 +429,10 @@ object CsvZipBackupManager {
 
     private fun parseNullableLong(value: String?): Long? {
         return if (value == null || value == NULL_TOKEN) null else value.toLongOrNull()
+    }
+
+    private fun parseNullableInt(value: String?): Int? {
+        return if (value == null || value == NULL_TOKEN) null else value.toIntOrNull()
     }
 
     private fun buildCsv(rows: List<List<String>>): String {
