@@ -141,10 +141,13 @@ interface StockRepository {
         discardAfterOpeningDays: Int? = null,
         lotNumber: String? = null,
         expiryDateEpochMs: Long? = null,
-        notes: String? = null
+        notes: String? = null,
+        openFirstPackageImmediately: Boolean = false
     ): Result<Unit>
 
     suspend fun openPackage(lotId: String, nowEpochMs: Long = System.currentTimeMillis()): Result<StockLot>
+
+    suspend fun revertOpenedPackage(lotId: String): Result<StockLot>
 
     suspend fun discardPackage(
         lotId: String,
@@ -167,6 +170,22 @@ interface StockRepository {
         discardAfterOpeningDays: Int?,
         notes: String?
     ): Result<StockLot>
+
+    suspend fun updatePackageMetadata(
+        lotId: String,
+        packageLabel: String? = null,
+        lotNumber: String? = null,
+        expiryDateEpochMs: Long? = null,
+        discardAfterOpeningDays: Int? = null,
+        notes: String? = null
+    ): Result<StockLot> = updatePackageDetails(
+        lotId = lotId,
+        packageLabel = packageLabel,
+        lotNumber = lotNumber,
+        expiryDateEpochMs = expiryDateEpochMs,
+        discardAfterOpeningDays = discardAfterOpeningDays,
+        notes = notes
+    )
 
     suspend fun depletePackage(
         lotId: String,
@@ -707,7 +726,8 @@ class NoveloRepositoryImpl(
         discardAfterOpeningDays: Int?,
         lotNumber: String?,
         expiryDateEpochMs: Long?,
-        notes: String?
+        notes: String?,
+        openFirstPackageImmediately: Boolean
     ): Result<Unit> = runCatching {
         require(packageCount > 0) { "Package count must be positive." }
         require(contentsPerPackage.isPositive()) { "Package contents must be positive." }
@@ -717,12 +737,20 @@ class NoveloRepositoryImpl(
 
         database.withTransaction {
             val med = medicationDao.getMedicationById(medicationId)?.toDomain()
-            val existingCount = stockLotDao.getLotsForMedication(medicationId).size
+            val existingLots = stockLotDao.getLotsForMedication(medicationId)
+            val existingCount = existingLots.size
+            val hasOpened = existingLots.any { it.packageStatus == PackageStatus.OPENED.name }
+            val shouldOpenFirst = openFirstPackageImmediately && !hasOpened
             var primaryLotId: String? = null
 
             for (i in 1..packageCount) {
                 val lotId = UUID.randomUUID().toString()
                 if (primaryLotId == null) primaryLotId = lotId
+                val isOpenThis = (i == 1 && shouldOpenFirst)
+                val status = if (isOpenThis) PackageStatus.OPENED else PackageStatus.UNOPENED
+                val openedAt = if (isOpenThis) nowMs else null
+                val discardCutoff = if (isOpenThis) discardAfterOpeningDays?.let { nowMs + it.toLong() * 86_400_000L } else null
+
                 val lotEntity = StockLotEntity(
                     id = lotId,
                     medicationId = medicationId,
@@ -735,8 +763,10 @@ class NoveloRepositoryImpl(
                     notes = notes?.takeIf { it.isNotBlank() },
                     packageType = packageType.name,
                     packageLabel = "${packageType.displayName} #${existingCount + i}",
-                    packageStatus = PackageStatus.UNOPENED.name,
-                    discardAfterOpeningDays = discardAfterOpeningDays
+                    packageStatus = status.name,
+                    openedAtEpochMs = openedAt,
+                    discardAfterOpeningDays = discardAfterOpeningDays,
+                    discardAfterOpeningEpochMs = discardCutoff
                 )
                 stockLotDao.insertLot(lotEntity)
             }
@@ -766,6 +796,15 @@ class NoveloRepositoryImpl(
         database.withTransaction {
             val entity = stockLotDao.getLotById(lotId) ?: throw IllegalArgumentException("Package not found")
             val updated = stockCalculator.openPackage(entity.toDomain(), nowEpochMs)
+            stockLotDao.updateLot(updated.toEntity())
+            updated
+        }
+    }
+
+    override suspend fun revertOpenedPackage(lotId: String): Result<StockLot> = runCatching {
+        database.withTransaction {
+            val entity = stockLotDao.getLotById(lotId) ?: throw IllegalArgumentException("Package not found: $lotId")
+            val updated = stockCalculator.revertOpenedPackage(entity.toDomain())
             stockLotDao.updateLot(updated.toEntity())
             updated
         }

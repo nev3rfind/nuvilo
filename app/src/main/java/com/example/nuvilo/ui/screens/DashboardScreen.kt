@@ -157,6 +157,7 @@ fun DashboardScreen(
                                         medication = hero.medication,
                                         stockBalance = hero.stockBalance,
                                         consumption = hero.consumption,
+                                        supplyForecast = hero.supplyForecast,
                                         onTakeClick = {
                                             viewModel.onTakeDose(hero.occurrence)
                                             scope.launch {
@@ -206,6 +207,7 @@ fun DashboardScreen(
                                     medication = item.medication,
                                     stockBalance = item.stockBalance,
                                     consumption = item.consumption,
+                                    supplyForecast = item.supplyForecast,
                                     onTakeClick = {
                                         viewModel.onTakeDose(item.occurrence)
                                         scope.launch {

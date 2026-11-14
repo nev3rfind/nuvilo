@@ -354,7 +354,7 @@ fun MedicationListScreen(
             medication = med,
             currentBalance = curBal,
             onDismiss = { medicationToRestock = null },
-            onConfirmPackages = { packageCount, contentsPerPackage, consumptionUnit, packageType, discardDays, lotNumber, expiryEpochMs, notes ->
+            onConfirmPackages = { packageCount, contentsPerPackage, consumptionUnit, packageType, discardDays, lotNumber, expiryEpochMs, notes, openFirst ->
                 viewModel.restockPackages(
                     medicationId = med.id,
                     packageCount = packageCount,
@@ -364,7 +364,8 @@ fun MedicationListScreen(
                     discardAfterOpeningDays = discardDays,
                     lotNumber = lotNumber,
                     expiryDateEpochMs = expiryEpochMs,
-                    notes = notes
+                    notes = notes,
+                    openFirstPackageImmediately = openFirst
                 )
                 medicationToRestock = null
                 val addedTotal = ScaledQuantity(contentsPerPackage.rawScaledValue * packageCount.toLong())

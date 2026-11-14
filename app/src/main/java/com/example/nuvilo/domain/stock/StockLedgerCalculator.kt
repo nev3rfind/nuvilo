@@ -156,7 +156,9 @@ class StockLedgerCalculator {
             when (lot.packageStatus) {
                 com.example.nuvilo.domain.model.PackageStatus.EMPTY,
                 com.example.nuvilo.domain.model.PackageStatus.EXPIRED,
-                com.example.nuvilo.domain.model.PackageStatus.DISCARDED -> continue
+                com.example.nuvilo.domain.model.PackageStatus.DISCARDED,
+                com.example.nuvilo.domain.model.PackageStatus.DAMAGED,
+                com.example.nuvilo.domain.model.PackageStatus.LOST -> continue
                 com.example.nuvilo.domain.model.PackageStatus.OPENED -> {
                     val effectiveDiscardMs = lot.effectiveDiscardAfterOpeningEpochMs
                     if (effectiveDiscardMs != null && effectiveDiscardMs <= nowEpochMs) continue
@@ -168,18 +170,40 @@ class StockLedgerCalculator {
             }
         }
 
-        val orderedQueue = eligibleOpened.sortedWith(
+        // Phase 10 Invariant: Prioritize currently opened packages.
+        // For packages requiring explicit user opening confirmation (bottles, tubes, inhalers, eye drops with discard windows),
+        // unopened containers must NEVER be auto-opened silently by dose consumption without explicit user unsealing.
+        val sortedOpened = eligibleOpened.sortedWith(
             compareBy<StockLot>(
                 { it.effectiveDiscardAfterOpeningEpochMs ?: Long.MAX_VALUE },
                 { it.expiryDateEpochMs ?: Long.MAX_VALUE },
                 { it.createdAtEpochMs }
             )
-        ) + eligibleUnopened.sortedWith(
-            compareBy<StockLot>(
-                { it.expiryDateEpochMs ?: Long.MAX_VALUE },
-                { it.createdAtEpochMs }
-            )
         )
+
+        val orderedQueue = if (sortedOpened.isNotEmpty()) {
+            // Deduct strictly from opened packages; do not cascade into unopened bottles
+            sortedOpened
+        } else {
+            // If no opened package exists, check if packages permit auto-allocation (e.g. discrete blister tablets)
+            // or if they strictly require explicit physical unsealing (e.g. bottles, tubes, discard-window packages).
+            val anyRequiresConfirmation = eligibleUnopened.any {
+                it.packageType?.requiresExplicitOpeningConfirmation == true ||
+                it.discardAfterOpeningDays != null ||
+                it.packageType == com.example.nuvilo.domain.model.PackageType.BOTTLE
+            }
+            if (anyRequiresConfirmation) {
+                // Do not auto-open. The unopened packages remain untouched until the patient confirms opening.
+                emptyList()
+            } else {
+                eligibleUnopened.sortedWith(
+                    compareBy<StockLot>(
+                        { it.expiryDateEpochMs ?: Long.MAX_VALUE },
+                        { it.createdAtEpochMs }
+                    )
+                )
+            }
+        }
 
         var remainingToDeductRaw = doseQuantity.rawScaledValue
         val results = mutableListOf<PackageAllocation>()
@@ -246,6 +270,24 @@ class StockLedgerCalculator {
             packageStatus = com.example.nuvilo.domain.model.PackageStatus.OPENED,
             openedAtEpochMs = nowEpochMs,
             discardAfterOpeningEpochMs = discardEpoch
+        )
+    }
+
+    /**
+     * Reverts an opened package back to UNOPENED status if accidentally opened.
+     * Invariant: Permitted only if zero units have been consumed from this container (remaining == initial).
+     */
+    fun revertOpenedPackage(lot: StockLot): StockLot {
+        check(lot.packageStatus == com.example.nuvilo.domain.model.PackageStatus.OPENED) {
+            "Cannot revert package in status ${lot.packageStatus}; only OPENED packages can be reverted"
+        }
+        check(lot.remainingQuantity == lot.initialQuantity) {
+            "Cannot revert package that has already been partially consumed (${lot.remainingQuantity.toDisplayString()} of ${lot.initialQuantity.toDisplayString()} remaining)"
+        }
+        return lot.copy(
+            packageStatus = com.example.nuvilo.domain.model.PackageStatus.UNOPENED,
+            openedAtEpochMs = null,
+            discardAfterOpeningEpochMs = null
         )
     }
 

@@ -377,3 +377,24 @@ Nuvilo strictly enforces zero-network permissions:
 - **Touch Targets**: All interactive elements strictly enforce $\ge 48\times 48\,\text{dp}$ touch bounds (`heightIn(min = 48.dp)` and `minimumInteractiveComponentSize()`).
 - **Screen Reader Privacy Isolation**: When `LockScreen` is displayed, underlying medication data is completely omitted from the Compose composition hierarchy.
 - **Lifecycle Efficiency**: Flow collection across all screens uses `collectAsStateWithLifecycle()` to prevent background flow emissions when the activity is stopped.
+
+---
+
+## 10. Physical Package Inventory & Bottle Lifecycle Architecture (Phase 10)
+
+### 10.1 Three-Tier Clinical Unit Separation
+Nuvilo decouples physical purchasing from administration deductions:
+1. **Purchasing Unit (`PackageType`)**: Physical containers purchased by the patient (`BOTTLE`, `TUBE`, `SINGLE_DOSE_CONTAINER_BOX`, `BLISTER_PACK`, `INHALER`, `VIAL`).
+2. **Package Consumption Capacity (`contentsPerPackage`)**: Usable units contained inside a single sealed container (e.g., $300\text{ drops}$ per eye-drop bottle), stored as exact `ScaledQuantity`.
+3. **Administration Unit**: Prescribed dose consumed per scheduled event (e.g., $1\text{ drop}$ per eye $\times 2\text{ eyes} = 2\text{ drops}$).
+
+### 10.2 Package Lifecycle State Machine & Isolation
+Each physical container is tracked as an identifiable `StockLot` record progressing through 7 states:
+- `UNOPENED`: Factory-sealed reserve. Discard-after-opening timer is dormant. Excluded from dose deductions for containers requiring explicit unsealing (`requiresExplicitOpeningConfirmation`).
+- `OPENED`: Active container in use. All scheduled doses deduct strictly from this container. Sterility countdown (`discardAfterOpeningEpochMs`) is active.
+- `EMPTY`: All units consumed or marked finished early (`depletePackageEarly`).
+- `DISCARDED`, `EXPIRED`, `DAMAGED`, `LOST`: Terminal states where any unconsumed units are written off as `MovementType.WASTAGE` (`doseOccurrenceId = null`), ensuring zero synthetic dose fabrication.
+- **Reversibility**:
+  - `revertOpenedPackage`: Reverts an accidentally opened container back to `UNOPENED` if and only if zero units have been consumed (`remainingQuantity == initialQuantity`).
+  - `reopenDepletedPackage`: Restores an accidentally depleted container to `OPENED` via a compensating `MovementType.ADJUSTMENT_IN` ledger entry.
+

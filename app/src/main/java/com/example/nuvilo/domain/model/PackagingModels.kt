@@ -18,7 +18,15 @@ enum class PackageType(
     INHALER("Inhaler", "Inhalers", StockUnit.PUFFS),
     VIAL("Vial / Pen", "Vials", StockUnit.UNITS),
     PATCH_BOX("Box of patches", "Boxes", StockUnit.PATCHES),
-    CUSTOM("Package", "Packages", StockUnit.OTHER)
+    CUSTOM("Package", "Packages", StockUnit.OTHER);
+
+    /**
+     * Whether an unopened package of this type must not be silently unsealed/auto-opened
+     * by software upon dose administration without explicit user confirmation.
+     * Bottles, tubes, jars, inhalers, and vials have physical seals and post-opening expiry timers.
+     */
+    val requiresExplicitOpeningConfirmation: Boolean
+        get() = this == BOTTLE || this == TUBE || this == JAR || this == INHALER || this == VIAL
 }
 
 /**
@@ -29,7 +37,9 @@ enum class PackageStatus(val displayName: String) {
     OPENED("Opened"),
     EMPTY("Empty"),
     EXPIRED("Expired"),
-    DISCARDED("Discarded");
+    DISCARDED("Discarded"),
+    DAMAGED("Damaged"),
+    LOST("Lost");
 
     val isEligibleForConsumption: Boolean
         get() = this == UNOPENED || this == OPENED
@@ -77,6 +87,88 @@ data class PackagingConfig(
     val trackingPrecision: TrackingPrecision = TrackingPrecision.EXACT,
     val gelTrackingMode: GelTrackingMode? = null
 )
+
+/**
+ * Returns a clinical, sensible default [PackagingConfig] for a given [MedicationForm] and [StockUnit].
+ * Ensures that 100% of medications in Nuvilo understand their packaging format (e.g. bottles for eye drops,
+ * blister packs for tablets, tubes for ointments) rather than exposing raw drop or milliliter counters.
+ */
+fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): PackagingConfig {
+    return when (form) {
+        MedicationForm.DROPS -> PackagingConfig(
+            packageType = PackageType.BOTTLE,
+            consumptionUnit = StockUnit.DROPS,
+            contentsPerPackage = ScaledQuantity.ofWhole(300),
+            netContentLabel = "10 ml",
+            discardAfterOpeningDays = 28,
+            trackingPrecision = TrackingPrecision.ESTIMATED
+        )
+        MedicationForm.LIQUID_ML -> PackagingConfig(
+            packageType = PackageType.BOTTLE,
+            consumptionUnit = StockUnit.ML,
+            contentsPerPackage = ScaledQuantity.ofWhole(100),
+            netContentLabel = "100 ml",
+            discardAfterOpeningDays = null,
+            trackingPrecision = TrackingPrecision.EXACT
+        )
+        MedicationForm.TABLET, MedicationForm.CAPSULE -> PackagingConfig(
+            packageType = PackageType.BLISTER_PACK,
+            consumptionUnit = if (form == MedicationForm.CAPSULE) StockUnit.CAPSULES else StockUnit.TABLETS,
+            contentsPerPackage = ScaledQuantity.ofWhole(28),
+            netContentLabel = "28 units",
+            discardAfterOpeningDays = null,
+            trackingPrecision = TrackingPrecision.EXACT
+        )
+        MedicationForm.INHALER_PUFFS -> PackagingConfig(
+            packageType = PackageType.INHALER,
+            consumptionUnit = StockUnit.PUFFS,
+            contentsPerPackage = ScaledQuantity.ofWhole(120),
+            netContentLabel = "120 actuations",
+            discardAfterOpeningDays = null,
+            trackingPrecision = TrackingPrecision.ESTIMATED
+        )
+        MedicationForm.TOPICAL_CREAM -> PackagingConfig(
+            packageType = PackageType.TUBE,
+            consumptionUnit = StockUnit.GRAMS,
+            contentsPerPackage = ScaledQuantity.ofWhole(30),
+            netContentLabel = "30 g",
+            discardAfterOpeningDays = 28,
+            trackingPrecision = TrackingPrecision.ESTIMATED,
+            gelTrackingMode = GelTrackingMode.ESTIMATED_APPLICATIONS
+        )
+        MedicationForm.INJECTION -> PackagingConfig(
+            packageType = PackageType.VIAL,
+            consumptionUnit = StockUnit.UNITS,
+            contentsPerPackage = ScaledQuantity.ofWhole(100),
+            netContentLabel = "100 units",
+            discardAfterOpeningDays = null,
+            trackingPrecision = TrackingPrecision.EXACT
+        )
+        MedicationForm.PATCH -> PackagingConfig(
+            packageType = PackageType.PATCH_BOX,
+            consumptionUnit = StockUnit.PATCHES,
+            contentsPerPackage = ScaledQuantity.ofWhole(7),
+            netContentLabel = "7 patches",
+            discardAfterOpeningDays = null,
+            trackingPrecision = TrackingPrecision.EXACT
+        )
+        else -> PackagingConfig(
+            packageType = when (stockUnit) {
+                StockUnit.TABLETS, StockUnit.CAPSULES -> PackageType.BLISTER_PACK
+                StockUnit.ML, StockUnit.DROPS -> PackageType.BOTTLE
+                StockUnit.PUFFS -> PackageType.INHALER
+                StockUnit.GRAMS -> PackageType.TUBE
+                StockUnit.CONTAINERS -> PackageType.BOX_SINGLE_DOSE
+                StockUnit.PATCHES -> PackageType.PATCH_BOX
+                StockUnit.UNITS -> PackageType.VIAL
+                else -> PackageType.CUSTOM
+            },
+            consumptionUnit = stockUnit,
+            contentsPerPackage = ScaledQuantity.ofWhole(28),
+            trackingPrecision = TrackingPrecision.EXACT
+        )
+    }
+}
 
 /**
  * Real-world administration parameters (eye selection, asymmetric drop counts, single-dose containers).

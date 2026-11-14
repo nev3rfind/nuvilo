@@ -1,5 +1,8 @@
 package com.example.nuvilo.system.notification
 
+import com.example.nuvilo.domain.model.Medication
+import com.example.nuvilo.domain.model.MedicationForm
+import com.example.nuvilo.domain.model.PackageType
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockUnit
@@ -102,71 +105,127 @@ class NotificationTextBuilderTest {
     }
 
     @Test
-    fun buildBigText_withActivePackageAndReserves_rendersInUsePackageDetails() {
+    fun buildBigText_withActiveBottleAndReserves_rendersPhase10PackageInventoryFormat() {
         val balance = StockBalance(
-            currentBalance = ScaledQuantity.ofWhole(50),
+            currentBalance = ScaledQuantity.ofWhole(1980),
             unit = StockUnit.DROPS,
             isNegative = false,
             isLowStock = false,
             isEstimate = true,
-            daysRemaining = 25
+            daysRemaining = 198
         )
 
         val bigText = NotificationTextBuilder.buildBigText(
             doseQuantity = ScaledQuantity.ofWhole(2),
             unit = StockUnit.DROPS,
-            medicationStrength = "0.5%",
-            scheduledTimeStr = "20:00",
+            medicationStrength = "0.3%",
+            scheduledTimeStr = "08:00",
             stockBalance = balance,
             activePackageLabel = "Bottle #1",
-            activePackageRemaining = ScaledQuantity.ofWhole(20),
-            unopenedPackagesCount = 1
+            activePackageRemaining = ScaledQuantity.ofWhole(180),
+            unopenedPackagesCount = 6
         )
 
-        assertTrue(bigText.contains("Take 2 drops (0.5%) · Scheduled for 20:00"))
-        assertTrue(bigText.contains("Remaining Supply: 50 drops (approx. 25 days runway)"))
-        assertTrue(bigText.contains("📦 In-Use Package: Bottle #1 (20 drops left in container · 1 sealed pack(s) in reserve)"))
+        assertTrue(bigText.contains("Take 2 drops (0.3%) · Scheduled for 08:00"))
+        assertTrue(bigText.contains("📦 Current bottle: 180 drops remaining."))
+        assertTrue(bigText.contains("📦 Unopened bottles: 6."))
+        assertTrue(bigText.contains("⏳ Estimated total supply: 198 days."))
 
         val subText = NotificationTextBuilder.buildSubText(
             stockBalance = balance,
             unit = StockUnit.DROPS,
             hasPendingOrder = false,
-            activePackageLabel = "Bottle #1"
+            activePackageLabel = "Bottle #1",
+            activePackageRemaining = ScaledQuantity.ofWhole(180),
+            unopenedPackagesCount = 6
         )
-        assertEquals("Bottle #1 · 50 left", subText)
+        assertEquals("Bottle #1 · 180 left · 6 sealed reserve", subText)
     }
 
     @Test
     fun buildBigText_withStagedNextPackage_rendersStagedPackageAlert() {
         val balance = StockBalance(
-            currentBalance = ScaledQuantity.ofWhole(30),
+            currentBalance = ScaledQuantity.ofWhole(1800),
             unit = StockUnit.DROPS,
             isNegative = false,
             isLowStock = false,
             isEstimate = true,
-            daysRemaining = 15
+            daysRemaining = 180
         )
 
         val bigText = NotificationTextBuilder.buildBigText(
             doseQuantity = ScaledQuantity.ofWhole(2),
             unit = StockUnit.DROPS,
-            medicationStrength = "0.5%",
+            medicationStrength = "0.3%",
             scheduledTimeStr = "08:00",
             stockBalance = balance,
-            unopenedPackagesCount = 1,
+            unopenedPackagesCount = 6,
             isNextPackageStaged = true,
             stagedPackageLabel = "Bottle #2"
         )
 
-        assertTrue(bigText.contains("📦 Package Status: Bottle #2 staged & ready to open (Last pack)"))
+        assertTrue(bigText.contains("📦 Package Status: Bottle #2 staged & ready to open (5 further in reserve)"))
+        assertTrue(bigText.contains("📦 Current bottle: Finished."))
+        assertTrue(bigText.contains("📦 Unopened bottles: 6."))
+        assertTrue(bigText.contains("⏳ Estimated total supply: 180 days."))
 
         val subText = NotificationTextBuilder.buildSubText(
             stockBalance = balance,
             unit = StockUnit.DROPS,
             hasPendingOrder = false,
-            isNextPackageStaged = true
+            isNextPackageStaged = true,
+            unopenedPackagesCount = 6
         )
-        assertEquals("Next pack ready · 30 left", subText)
+        assertEquals("Next pack ready · 1800 left · 6 sealed reserve", subText)
+    }
+
+    @Test
+    fun buildFinishedPackageAlert_unmasked_rendersSpecExactNotice() {
+        val hydro = Medication(
+            id = "med-hf",
+            name = "Hydro Forte",
+            strength = "0.3%",
+            form = MedicationForm.DROPS,
+            stockUnit = StockUnit.DROPS,
+            openingStock = ScaledQuantity.ofWhole(2100),
+            lowStockThreshold = ScaledQuantity.ofWhole(100)
+        )
+
+        val alert = NotificationTextBuilder.buildFinishedPackageAlert(
+            medication = hydro,
+            packageLabel = "Bottle #1",
+            packageType = PackageType.BOTTLE,
+            unopenedPackagesCount = 6,
+            isPrivacyMasked = false
+        )
+
+        assertEquals("Hydro Forte – Current bottle finished.", alert.title)
+        assertEquals("6 unopened bottles available.\nOpen the next bottle when ready.", alert.body)
+    }
+
+    @Test
+    fun buildFinishedPackageAlert_privacyMasked_doesNotLeakMedicationName() {
+        val hydro = Medication(
+            id = "med-hf",
+            name = "Hydro Forte",
+            strength = "0.3%",
+            form = MedicationForm.DROPS,
+            stockUnit = StockUnit.DROPS,
+            openingStock = ScaledQuantity.ofWhole(2100),
+            lowStockThreshold = ScaledQuantity.ofWhole(100)
+        )
+
+        val alert = NotificationTextBuilder.buildFinishedPackageAlert(
+            medication = hydro,
+            packageLabel = "Bottle #1",
+            packageType = PackageType.BOTTLE,
+            unopenedPackagesCount = 6,
+            isPrivacyMasked = true
+        )
+
+        assertEquals("Medication container finished", alert.title)
+        assertFalse(alert.body.contains("Hydro Forte"))
+        assertTrue(alert.body.contains("6 unopened container(s) available"))
     }
 
     @Test

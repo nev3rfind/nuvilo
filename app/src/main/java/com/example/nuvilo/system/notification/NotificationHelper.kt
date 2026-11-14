@@ -258,6 +258,7 @@ class NotificationHelper(private val context: Context) {
                 unit = unit,
                 hasPendingOrder = hasPendingOrder,
                 activePackageLabel = activePackageLabel,
+                activePackageRemaining = activePackageRemaining,
                 unopenedPackagesCount = unopenedPackagesCount,
                 isNextPackageStaged = isNextPackageStaged
             )
@@ -277,7 +278,8 @@ class NotificationHelper(private val context: Context) {
                 activePackageRemaining = activePackageRemaining,
                 unopenedPackagesCount = unopenedPackagesCount,
                 isNextPackageStaged = isNextPackageStaged,
-                stagedPackageLabel = stagedPackageLabel
+                stagedPackageLabel = stagedPackageLabel,
+                packageType = medication?.packagingConfig?.packageType
             )
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
@@ -466,6 +468,53 @@ class NotificationHelper(private val context: Context) {
         notificationManager.notify(notificationId, notification)
     }
 
+    fun showPackageFinishedNotification(
+        medication: Medication,
+        packageLabel: String? = null,
+        packageType: com.example.nuvilo.domain.model.PackageType? = null,
+        unopenedPackagesCount: Int = 0,
+        isPrivacyMasked: Boolean = false
+    ) {
+        if (!areNotificationsEnabled()) return
+
+        val notificationId = ("pkg_finished_" + medication.id).hashCode()
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_SELECTED_MEDICATION_ID, medication.id)
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val payload = NotificationTextBuilder.buildFinishedPackageAlert(
+            medication = medication,
+            packageLabel = packageLabel,
+            packageType = packageType,
+            unopenedPackagesCount = unopenedPackagesCount,
+            isPrivacyMasked = isPrivacyMasked
+        )
+
+        val notification = NotificationCompat.Builder(context, payload.channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(payload.title)
+            .setContentText(payload.body.replace("\n", " "))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(payload.body))
+            .setVisibility(if (isPrivacyMasked) NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(contentPendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(notificationId, notification)
+    }
+
+    fun cancelPackageFinishedNotification(medicationId: String) {
+        notificationManager.cancel(("pkg_finished_" + medicationId).hashCode())
+    }
+
     fun cancelNotification(notificationId: Int) {
         notificationManager.cancel(notificationId)
     }
@@ -477,13 +526,21 @@ object NotificationTextBuilder {
         unit: StockUnit,
         hasPendingOrder: Boolean,
         activePackageLabel: String? = null,
+        activePackageRemaining: ScaledQuantity? = null,
         unopenedPackagesCount: Int = 0,
         isNextPackageStaged: Boolean = false
     ): String? {
         return when {
             hasPendingOrder -> "GP Order Pending · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
-            isNextPackageStaged -> "Next pack ready · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left"
-            activePackageLabel != null && stockBalance != null -> "$activePackageLabel · ${stockBalance.currentBalance.toDisplayString()} left"
+            isNextPackageStaged -> {
+                val reserve = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed reserve" else ""
+                "Next pack ready · ${stockBalance?.currentBalance?.toDisplayString() ?: ""} left$reserve"
+            }
+            activePackageLabel != null && stockBalance != null -> {
+                val countLeft = activePackageRemaining?.toDisplayString() ?: stockBalance.currentBalance.toDisplayString()
+                val reserve = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed reserve" else ""
+                "$activePackageLabel · $countLeft left$reserve"
+            }
             stockBalance != null -> "${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} left"
             else -> null
         }
@@ -503,44 +560,89 @@ object NotificationTextBuilder {
         activePackageRemaining: ScaledQuantity? = null,
         unopenedPackagesCount: Int = 0,
         isNextPackageStaged: Boolean = false,
-        stagedPackageLabel: String? = null
+        stagedPackageLabel: String? = null,
+        packageType: com.example.nuvilo.domain.model.PackageType? = null
     ): String {
         val instructionLine = if (medication != null) {
             buildDoseInstructionLine(medication, doseQuantity)
         } else {
             "${doseQuantity.toDisplayString()} ${unit.abbreviation}"
         }
+
+        val pkgType = packageType ?: medication?.packagingConfig?.packageType ?: com.example.nuvilo.domain.model.PackageType.BOTTLE
+        val typeDisplayName = pkgType.displayName.lowercase()
+        val typePlural = pkgType.pluralName.lowercase()
+
         return buildString {
             append("Take $instructionLine ($medicationStrength) · Scheduled for $scheduledTimeStr")
             if (stockBalance != null) {
-                val runwayText = stockBalance.daysRemaining?.let { "approx. $it days runway" } ?: "supply unmetered"
-                append("\n📦 Remaining Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} ($runwayText)")
+                val runwayDays = stockBalance.daysRemaining
 
                 if (isNextPackageStaged) {
-                    val label = stagedPackageLabel ?: "Next unopened pack"
+                    val label = stagedPackageLabel ?: "Next unopened $typeDisplayName"
                     val reserveStr = if (unopenedPackagesCount > 1) " (${unopenedPackagesCount - 1} further in reserve)" else " (Last pack)"
                     append("\n📦 Package Status: $label staged & ready to open$reserveStr")
-                } else if (activePackageLabel != null && activePackageRemaining != null) {
-                    val reserveStr = if (unopenedPackagesCount > 0) " · $unopenedPackagesCount sealed pack(s) in reserve" else " · Last container in stock"
-                    append("\n📦 In-Use Package: $activePackageLabel (${activePackageRemaining.toDisplayString()} ${unit.abbreviation} left in container$reserveStr)")
+                    append("\n📦 Current $typeDisplayName: Finished.")
+                    append("\n📦 Unopened $typePlural: $unopenedPackagesCount.")
+                    if (runwayDays != null) {
+                        append("\n⏳ Estimated total supply: $runwayDays days.")
+                    }
+                } else if (activePackageRemaining != null) {
+                    append("\n📦 Current $typeDisplayName: ${activePackageRemaining.toDisplayString()} ${unit.abbreviation} remaining.")
+                    append("\n📦 Unopened $typePlural: $unopenedPackagesCount.")
+                    if (runwayDays != null) {
+                        append("\n⏳ Estimated total supply: $runwayDays days.")
+                    }
+                } else {
+                    val runwayText = runwayDays?.let { "approx. $it days runway" } ?: "supply unmetered"
+                    append("\n📦 Remaining Supply: ${stockBalance.currentBalance.toDisplayString()} ${unit.abbreviation} ($runwayText)")
+                    if (unopenedPackagesCount > 0) {
+                        append("\n📦 Unopened $typePlural: $unopenedPackagesCount.")
+                    }
                 }
 
                 if (hasPendingOrder) {
                     val qtyStr = pendingOrderQuantity?.let { "${it.toDisplayString()} ${unit.abbreviation}" } ?: "Repeat"
                     val noteStr = if (!pendingOrderNotes.isNullOrBlank()) " ($pendingOrderNotes)" else ""
                     append("\n📋 GP Order Pending: $qtyStr requested$noteStr — in progress with surgery/pharmacy")
-                } else if (stockBalance.isLowStock || (stockBalance.daysRemaining != null && stockBalance.daysRemaining <= 7)) {
-                    val daysRemaining = stockBalance.daysRemaining ?: 7
+                } else if (stockBalance.isLowStock || (runwayDays != null && runwayDays <= 7)) {
+                    val daysRemaining = runwayDays ?: 7
                     val urgency = if (daysRemaining <= 3) "Urgent: " else ""
                     append("\n⚠️ ${urgency}GP Recommendation: Approx. $daysRemaining days supply left. Order repeat prescription now (takes 2-3 working days).")
-                } else {
-                    val days = stockBalance.daysRemaining
-                    if (days != null) {
-                        append("\n✅ Supply Healthy: ~$days days runway remaining before next GP reorder.")
-                    }
+                } else if (runwayDays != null && activePackageRemaining == null && !isNextPackageStaged) {
+                    append("\n✅ Supply Healthy: ~$runwayDays days runway remaining before next GP reorder.")
                 }
             }
         }
+    }
+
+    fun buildFinishedPackageAlert(
+        medication: Medication,
+        packageLabel: String? = null,
+        packageType: com.example.nuvilo.domain.model.PackageType? = null,
+        unopenedPackagesCount: Int = 0,
+        isPrivacyMasked: Boolean = false
+    ): AlertMessagePayload {
+        if (isPrivacyMasked) {
+            val title = "Medication container finished"
+            val body = if (unopenedPackagesCount > 0) {
+                "A medication container has finished. $unopenedPackagesCount unopened container(s) available. Open next container when ready."
+            } else {
+                "A medication container has finished. Zero reserve packages remaining. Request a repeat prescription."
+            }
+            return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
+        }
+
+        val effectiveType = packageType ?: medication.packagingConfig?.packageType ?: com.example.nuvilo.domain.model.PackageType.BOTTLE
+        val typeDisplayName = effectiveType.displayName.lowercase()
+        val typePlural = effectiveType.pluralName.lowercase()
+        val title = "${medication.name} – Current $typeDisplayName finished."
+        val body = if (unopenedPackagesCount > 0) {
+            "$unopenedPackagesCount unopened $typePlural available.\nOpen the next $typeDisplayName when ready."
+        } else {
+            "0 unopened $typePlural remaining.\nRequest an urgent repeat prescription immediately."
+        }
+        return AlertMessagePayload(title = title, body = body, channelId = NotificationChannelIds.LOW_STOCK_ALERTS)
     }
 
     fun buildDoseInstructionLine(

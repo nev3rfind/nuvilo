@@ -80,7 +80,7 @@ class PackageLifecycleAndFefoTest {
     }
 
     @Test
-    fun allocateAgainstPackages_whenOpenedExhausted_opensNextFefoBottleAndStampsDiscardWindow() {
+    fun allocateAgainstPackages_whenOpenedExhausted_doesNotAutoOpenUnopenedBottle_enforcesOpenPackageIsolation() {
         val b1 = bottleLot(
             id = "b1",
             remainingDrops = 1,
@@ -103,27 +103,22 @@ class PackageLifecycleAndFefoTest {
             discardAfterOpeningDays = 28
         )
 
-        // Need 2 drops: takes remaining 1 drop from b1 (now EMPTY) and opens b2 taking 1 drop (299 left)
+        // Need 2 drops: takes remaining 1 drop from b1 (now EMPTY).
+        // Phase 10 Invariant: Does NOT silently auto-open b2! Unopened bottles remain sealed until user confirmation.
         val allocations = calculator.allocateDoseAgainstPackages(
             doseQuantity = ScaledQuantity.ofWhole(2),
             lots = listOf(b3Later, b1, b2FefoFirst),
             nowEpochMs = nowMs
         )
 
-        assertEquals(2, allocations.size)
+        assertEquals(1, allocations.size)
 
         val first = allocations[0]
         assertEquals("b1", first.updatedLot.id)
         assertEquals(ScaledQuantity.ZERO, first.updatedLot.remainingQuantity)
         assertEquals(PackageStatus.EMPTY, first.updatedLot.packageStatus)
-
-        val second = allocations[1]
-        assertEquals("b2", second.updatedLot.id)
-        assertEquals(ScaledQuantity.ofWhole(299), second.updatedLot.remainingQuantity)
-        assertEquals(PackageStatus.OPENED, second.updatedLot.packageStatus)
-        assertEquals(true, second.newlyOpened)
-        assertEquals(nowMs, second.updatedLot.openedAtEpochMs)
-        assertEquals(nowMs + 28L * dayMs, second.updatedLot.discardAfterOpeningEpochMs)
+        assertEquals(ScaledQuantity.ofWhole(1), first.deductedQuantity)
+        assertEquals(false, first.newlyOpened)
     }
 
     @Test
@@ -147,23 +142,26 @@ class PackageLifecycleAndFefoTest {
             remainingDrops = 150,
             status = PackageStatus.DISCARDED
         )
-        val goodSealed = bottleLot(
+        val goodOpened = bottleLot(
             id = "good",
             remainingDrops = 300,
-            status = PackageStatus.UNOPENED,
+            status = PackageStatus.OPENED,
+            openedAtEpochMs = nowMs - dayMs,
+            discardAfterOpeningDays = 28,
+            discardAfterOpeningEpochMs = nowMs + 27L * dayMs,
             expiryEpochMs = nowMs + 120L * dayMs
         )
 
         val allocations = calculator.allocateDoseAgainstPackages(
             doseQuantity = ScaledQuantity.ofWhole(2),
-            lots = listOf(expiredMfg, pastDiscardWindow, manuallyDiscarded, goodSealed),
+            lots = listOf(expiredMfg, pastDiscardWindow, manuallyDiscarded, goodOpened),
             nowEpochMs = nowMs
         )
 
         assertEquals(1, allocations.size)
         assertEquals("good", allocations[0].updatedLot.id)
         assertEquals(ScaledQuantity.ofWhole(298), allocations[0].updatedLot.remainingQuantity)
-        assertTrue(allocations[0].newlyOpened)
+        assertEquals(false, allocations[0].newlyOpened)
     }
 
     @Test
@@ -265,5 +263,52 @@ class PackageLifecycleAndFefoTest {
         assertEquals(ScaledQuantity.ZERO, emptyRecount.updatedLot.remainingQuantity)
         assertEquals(ScaledQuantity.ofWhole(300), sealedBottle.remainingQuantity)
         assertNull(sealedBottle.openedAtEpochMs)
+    }
+
+    @Test
+    fun revertOpenedPackage_revertsOpenedUnconsumedPackageToUnopened() {
+        val openedBottle = bottleLot(
+            id = "b1",
+            remainingDrops = 300,
+            initialDrops = 300,
+            status = PackageStatus.OPENED,
+            openedAtEpochMs = nowMs,
+            discardAfterOpeningEpochMs = nowMs + 28L * dayMs
+        )
+
+        val reverted = calculator.revertOpenedPackage(openedBottle)
+
+        assertEquals(PackageStatus.UNOPENED, reverted.packageStatus)
+        assertNull(reverted.openedAtEpochMs)
+        assertNull(reverted.discardAfterOpeningEpochMs)
+        assertEquals(ScaledQuantity.ofWhole(300), reverted.remainingQuantity)
+    }
+
+    @Test
+    fun revertOpenedPackage_rejectsPartiallyConsumedPackage() {
+        val partiallyConsumed = bottleLot(
+            id = "b1",
+            remainingDrops = 240,
+            initialDrops = 300,
+            status = PackageStatus.OPENED,
+            openedAtEpochMs = nowMs
+        )
+
+        assertThrows(IllegalStateException::class.java) {
+            calculator.revertOpenedPackage(partiallyConsumed)
+        }
+    }
+
+    @Test
+    fun revertOpenedPackage_rejectsNonOpenedPackage() {
+        val unopened = bottleLot(id = "u1", remainingDrops = 300, status = PackageStatus.UNOPENED)
+        val empty = bottleLot(id = "e1", remainingDrops = 0, status = PackageStatus.EMPTY)
+
+        assertThrows(IllegalStateException::class.java) {
+            calculator.revertOpenedPackage(unopened)
+        }
+        assertThrows(IllegalStateException::class.java) {
+            calculator.revertOpenedPackage(empty)
+        }
     }
 }

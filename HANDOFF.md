@@ -3,28 +3,29 @@
 > **Product**: Nuvilo — *"Medication, made manageable."*  
 > **Package / Application ID**: `com.nuvilomed.app` (internal namespace: `com.example.nuvilo`)  
 > **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
-> **Active Branch**: `main` (Single source of truth; clean and in sync with `origin/main`)  
-> **Latest Verified Commit**: `5a1ef35` (Pre-merge main) / `feat/16-intelligent-medication-inventory` (Phase 9)  
-> **Date**: 2026-11-12  
+> **Active Branch**: `feat/18-physical-package-inventory` (Phase 10 feature branch; stacked on `feat/16-intelligent-medication-inventory` / `main`)  
+> **Latest Verified Milestone**: Phase 10 — Physical Package Inventory, Bottle Lifecycle & Intelligent Stock Management (Issue [#18](https://github.com/nev3rfind/nuvilo/issues/18))  
+> **Date**: 2026-11-14  
 
 ---
 
 ## 1. Executive Summary & Repository State
 
-Nuvilo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. Development through **Phases 0 through 9** (including **Room Schema v4**, **Intelligent Real-World Packaging**, **Decoupled Consumption**, **Discrete FEFO Shelf-Life Simulation**, **Haptic-First Feedback**, **7 Notification Channels**, and the **Pre-Merge 200+ Regression Suite**) has been completed, verified on physical/emulated Android 17 (API 37).
+Nuvilo is a native Android, offline-first personal medication tracking and stock management app built with healthcare-grade rigor. Development through **Phases 0 through 10** (including **Room Schema v4**, **Physical Package Inventory**, **7-State Container Lifecycle**, **Opened-Package Consumption Isolation**, **Discrete FEFO Shelf-Life Simulation**, **Haptic-First Feedback**, **7 Notification Channels**, and the **200+ Regression Suite**) has been completed and verified.
 
 ### Active Branch & Git Cleanliness
-- **Branch**: `feat/16-intelligent-medication-inventory` (Feature branch for Phase 9, Issue #16)
-- **Base Branch**: `main`
+- **Branch**: `feat/18-physical-package-inventory` (Feature branch for Phase 10, Issue #18)
+- **Base Branch**: `main` / `feat/16-intelligent-medication-inventory`
 - **Room Database Schema**: Version 4 (`MIGRATION_3_4`) with packaging and package lifecycle tracking.
 - **Backup Schema**: Version 4 (`BackupDataV4`) with bidirectional compatibility (v1, v2, v3, v4).
-- **Phase 9 Addendum Architecture**:
-  - *Early Package Depletion*: Allows marking an opened container finished ahead of theoretical zero capacity (`depletePackageEarly`), writing off remaining drops strictly as `MovementType.WASTAGE` with zero synthetic dose fabrication.
-  - *Option B Persistence Mapping*: Preserves Room Schema v4 by encoding structured depletion reasons and notes in `discard_reason` (`DEPLETED[code]: note`) and `discarded_at_epoch_ms`.
-  - *Intelligent Container Staging*: Next eligible unopened package selected via FEFO (`findStagedNextPackage`) and staged as "Ready to Open" without premature auto-opening.
-  - *Accidental Depletion Reversal*: `reopenDepletedPackage` applies compensating `MovementType.ADJUSTMENT_IN` and restores container balance and state.
-  - *Five-Agent Swarm Audit Suite*: Conducted parallel evaluations across Domain Invariants (`AGENT_1_DOMAIN_AUDIT.md`), Inventory Accounting (`AGENT_2_INVENTORY_REPORT.md`), Notifications & Haptics (`AGENT_3_NOTIFICATIONS_HAPTICS_REPORT.md`), UI/UX Accessibility (`AGENT_4_UI_UX_AUDIT.md`), and Quality Assurance (`AGENT_5_QA_REPORT.md`).
-  - *Acceptance Test*: Created `Phase9EarlyDepletionAcceptanceTest.kt` verifying the full Hydro Forte 300+300 drop scenario, early depletion write-off, and accidental reversal.
+- **Phase 10 Architecture**:
+  - *Three-Tier Clinical Unit Separation*: Purchasing Units (`PackageType`: bottles, tubes, single-dose boxes, blister packs) vs Package Consumption Capacity (`contentsPerPackage`) vs Administration Units.
+  - *Authoritative Packaging Resolution*: `Medication.effectivePackagingConfig` via `inferDefaultPackagingConfig` ensures 100% of medications have a clinical packaging profile.
+  - *7-State Package Lifecycle & Isolation*: `UNOPENED`, `OPENED`, `EMPTY`, `DISCARDED`, `EXPIRED`, `DAMAGED`, `LOST`. Doses deduct strictly from `OPENED` packages (`allocateDoseAgainstPackages`); unopened reserve packages are never auto-opened silently (`requiresExplicitOpeningConfirmation`).
+  - *Redesigned Restock Supplies*: Patients buy physical bottles/packages (`+1`, `+2`, `+3`, `+5`, `+7` presets) with `openFirstPackageImmediately` toggle and live supply forecast summary card.
+  - *Accidental Opening Reversal*: `revertOpenedPackage` safely reverts an accidentally opened bottle back to `UNOPENED` if zero units have been consumed.
+  - *Early Depletion & Reversal*: `depletePackageEarly` writes off remaining drops strictly as `MovementType.WASTAGE` (`doseOccurrenceId = null`, zero synthetic doses) and stages the next unopened package via FEFO (`findStagedNextPackage`). `reopenDepletedPackage` restores the container via `MovementType.ADJUSTMENT_IN`.
+  - *Documentation Suite*: 7 technical specifications in `docs/inventory/`.
 
 ---
 

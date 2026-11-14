@@ -60,7 +60,7 @@ class SupplyForecastCalculator(
         for (lot in lots) {
             if (!lot.remainingQuantity.isPositive()) continue
             when (lot.packageStatus) {
-                PackageStatus.EMPTY, PackageStatus.DISCARDED -> continue
+                PackageStatus.EMPTY, PackageStatus.DISCARDED, PackageStatus.DAMAGED, PackageStatus.LOST -> continue
                 PackageStatus.EXPIRED -> {
                     expiredCount++
                     continue

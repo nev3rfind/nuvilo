@@ -186,7 +186,8 @@ fun HeroDoseCard(
     onSkipClick: () -> Unit = onSkip,
     onSnoozeClick: () -> Unit = onSnooze,
     onCardClick: () -> Unit = onClick,
-    consumption: OccurrenceConsumption? = null
+    consumption: OccurrenceConsumption? = null,
+    supplyForecast: SupplyForecast? = null
 ) {
     val nuviloHaptics = LocalNuviloHaptics.current
     val semantic = MaterialTheme.noveloColors
@@ -338,49 +339,209 @@ fun HeroDoseCard(
                 }
 
                 if (stockBalance != null) {
-                    val runwayStr = stockBalance.daysRemaining?.let { "~$it days supply left" }
-                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation} left"
+                    val activePkg = supplyForecast?.activeOpenedPackage
+                    val unopenedCount = supplyForecast?.unopenedPackagesCount ?: 0
+                    val hasPackageInventory = activePkg != null || unopenedCount > 0
+                    val totalPhysical = (if (activePkg != null) 1 else 0) + unopenedCount
+                    val pkgConfig = medication.effectivePackagingConfig
+                    val pkgName = pkgConfig.packageType.displayName
+                    val pkgPlural = pkgConfig.packageType.pluralName
                     val isReorderNeeded = stockBalance.isLowStock || (stockBalance.daysRemaining != null && stockBalance.daysRemaining <= 7)
 
-                    Surface(
-                        shape = NoveloPillShape,
-                        color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    if (hasPackageInventory) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = if (activePkg != null) {
+                                                "Open ${pkgName.lowercase()}: ${activePkg.remainingQuantity.toDisplayString()} / ${activePkg.initialQuantity.toDisplayString()} ${medication.effectiveConsumptionUnit.abbreviation}"
+                                            } else if (unopenedCount > 0) {
+                                                "No open ${pkgName.lowercase()} · $unopenedCount sealed in reserve"
+                                            } else {
+                                                "Supply exhausted (0 ${medication.effectiveConsumptionUnit.abbreviation})"
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Text(
+                                        text = "$totalPhysical $pkgPlural total",
+                                        style = MaterialTheme.typography.labelSmall.tabular,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Unopened: $unopenedCount ${if (unopenedCount == 1) pkgName.lowercase() else pkgPlural.lowercase()}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    val daysStr = (supplyForecast?.daysOfSupply ?: stockBalance.daysRemaining)?.let { "Estimated supply: ~$it days" }
+                                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}"
+                                    Text(
+                                        text = daysStr,
+                                        style = MaterialTheme.typography.bodySmall.tabular,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                val isNearlyEmpty = activePkg != null && (
+                                    activePkg.remainingQuantity.rawScaledValue <= 20_000L ||
+                                    activePkg.remainingQuantity.rawScaledValue <= (activePkg.initialQuantity.rawScaledValue / 10).coerceAtLeast(10_000L)
+                                )
+                                val isNoUnopenedRemaining = unopenedCount == 0 && activePkg != null
+                                val isExpiringSoon = supplyForecast?.daysUntilSoonestExpiry != null && supplyForecast.daysUntilSoonestExpiry <= 30
+                                val isPastDiscard = (supplyForecast?.packagesNeedingDiscardCount ?: 0) > 0 ||
+                                    (supplyForecast?.daysUntilActivePackageDiscard != null && supplyForecast.daysUntilActivePackageDiscard <= 0)
+
+                                if (isNearlyEmpty || isNoUnopenedRemaining || isExpiringSoon || isPastDiscard) {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        if (isPastDiscard) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.missed.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.missed.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "Past discard limit",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.missed,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (isNearlyEmpty) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.warning.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "$pkgName nearly empty",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.warning,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (isNoUnopenedRemaining) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.warning.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "No unopened ${pkgPlural.lowercase()} remaining",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.warning,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (isExpiringSoon && !isPastDiscard) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.warning.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "Expiring soon",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.warning,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        val runwayStr = stockBalance.daysRemaining?.let { "~$it days supply left" }
+                            ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation} left"
+
+                        Surface(
+                            shape = NoveloPillShape,
+                            color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
-                                    contentDescription = null,
-                                    tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
+                                        contentDescription = null,
+                                        tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = if (isReorderNeeded) "Low Supply: $runwayStr · Reorder from GP soon" else "Supply Runway: $runwayStr",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                                 Text(
-                                    text = if (isReorderNeeded) "Low Supply: $runwayStr · Reorder from GP soon" else "Supply Runway: $runwayStr",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                    text = "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}",
+                                    style = MaterialTheme.typography.labelSmall.tabular,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
                                 )
                             }
-                            Text(
-                                text = "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}",
-                                style = MaterialTheme.typography.labelSmall.tabular,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
-                            )
                         }
                     }
                 }
@@ -747,7 +908,8 @@ fun TimelineDoseItem(
     onSnoozeClick: () -> Unit = {},
     onCardClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    consumption: OccurrenceConsumption? = null
+    consumption: OccurrenceConsumption? = null,
+    supplyForecast: SupplyForecast? = null
 ) {
     val nuviloHaptics = LocalNuviloHaptics.current
     val semantic = MaterialTheme.noveloColors
@@ -863,18 +1025,125 @@ fun TimelineDoseItem(
                 }
 
                 if (stockBalance != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        StockBadge(balance = stockBalance)
-                        if (stockBalance.daysRemaining != null) {
-                            Text(
-                                text = "~${stockBalance.daysRemaining}d supply runway",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    val activePkg = supplyForecast?.activeOpenedPackage
+                    val unopenedCount = supplyForecast?.unopenedPackagesCount ?: 0
+                    val hasPackageInventory = activePkg != null || unopenedCount > 0
+                    val totalPhysical = (if (activePkg != null) 1 else 0) + unopenedCount
+                    val pkgConfig = medication.effectivePackagingConfig
+                    val pkgPlural = pkgConfig.packageType.pluralName
+
+                    if (hasPackageInventory) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(13.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = if (activePkg != null) {
+                                                "Open ${pkgConfig.packageType.displayName.lowercase()}: ${activePkg.remainingQuantity.toDisplayString()}/${activePkg.initialQuantity.toDisplayString()} ${medication.effectiveConsumptionUnit.abbreviation}"
+                                            } else {
+                                                "$unopenedCount unopened $pkgPlural"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    val daysText = (supplyForecast?.daysOfSupply ?: stockBalance.daysRemaining)?.let { "~$it d" }
+                                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}"
+                                    Text(
+                                        text = "$totalPhysical $pkgPlural ($daysText)",
+                                        style = MaterialTheme.typography.labelSmall.tabular,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                val isNearlyEmpty = activePkg != null && (
+                                    activePkg.remainingQuantity.rawScaledValue <= 20_000L ||
+                                    activePkg.remainingQuantity.rawScaledValue <= (activePkg.initialQuantity.rawScaledValue / 10).coerceAtLeast(10_000L)
+                                )
+                                val isNoUnopenedRemaining = unopenedCount == 0 && activePkg != null
+                                val isExpiringSoon = supplyForecast?.daysUntilSoonestExpiry != null && supplyForecast.daysUntilSoonestExpiry <= 30
+                                val isPastDiscard = (supplyForecast?.packagesNeedingDiscardCount ?: 0) > 0 ||
+                                    (supplyForecast?.daysUntilActivePackageDiscard != null && supplyForecast.daysUntilActivePackageDiscard <= 0)
+
+                                if (isNearlyEmpty || isNoUnopenedRemaining || isExpiringSoon || isPastDiscard) {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        if (isPastDiscard) {
+                                            Text(
+                                                text = "Past discard limit",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.missed,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isNearlyEmpty) {
+                                            Text(
+                                                text = "${pkgConfig.packageType.displayName} nearly empty",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.warning,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isNoUnopenedRemaining) {
+                                            Text(
+                                                text = "No unopened remaining",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.warning,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isExpiringSoon && !isPastDiscard) {
+                                            Text(
+                                                text = "Expiring soon",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.warning,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            StockBadge(balance = stockBalance)
+                            if (stockBalance.daysRemaining != null) {
+                                Text(
+                                    text = "~${stockBalance.daysRemaining}d supply runway",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -1250,6 +1519,18 @@ fun PackageStatusChip(
             semantic.skipped,
             "Discarded",
             Icons.Default.Close
+        )
+        PackageStatus.DAMAGED -> listOf(
+            semantic.skippedContainer,
+            semantic.skipped,
+            "Damaged",
+            Icons.Default.Warning
+        )
+        PackageStatus.LOST -> listOf(
+            semantic.warningContainer,
+            semantic.warning,
+            "Lost",
+            Icons.Default.Warning
         )
     }
     Surface(

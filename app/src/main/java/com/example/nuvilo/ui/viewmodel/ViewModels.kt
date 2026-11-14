@@ -542,7 +542,8 @@ class MedicationViewModel(
         discardAfterOpeningDays: Int? = null,
         lotNumber: String? = null,
         expiryDateEpochMs: Long? = null,
-        notes: String? = null
+        notes: String? = null,
+        openFirstPackageImmediately: Boolean = false
     ) {
         viewModelScope.launch {
             stockRepository.restockPackages(
@@ -554,7 +555,8 @@ class MedicationViewModel(
                 discardAfterOpeningDays = discardAfterOpeningDays,
                 lotNumber = lotNumber,
                 expiryDateEpochMs = expiryDateEpochMs,
-                notes = notes
+                notes = notes,
+                openFirstPackageImmediately = openFirstPackageImmediately
             )
         }
     }
@@ -854,7 +856,8 @@ class MedicationDetailViewModel(
         discardAfterOpeningDays: Int? = null,
         lotNumber: String? = null,
         expiryDateEpochMs: Long? = null,
-        notes: String? = null
+        notes: String? = null,
+        openFirstPackageImmediately: Boolean = false
     ) {
         viewModelScope.launch {
             awaitLoadedState()
@@ -867,11 +870,13 @@ class MedicationDetailViewModel(
                 discardAfterOpeningDays = discardAfterOpeningDays,
                 lotNumber = lotNumber,
                 expiryDateEpochMs = expiryDateEpochMs,
-                notes = notes
+                notes = notes,
+                openFirstPackageImmediately = openFirstPackageImmediately
             )
             if (result.isSuccess) {
                 val totalAdded = ScaledQuantity(contentsPerPackage.rawScaledValue * packageCount.toLong())
-                _actionSuccessMessage.value = "Added $packageCount ${packageType.pluralName.lowercase()} (${totalAdded.toDisplayString()} ${consumptionUnit.abbreviation})"
+                val openSuffix = if (openFirstPackageImmediately) " (first opened)" else ""
+                _actionSuccessMessage.value = "Added $packageCount ${packageType.pluralName.lowercase()} (${totalAdded.toDisplayString()} ${consumptionUnit.abbreviation})$openSuffix"
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to add packages"
             }
@@ -887,6 +892,19 @@ class MedicationDetailViewModel(
                 _actionSuccessMessage.value = "$label opened and active for dosing"
             } else {
                 _errorMessage.value = result.exceptionOrNull()?.message ?: "Unable to open package"
+            }
+        }
+    }
+
+    fun revertOpenedPackage(lotId: String) {
+        viewModelScope.launch {
+            awaitLoadedState()
+            val result = stockRepository.revertOpenedPackage(lotId)
+            if (result.isSuccess) {
+                val label = result.getOrNull()?.packageLabel ?: "Package"
+                _actionSuccessMessage.value = "$label reverted to unopened"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Unable to revert opened package"
             }
         }
     }
@@ -950,6 +968,22 @@ class MedicationDetailViewModel(
             }
         }
     }
+
+    fun updatePackageMetadata(
+        lotId: String,
+        packageLabel: String? = null,
+        lotNumber: String? = null,
+        expiryDateEpochMs: Long? = null,
+        discardAfterOpeningDays: Int? = null,
+        notes: String? = null
+    ) = updatePackageDetails(
+        lotId = lotId,
+        packageLabel = packageLabel,
+        lotNumber = lotNumber,
+        expiryDateEpochMs = expiryDateEpochMs,
+        discardAfterOpeningDays = discardAfterOpeningDays,
+        notes = notes
+    )
 
     fun depletePackage(
         lotId: String,

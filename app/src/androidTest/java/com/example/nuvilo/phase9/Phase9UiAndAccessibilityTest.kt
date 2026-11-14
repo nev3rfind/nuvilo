@@ -135,7 +135,7 @@ class Phase9UiAndAccessibilityTest {
                     currentBalance = ScaledQuantity.ofWhole(50),
                     onDismiss = {},
                     onConfirm = { _, _, _, _ -> },
-                    onConfirmPackages = { packageCount, contentsPerPackage, _, _, _, _, _, _ ->
+                    onConfirmPackages = { packageCount, contentsPerPackage, _, _, _, _, _, _, _ ->
                         restockedPackages = packageCount
                         addedPerPkg = contentsPerPackage
                     }
@@ -144,7 +144,7 @@ class Phase9UiAndAccessibilityTest {
         }
 
         composeTestRule.onNodeWithText("+2 Bottles").performScrollTo().performClick()
-        composeTestRule.onNodeWithText("50 → 650 drops (+600)", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 Bottles received (600 estimated drops in total)", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Confirm Restock").performClick()
 
         assertEquals(2, restockedPackages)

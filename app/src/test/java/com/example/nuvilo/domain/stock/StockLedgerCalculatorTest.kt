@@ -2,13 +2,16 @@ package com.example.nuvilo.domain.stock
 
 import com.example.nuvilo.domain.model.DepletionReason
 import com.example.nuvilo.domain.model.DoseStatus
+import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
 import com.example.nuvilo.domain.model.PackageStatus
+import com.example.nuvilo.domain.model.PackageType
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.model.TrackingPrecision
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -502,5 +505,98 @@ class StockLedgerCalculatorTest {
         assertEquals(MovementType.ADJUSTMENT_IN, outcome.reversalEntry.movementType)
         assertEquals(60_000L, outcome.reversalEntry.quantity.rawScaledValue)
         assertEquals("bottleA", outcome.reversalEntry.lotId)
+    }
+
+    @Test
+    fun allocateDoseAgainstPackages_enforcesOpenPackageIsolation_doesNotAutoOpenUnopenedPackages() {
+        val nowMs = 1_000_000L
+        val bottle1 = StockLot(
+            id = "b1",
+            medicationId = "med1",
+            initialQuantity = ScaledQuantity.ofWhole(300),
+            remainingQuantity = ScaledQuantity.ofWhole(1),
+            unit = StockUnit.DROPS,
+            packageType = PackageType.BOTTLE,
+            packageStatus = PackageStatus.OPENED,
+            openedAtEpochMs = nowMs - 100_000L
+        )
+        val bottle2 = StockLot(
+            id = "b2",
+            medicationId = "med1",
+            initialQuantity = ScaledQuantity.ofWhole(300),
+            remainingQuantity = ScaledQuantity.ofWhole(300),
+            unit = StockUnit.DROPS,
+            packageType = PackageType.BOTTLE,
+            packageStatus = PackageStatus.UNOPENED,
+            expiryDateEpochMs = nowMs + 10_000_000L,
+            createdAtEpochMs = nowMs - 50_000L
+        )
+
+        // Dose of 2 drops: should consume 1 remaining from b1, transition b1 to EMPTY,
+        // and NOT touch unopened bottle b2.
+        val allocations = calculator.allocateDoseAgainstPackages(
+            doseQuantity = ScaledQuantity.ofWhole(2),
+            lots = listOf(bottle1, bottle2),
+            nowEpochMs = nowMs
+        )
+
+        assertEquals(1, allocations.size)
+        assertEquals("b1", allocations[0].updatedLot.id)
+        assertEquals(ScaledQuantity.ZERO, allocations[0].updatedLot.remainingQuantity)
+        assertEquals(PackageStatus.EMPTY, allocations[0].updatedLot.packageStatus)
+        assertEquals(ScaledQuantity.ofWhole(1), allocations[0].deductedQuantity)
+        assertFalse(allocations[0].newlyOpened)
+    }
+
+    @Test
+    fun medication_effectivePackagingConfig_providesClinicalDefaults_forAllForms() {
+        val baseMed = Medication(
+            id = "test-med",
+            name = "Test",
+            strength = "10mg",
+            form = MedicationForm.DROPS,
+            stockUnit = StockUnit.DROPS,
+            openingStock = ScaledQuantity.ofWhole(300),
+            lowStockThreshold = ScaledQuantity.ofWhole(30)
+        )
+
+        // DROPS default
+        val dropsConfig = baseMed.effectivePackagingConfig
+        assertEquals(PackageType.BOTTLE, dropsConfig.packageType)
+        assertEquals(StockUnit.DROPS, dropsConfig.consumptionUnit)
+        assertEquals(300_000L, dropsConfig.contentsPerPackage?.rawScaledValue)
+        assertEquals(28, dropsConfig.discardAfterOpeningDays)
+        assertEquals(TrackingPrecision.ESTIMATED, dropsConfig.trackingPrecision)
+
+        // TABLET default
+        val tabMed = baseMed.copy(form = MedicationForm.TABLET, stockUnit = StockUnit.TABLETS)
+        val tabConfig = tabMed.effectivePackagingConfig
+        assertEquals(PackageType.BLISTER_PACK, tabConfig.packageType)
+        assertEquals(StockUnit.TABLETS, tabConfig.consumptionUnit)
+        assertEquals(TrackingPrecision.EXACT, tabConfig.trackingPrecision)
+
+        // INHALER_PUFFS default
+        val inhalerMed = baseMed.copy(form = MedicationForm.INHALER_PUFFS, stockUnit = StockUnit.PUFFS)
+        val inhalerConfig = inhalerMed.effectivePackagingConfig
+        assertEquals(PackageType.INHALER, inhalerConfig.packageType)
+        assertEquals(StockUnit.PUFFS, inhalerConfig.consumptionUnit)
+        assertEquals(TrackingPrecision.ESTIMATED, inhalerConfig.trackingPrecision)
+
+        // TOPICAL_CREAM default
+        val creamMed = baseMed.copy(form = MedicationForm.TOPICAL_CREAM, stockUnit = StockUnit.GRAMS)
+        val creamConfig = creamMed.effectivePackagingConfig
+        assertEquals(PackageType.TUBE, creamConfig.packageType)
+        assertEquals(StockUnit.GRAMS, creamConfig.consumptionUnit)
+    }
+
+    @Test
+    fun packageStatus_damagedAndLost_areIneligibleForConsumption() {
+        assertFalse(PackageStatus.DAMAGED.isEligibleForConsumption)
+        assertFalse(PackageStatus.LOST.isEligibleForConsumption)
+        assertTrue(PackageStatus.UNOPENED.isEligibleForConsumption)
+        assertTrue(PackageStatus.OPENED.isEligibleForConsumption)
+        assertFalse(PackageStatus.EMPTY.isEligibleForConsumption)
+        assertFalse(PackageStatus.DISCARDED.isEligibleForConsumption)
+        assertFalse(PackageStatus.EXPIRED.isEligibleForConsumption)
     }
 }

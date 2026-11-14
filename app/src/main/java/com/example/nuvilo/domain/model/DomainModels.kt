@@ -17,8 +17,11 @@ data class Medication(
     val administrationProfile: AdministrationProfile = AdministrationProfile(),
     val lowStockDaysThreshold: Int? = null
 ) {
+    val effectivePackagingConfig: PackagingConfig
+        get() = packagingConfig ?: inferDefaultPackagingConfig(form, stockUnit)
+
     val effectiveConsumptionUnit: StockUnit
-        get() = packagingConfig?.consumptionUnit ?: stockUnit
+        get() = effectivePackagingConfig.consumptionUnit
 }
 
 data class StockLot(

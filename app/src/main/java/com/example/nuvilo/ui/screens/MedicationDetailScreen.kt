@@ -32,7 +32,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AllInbox
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
@@ -44,9 +46,11 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -324,6 +328,7 @@ fun MedicationDetailScreen(
                             nextUnopenedLot = nextUnopenedFefoLot,
                             stagedNextLot = uiState.stagedNextPackage ?: nextUnopenedFefoLot,
                             unopenedCount = unopenedCount,
+                            lots = uiState.lots,
                             educationalInsight = educationalInsight,
                             onEditMedicationClick = { showEditMedicationDialog = true },
                             onRestockClick = { showRestockDialog = true },
@@ -342,6 +347,9 @@ fun MedicationDetailScreen(
                                     nuviloHaptics.perform(NuviloHapticEvent.PACKAGE_OPENED)
                                     viewModel.openPackage(lot.id)
                                 }
+                            },
+                            onRevertOpenedClick = { lotId ->
+                                viewModel.revertOpenedPackage(lotId)
                             },
                             onDiscardOpenedClick = activeOpenLot?.let { openLot ->
                                 { lotToDiscard = openLot }
@@ -481,11 +489,17 @@ fun MedicationDetailScreen(
     }
 
     if (showRestockDialog && med != null) {
+        val hasOpenedPack = uiState.lots.any { it.packageStatus == PackageStatus.OPENED }
+        val dailyRate = uiState.schedules.sumOf {
+            it.targetTimesMinuteOfDay.size.toLong() * it.doseQuantityPerOccurrence.rawScaledValue
+        }.takeIf { it > 0L }?.let { ScaledQuantity(it) }
         RestockDialog(
             medication = med,
             currentBalance = uiState.stockBalance?.currentBalance ?: ScaledQuantity.ZERO,
+            hasOpenedPackage = hasOpenedPack,
+            dailyConsumptionRate = dailyRate,
             onDismiss = { showRestockDialog = false },
-            onConfirmPackages = { packageCount, contentsPerPackage, consumptionUnit, packageType, discardDays, lotNumber, expiryEpoch, notes ->
+            onConfirmPackages = { packageCount, contentsPerPackage, consumptionUnit, packageType, discardDays, lotNumber, expiryEpoch, notes, openFirstImmediately ->
                 nuviloHaptics.perform(NuviloHapticEvent.RESTOCK_SAVED)
                 viewModel.restockPackages(
                     packageCount = packageCount,
@@ -495,7 +509,8 @@ fun MedicationDetailScreen(
                     discardAfterOpeningDays = discardDays,
                     lotNumber = lotNumber,
                     expiryDateEpochMs = expiryEpoch,
-                    notes = notes
+                    notes = notes,
+                    openFirstPackageImmediately = openFirstImmediately
                 )
                 showRestockDialog = false
             },
@@ -518,6 +533,18 @@ fun MedicationDetailScreen(
                 nuviloHaptics.perform(NuviloHapticEvent.RECOUNT_SAVED)
                 viewModel.adjustStock(targetBal, reason, targetLotId)
                 showAdjustDialog = false
+            },
+            onRecountPackageClick = { lot ->
+                showAdjustDialog = false
+                lotToRecount = lot
+            },
+            onDepletePackageClick = { lot ->
+                showAdjustDialog = false
+                lotToDeplete = lot
+            },
+            onRevertPackageClick = { lot ->
+                showAdjustDialog = false
+                viewModel.revertOpenedPackage(lot.id)
             }
         )
     }
@@ -532,6 +559,16 @@ fun MedicationDetailScreen(
                 nuviloHaptics.perform(NuviloHapticEvent.RECOUNT_SAVED)
                 viewModel.recountOpenedPackage(currentLotToRecount.id, observedRemaining, reason)
                 lotToRecount = null
+            },
+            onDepleteClick = {
+                val lot = currentLotToRecount
+                lotToRecount = null
+                lotToDeplete = lot
+            },
+            onRevertClick = {
+                val lotId = currentLotToRecount.id
+                lotToRecount = null
+                viewModel.revertOpenedPackage(lotId)
             }
         )
     }
@@ -693,12 +730,14 @@ private fun MedicationHeroAndStockCard(
     nextUnopenedLot: StockLot? = null,
     stagedNextLot: StockLot? = null,
     unopenedCount: Int = 0,
+    lots: List<StockLot> = emptyList(),
     educationalInsight: String? = null,
     onEditMedicationClick: () -> Unit,
     onRestockClick: () -> Unit,
     onAdjustClick: () -> Unit,
     onDepleteOpenedClick: (() -> Unit)? = null,
     onOpenNextPackageClick: (() -> Unit)? = null,
+    onRevertOpenedClick: ((lotId: String) -> Unit)? = null,
     onDiscardOpenedClick: (() -> Unit)? = null,
     onRequestRepeatClick: (() -> Unit)? = null
 ) {
@@ -867,6 +906,13 @@ private fun MedicationHeroAndStockCard(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    val pkgConfig = medication.effectivePackagingConfig
+                    val pkgSingular = pkgConfig.packageType.displayName
+                    val pkgPlural = pkgConfig.packageType.pluralName
+                    val activeOpen = supplyForecast?.activeOpenedPackage
+                    val unopenedCount = supplyForecast?.unopenedPackagesCount ?: 0
+                    val totalPhysical = (if (activeOpen != null) 1 else 0) + unopenedCount
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -874,7 +920,7 @@ private fun MedicationHeroAndStockCard(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = "CURRENT STOCK BALANCE",
+                                text = "TOTAL ESTIMATED USABLE SUPPLY",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -894,6 +940,14 @@ private fun MedicationHeroAndStockCard(
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                            if (totalPhysical > 0) {
+                                Text(
+                                    text = "$totalPhysical total physical $pkgPlural ($unopenedCount unopened)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -940,20 +994,32 @@ private fun MedicationHeroAndStockCard(
                         }
                     }
 
-                    // Contextual Package-Level Summary & Active Opened Bottle Progress
-                    if (supplyForecast != null && (supplyForecast.openedPackagesCount > 0 || supplyForecast.unopenedPackagesCount > 0 || supplyForecast.activeOpenedPackage != null)) {
-                        val pkgPlural = medication.packagingConfig?.packageType?.pluralName?.lowercase() ?: "packages"
-                        val pkgSingular = medication.packagingConfig?.packageType?.displayName ?: "Package"
-                        val activeOpen = supplyForecast.activeOpenedPackage
+                    // Redesigned Physical Package Inventory & Stock Overview
+                    val packaging = pkgConfig
+                    val openedLots = lots.filter { it.packageStatus == PackageStatus.OPENED }
+                    val unopenedLots = lots.filter { it.packageStatus == PackageStatus.UNOPENED }
+                    val openedLotsCount = if (lots.isNotEmpty()) openedLots.size else (supplyForecast?.openedPackagesCount ?: 0)
+                    val unopenedLotsCount = if (lots.isNotEmpty()) unopenedLots.size else (supplyForecast?.unopenedPackagesCount ?: unopenedCount)
+                    val totalPhysicalCount = openedLotsCount + unopenedLotsCount
+                    val currentActiveOpen = openedLots.firstOrNull() ?: activeOpen
+                    val usableUnits = supplyForecast?.totalUsableUnits ?: balance.currentBalance
+                    val daysOfSupply = supplyForecast?.daysOfSupply ?: balance.daysRemaining
+                    val dailyRate = if (daysOfSupply != null && daysOfSupply > 0) {
+                        ScaledQuantity(usableUnits.rawScaledValue / daysOfSupply.toLong())
+                    } else null
+
+                    // 1. Total Physical Inventory Card
+                    if (totalPhysicalCount > 0 || supplyForecast != null) {
                         Surface(
                             shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
+                                    .padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
@@ -961,61 +1027,296 @@ private fun MedicationHeroAndStockCard(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "Total Physical Inventory",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                     Text(
-                                        text = "Package Overview ($pkgPlural)",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "${supplyForecast.openedPackagesCount} open · ${supplyForecast.unopenedPackagesCount} sealed",
-                                        style = MaterialTheme.typography.labelMedium.tabular,
-                                        fontWeight = FontWeight.SemiBold,
+                                        text = "$totalPhysicalCount total ${if (totalPhysicalCount == 1) pkgSingular.lowercase() else pkgPlural.lowercase()}",
+                                        style = MaterialTheme.typography.titleSmall.tabular,
+                                        fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
 
-                                if (activeOpen != null) {
-                                    val openLabel = activeOpen.packageLabel ?: activeOpen.lotNumber ?: "Current $pkgSingular"
-                                    val initialRaw = activeOpen.initialQuantity.rawScaledValue.coerceAtLeast(1L)
-                                    val fraction = (activeOpen.remainingQuantity.rawScaledValue.toFloat() / initialRaw.toFloat()).coerceIn(0f, 1f)
+                                Text(
+                                    text = "$openedLotsCount opened + $unopenedLotsCount unopened ${pkgPlural.lowercase()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "TOTAL ESTIMATED USABLE SUPPLY",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "${usableUnits.toDisplayString()} ${packaging.consumptionUnit.abbreviation}",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (balance.isLowStock) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Subject to package usability and expiry",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        )
+                                    }
+
+                                    if (daysOfSupply != null) {
+                                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Surface(
+                                                shape = MaterialTheme.shapes.extraSmall,
+                                                color = if (balance.isLowStock) semantic.warningContainer else MaterialTheme.colorScheme.primaryContainer,
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (balance.isLowStock) semantic.warningBorder else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                                )
+                                            ) {
+                                                Text(
+                                                    text = "~$daysOfSupply days supply",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (balance.isLowStock) semantic.warning else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                            if (dailyRate != null && dailyRate.isPositive()) {
+                                                Text(
+                                                    text = "at ~${dailyRate.toDisplayString()} ${packaging.consumptionUnit.abbreviation}/day",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Current Opened Package Card
+                    if (currentActiveOpen != null) {
+                        val openLabel = currentActiveOpen.packageLabel ?: currentActiveOpen.lotNumber?.let { "Lot #$it" } ?: "Current $pkgSingular"
+                        val initialRaw = currentActiveOpen.initialQuantity.rawScaledValue.coerceAtLeast(1L)
+                        val fraction = (currentActiveOpen.remainingQuantity.rawScaledValue.toFloat() / initialRaw.toFloat()).coerceIn(0f, 1f)
+                        val openedDateStr = currentActiveOpen.openedAtEpochMs?.let {
+                            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+                        } ?: "Unknown date"
+
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Science,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "Current Opened $pkgSingular",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Surface(
+                                        shape = NoveloPillShape,
+                                        color = semantic.takenContainer,
+                                        border = BorderStroke(1.dp, semantic.takenBorder)
                                     ) {
                                         Text(
-                                            text = openLabel,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
+                                            text = "OPENED",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = semantic.taken,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Text(
+                                        text = openLabel,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "${currentActiveOpen.remainingQuantity.toDisplayString()} / ${currentActiveOpen.initialQuantity.toDisplayString()} ${currentActiveOpen.unit.abbreviation} remaining",
+                                        style = MaterialTheme.typography.bodyMedium.tabular,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = { fraction },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(NoveloPillShape)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Opened: $openedDateStr",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    val discardCutoffMs = currentActiveOpen.discardAfterOpeningEpochMs ?: supplyForecast?.daysUntilActivePackageDiscard?.let {
+                                        System.currentTimeMillis() + it.toLong() * 86_400_000L
+                                    }
+                                    if (discardCutoffMs != null) {
+                                        val discardDateStr = Instant.ofEpochMilli(discardCutoffMs).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+                                        val daysLeft = ((discardCutoffMs - System.currentTimeMillis()) / 86_400_000L).toInt()
+                                        val isUrgent = daysLeft <= 3
+                                        Text(
+                                            text = if (daysLeft <= 0) "Discard deadline: EXPIRED" else "Discard deadline: $discardDateStr ($daysLeft days)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isUrgent) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isUrgent) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                // Quick actions on opened container: "Mark finished" and "Revert to sealed"
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (onDepleteOpenedClick != null) {
+                                        OutlinedButton(
+                                            onClick = onDepleteOpenedClick,
+                                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                                            shape = MaterialTheme.shapes.small,
+                                            border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.7f))
+                                        ) {
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = semantic.warning, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Mark finished", style = MaterialTheme.typography.labelMedium, color = semantic.warning, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    if (onRevertOpenedClick != null && currentActiveOpen.remainingQuantity == currentActiveOpen.initialQuantity) {
+                                        OutlinedButton(
+                                            onClick = { onRevertOpenedClick(currentActiveOpen.id) },
+                                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                                            shape = MaterialTheme.shapes.small
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Revert to sealed", style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Unopened Reserve Supply Card
+                    if (unopenedLotsCount > 0) {
+                        val totalUnopenedRaw = if (unopenedLots.isNotEmpty()) {
+                            unopenedLots.map { it.remainingQuantity.rawScaledValue }.sum()
+                        } else {
+                            (packaging.contentsPerPackage?.rawScaledValue ?: 0L) * unopenedLotsCount.toLong()
+                        }
+                        val totalUnopenedQtyStr = ScaledQuantity(totalUnopenedRaw).toDisplayString()
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AllInbox,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "$unopenedLotsCount ${if (unopenedLotsCount == 1) pkgSingular.lowercase() else pkgPlural.lowercase()} available",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "${activeOpen.remainingQuantity.toDisplayString()} / ${activeOpen.initialQuantity.toDisplayString()} ${activeOpen.unit.abbreviation}",
-                                            style = MaterialTheme.typography.bodySmall.tabular,
+                                            text = "$totalUnopenedQtyStr ${packaging.consumptionUnit.abbreviation} sealed in reserve",
+                                            style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    LinearProgressIndicator(
-                                        progress = { fraction },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(6.dp)
-                                            .clip(NoveloPillShape)
+                                }
+                                Surface(
+                                    shape = NoveloPillShape,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    Text(
+                                        text = "SEALED",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
-                                    val discardDaysLeft = supplyForecast.daysUntilActivePackageDiscard
-                                    if (discardDaysLeft != null) {
-                                        val isUrgentDiscard = discardDaysLeft <= 3
-                                        Text(
-                                            text = if (discardDaysLeft <= 0) {
-                                                "After-opening discard limit reached — replace and discard safely."
-                                            } else {
-                                                "After-opening limit: discard in $discardDaysLeft day(s)"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = if (isUrgentDiscard) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isUrgentDiscard) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -1178,9 +1479,7 @@ private fun MedicationHeroAndStockCard(
                         }
                     }
 
-                    val pkgSingular = medication.packagingConfig?.packageType?.displayName ?: "Pack"
-                    val pkgPlural = medication.packagingConfig?.packageType?.pluralName ?: "Supply"
-                    val hasOpenedPack = supplyForecast?.activeOpenedPackage != null
+                    val hasOpenedPack = currentActiveOpen != null
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2789,6 +3088,8 @@ fun EditScheduleDialog(
 fun RestockDialog(
     medication: Medication,
     currentBalance: ScaledQuantity = ScaledQuantity.ZERO,
+    hasOpenedPackage: Boolean = false,
+    dailyConsumptionRate: ScaledQuantity? = null,
     onDismiss: () -> Unit,
     onConfirm: (
         quantity: ScaledQuantity,
@@ -2804,61 +3105,46 @@ fun RestockDialog(
         discardAfterOpeningDays: Int?,
         lotNumber: String?,
         expiryDateEpochMs: Long?,
-        notes: String?
+        notes: String?,
+        openFirstPackageImmediately: Boolean
     ) -> Unit)? = null
 ) {
     val semantic = MaterialTheme.noveloColors
-    val packaging = medication.packagingConfig
-    val packageAwareAvailable = onConfirmPackages != null && packaging != null
-    var usePackageMode by rememberSaveable { mutableStateOf(packageAwareAvailable) }
+    val packaging = medication.effectivePackagingConfig
+    val pkgName = packaging.packageType.displayName
+    val pkgPlural = packaging.packageType.pluralName
+    val consumptionUnit = packaging.consumptionUnit
 
-    val consumptionUnit = medication.effectiveConsumptionUnit
-    val defaultInitialQty = when (consumptionUnit) {
+    val defaultInitialQty = packaging.contentsPerPackage?.toDisplayString() ?: when (consumptionUnit) {
         StockUnit.DROPS -> "300"
         StockUnit.CONTAINERS -> "30"
         StockUnit.ML -> "100"
         StockUnit.PUFFS -> "120"
-        StockUnit.BOTTLES -> "1"
         StockUnit.PATCHES -> "7"
         else -> "28"
     }
+
     var packageCountStr by rememberSaveable { mutableStateOf("1") }
-    var contentsPerPackageStr by rememberSaveable {
-        mutableStateOf(packaging?.contentsPerPackage?.toDisplayString() ?: defaultInitialQty)
-    }
+    var contentsPerPackageStr by rememberSaveable { mutableStateOf(defaultInitialQty) }
     var discardDaysStr by rememberSaveable {
-        mutableStateOf(packaging?.discardAfterOpeningDays?.toString() ?: "")
+        mutableStateOf(packaging.discardAfterOpeningDays?.toString() ?: "")
     }
-    var quantityStr by rememberSaveable { mutableStateOf(defaultInitialQty) }
+    var openFirstImmediately by rememberSaveable { mutableStateOf(!hasOpenedPackage) }
     var lotNumber by rememberSaveable { mutableStateOf("") }
     var expiryDaysAheadStr by rememberSaveable { mutableStateOf("365") }
     var notes by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
-    val presets = when (consumptionUnit) {
-        StockUnit.DROPS -> listOf("150", "300", "600")
-        StockUnit.CONTAINERS -> listOf("30", "60", "200")
-        StockUnit.ML -> listOf("50", "100", "150", "200")
-        StockUnit.PUFFS -> listOf("60", "120", "200")
-        StockUnit.BOTTLES -> listOf("1", "2", "3")
-        StockUnit.PATCHES -> listOf("5", "7", "14", "28")
-        else -> listOf("7", "14", "28", "56", "84")
-    }
+    val packagePresets = listOf(1, 2, 3, 5, 7)
 
-    val parsedPackageCount = packageCountStr.trim().toIntOrNull()?.takeIf { it in 1..24 }
+    val parsedPackageCount = packageCountStr.trim().toIntOrNull()?.takeIf { it in 1..99 }
     val parsedContentsPerPackage = runCatching { ScaledQuantity.fromDisplayString(contentsPerPackageStr) }
         .getOrNull()?.takeIf { it.isPositive() }
-    val parsedDirectQty = runCatching { ScaledQuantity.fromDisplayString(quantityStr) }
-        .getOrNull()?.takeIf { it.isPositive() }
 
-    val effectiveAddedQty = if (usePackageMode && packageAwareAvailable) {
-        if (parsedPackageCount != null && parsedContentsPerPackage != null) {
-            parsedContentsPerPackage * parsedPackageCount.toLong()
-        } else {
-            null
-        }
+    val effectiveAddedQty = if (parsedPackageCount != null && parsedContentsPerPackage != null) {
+        parsedContentsPerPackage * parsedPackageCount.toLong()
     } else {
-        parsedDirectQty
+        null
     }
 
     val isValid = effectiveAddedQty != null && effectiveAddedQty.isPositive()
@@ -2866,10 +3152,16 @@ fun RestockDialog(
     val daysAhead = expiryDaysAheadStr.toLongOrNull() ?: 365L
     val computedExpiryDateStr = LocalDate.now().plusDays(daysAhead.coerceAtLeast(1L)).format(DATE_FORMATTER)
 
+    val estimatedDaysSupply = if (effectiveAddedQty != null && dailyConsumptionRate != null && dailyConsumptionRate.isPositive()) {
+        (newBalance.rawScaledValue / dailyConsumptionRate.rawScaledValue).toInt()
+    } else {
+        null
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.imePadding(),
-        title = { Text("Restock Supplies", fontWeight = FontWeight.Bold) },
+        title = { Text("Restock Supply", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -2878,35 +3170,93 @@ fun RestockDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = if (usePackageMode && packageAwareAvailable && packaging != null) {
-                        "Add sealed ${packaging.packageType.pluralName.lowercase()} for ${medication.name} (${medication.strength}). Each package stays UNOPENED until you start using it."
-                    } else {
-                        "Recording new supply for ${medication.name} (${medication.strength}). Appends an immutable RESTOCK entry and creates a FEFO batch lot."
-                    },
+                    text = "Purchase physical ${pkgPlural.lowercase()} for ${medication.name} (${medication.strength}). Nuvilo tracks consumption internally from your opened ${pkgName.lowercase()}.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (packageAwareAvailable && packaging != null) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
+                // Package Quantity and Capacity Inputs
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = packageCountStr,
+                        onValueChange = { packageCountStr = it },
+                        label = { Text("Number of $pkgPlural *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(0.9f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = contentsPerPackageStr,
+                        onValueChange = { contentsPerPackageStr = it },
+                        label = { Text("${consumptionUnit.displayName} / $pkgName *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1.1f),
+                        singleLine = true
+                    )
+                }
+
+                // Package-Aware Presets (Adapts to package type: bottles, tubes, packs, etc.)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    packagePresets.forEach { countPreset ->
                         FilterChip(
-                            selected = usePackageMode,
-                            onClick = { usePackageMode = true },
-                            label = { Text("Add ${packaging.packageType.pluralName}") }
+                            selected = packageCountStr == countPreset.toString(),
+                            onClick = { packageCountStr = countPreset.toString() },
+                            label = { Text("+$countPreset ${if (countPreset == 1) pkgName else pkgPlural}") }
                         )
-                        FilterChip(
-                            selected = !usePackageMode,
-                            onClick = { usePackageMode = false },
-                            label = { Text("Custom ${consumptionUnit.abbreviation} Amount") }
+                    }
+                }
+
+                // Immediate Opening Option
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (openFirstImmediately) semantic.takenContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (openFirstImmediately) semantic.takenBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { openFirstImmediately = !openFirstImmediately }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Open first ${pkgName.lowercase()} immediately",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (openFirstImmediately) semantic.taken else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (hasOpenedPackage) {
+                                    "You already have an opened ${pkgName.lowercase()} in use. Leave unchecked unless starting this new container now."
+                                } else {
+                                    "Marks package #1 as OPENED and starts discard countdown (if applicable). Remaining containers stay UNOPENED in reserve."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = openFirstImmediately,
+                            onCheckedChange = { openFirstImmediately = it }
                         )
                     }
                 }
 
                 // Live Post-Restock Impact Preview
-                if (effectiveAddedQty != null && effectiveAddedQty.isPositive()) {
+                if (effectiveAddedQty != null && effectiveAddedQty.isPositive() && parsedPackageCount != null && parsedContentsPerPackage != null) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         color = semantic.takenContainer,
@@ -2915,25 +3265,36 @@ fun RestockDialog(
                     ) {
                         Column(
                             modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             Text(
-                                text = "Ledger Impact Preview (+RESTOCK)",
+                                text = "LIVE RESTOCK SUMMARY",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = semantic.taken
                             )
                             Text(
-                                text = "${currentBalance.toDisplayString()} → ${newBalance.toDisplayString()} ${consumptionUnit.abbreviation} (+${effectiveAddedQty.toDisplayString()})",
+                                text = "$parsedPackageCount ${if (parsedPackageCount == 1) pkgName else pkgPlural} received (${effectiveAddedQty.toDisplayString()} estimated ${consumptionUnit.abbreviation} in total)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = semantic.taken
                             )
-                            if (usePackageMode && packageAwareAvailable && packaging != null && parsedPackageCount != null && parsedContentsPerPackage != null) {
+                            val breakdownStr = if (openFirstImmediately) {
+                                "1 opened ${pkgName.lowercase()} + ${parsedPackageCount - 1} unopened ${pkgPlural.lowercase()} in reserve"
+                            } else {
+                                "$parsedPackageCount unopened ${pkgPlural.lowercase()} in reserve"
+                            }
+                            Text(
+                                text = breakdownStr,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = semantic.taken
+                            )
+                            if (estimatedDaysSupply != null) {
                                 Text(
-                                    text = "$parsedPackageCount × ${packaging.packageType.displayName} (${parsedContentsPerPackage.toDisplayString()} ${consumptionUnit.abbreviation} each)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = semantic.taken
+                                    text = "Estimated Supply: ~$estimatedDaysSupply days at current configured dosage",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = semantic.taken.copy(alpha = 0.9f)
                                 )
                             }
                             Text(
@@ -2945,74 +3306,15 @@ fun RestockDialog(
                     }
                 }
 
-                if (usePackageMode && packageAwareAvailable && packaging != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = packageCountStr,
-                            onValueChange = { packageCountStr = it },
-                            label = { Text("${packaging.packageType.pluralName} Added *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(0.8f),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = contentsPerPackageStr,
-                            onValueChange = { contentsPerPackageStr = it },
-                            label = { Text("${consumptionUnit.displayName} / ${packaging.packageType.displayName} *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                    }
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf("1", "2", "3", "6").forEach { countPreset ->
-                            FilterChip(
-                                selected = packageCountStr == countPreset,
-                                onClick = { packageCountStr = countPreset },
-                                label = { Text("+$countPreset ${if (countPreset == "1") packaging.packageType.displayName else packaging.packageType.pluralName}") }
-                            )
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = discardDaysStr,
-                        onValueChange = { discardDaysStr = it },
-                        label = { Text("Discard Window After Opening (Days, Optional)") },
-                        placeholder = { Text("e.g. 28 for eye drops") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = quantityStr,
-                        onValueChange = { quantityStr = it },
-                        label = { Text("Quantity Added (${consumptionUnit.displayName}) *") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        presets.forEach { preset ->
-                            FilterChip(
-                                selected = quantityStr == preset,
-                                onClick = { quantityStr = preset },
-                                label = { Text("+$preset ${consumptionUnit.abbreviation}") }
-                            )
-                        }
-                    }
-                }
+                OutlinedTextField(
+                    value = discardDaysStr,
+                    onValueChange = { discardDaysStr = it },
+                    label = { Text("Discard Window After Opening (Days, Optional)") },
+                    placeholder = { Text("e.g. 28 for eye drops") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
 
                 OutlinedTextField(
                     value = lotNumber,
@@ -3050,9 +3352,7 @@ fun RestockDialog(
                         val expiryEpoch = System.currentTimeMillis() + (daysAhead * 24 * 60 * 60 * 1000)
                         val cleanLot = lotNumber.takeIf { it.isNotBlank() }
                         val cleanNotes = notes.takeIf { it.isNotBlank() }
-                        if (usePackageMode && onConfirmPackages != null && packaging != null &&
-                            parsedPackageCount != null && parsedContentsPerPackage != null
-                        ) {
+                        if (onConfirmPackages != null && parsedPackageCount != null && parsedContentsPerPackage != null) {
                             onConfirmPackages(
                                 parsedPackageCount,
                                 parsedContentsPerPackage,
@@ -3061,7 +3361,8 @@ fun RestockDialog(
                                 discardDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
                                 cleanLot,
                                 expiryEpoch,
-                                cleanNotes
+                                cleanNotes,
+                                openFirstImmediately
                             )
                         } else {
                             onConfirm(
@@ -3096,7 +3397,10 @@ fun AdjustStockDialog(
         targetBalance: ScaledQuantity,
         reason: String,
         targetLotId: String?
-    ) -> Unit
+    ) -> Unit,
+    onRecountPackageClick: ((lot: StockLot) -> Unit)? = null,
+    onDepletePackageClick: ((lot: StockLot) -> Unit)? = null,
+    onRevertPackageClick: ((lot: StockLot) -> Unit)? = null
 ) {
     val semantic = MaterialTheme.noveloColors
     var targetBalanceStr by rememberSaveable { mutableStateOf(currentBalance.toDisplayString()) }
@@ -3116,8 +3420,114 @@ fun AdjustStockDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // If physical packages exist, show package inspection list first
+                if (lots.isNotEmpty()) {
+                    Text(
+                        text = "Physical Packages in Inventory",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        for (lot in lots) {
+                            val isOpened = lot.packageStatus == PackageStatus.OPENED
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = if (isOpened) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isOpened) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = lot.packageLabel ?: lot.lotNumber?.let { "Lot #$it" } ?: "Package",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        PackageStatusChip(status = lot.packageStatus)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Remaining: ${lot.remainingQuantity.toDisplayString()} / ${lot.initialQuantity.toDisplayString()} ${lot.unit.abbreviation}",
+                                            style = MaterialTheme.typography.bodySmall.tabular
+                                        )
+                                        val expStr = lot.expiryDateEpochMs?.let {
+                                            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DATE_FORMATTER)
+                                        } ?: "No expiry"
+                                        Text(
+                                            text = "Exp: $expStr",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    if (isOpened) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            if (onRecountPackageClick != null) {
+                                                FilledTonalButton(
+                                                    onClick = { onRecountPackageClick(lot) },
+                                                    modifier = Modifier.weight(1f).heightIn(min = 34.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text("Recount This", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                            if (onDepletePackageClick != null) {
+                                                OutlinedButton(
+                                                    onClick = { onDepletePackageClick(lot) },
+                                                    modifier = Modifier.weight(1f).heightIn(min = 34.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                    border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.7f))
+                                                ) {
+                                                    Text("Mark Finished", style = MaterialTheme.typography.labelSmall, color = semantic.warning)
+                                                }
+                                            }
+                                            if (onRevertPackageClick != null && lot.remainingQuantity == lot.initialQuantity) {
+                                                OutlinedButton(
+                                                    onClick = { onRevertPackageClick(lot) },
+                                                    modifier = Modifier.weight(1f).heightIn(min = 34.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text("Revert", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                }
+
+                Text(
+                    text = "Direct Total Stock Balance Adjustment",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
                 if (parsedTarget != null) {
                     val delta = parsedTarget - currentBalance
                     val isIncrease = delta.isPositive()
@@ -3157,7 +3567,7 @@ fun AdjustStockDialog(
                 OutlinedTextField(
                     value = targetBalanceStr,
                     onValueChange = { targetBalanceStr = it },
-                    label = { Text("Actual Observed Count (${medication.stockUnit.abbreviation}) *") },
+                    label = { Text("Actual Total Observed Count (${medication.stockUnit.abbreviation}) *") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -3167,13 +3577,13 @@ fun AdjustStockDialog(
                     value = reason,
                     onValueChange = { reason = it },
                     label = { Text("Reason for Recount / Adjustment *") },
-                    placeholder = { Text("e.g. Physical blister pack recount, dropped tablet") },
+                    placeholder = { Text("e.g. Physical container recount, spill") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 if (lots.isNotEmpty()) {
                     Text(
-                        text = "Apply adjustment to batch lot:",
+                        text = "Apply total adjustment to batch lot:",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -3201,7 +3611,7 @@ fun AdjustStockDialog(
                                 onClick = { selectedLotId = lot.id }
                             )
                             Text(
-                                text = "${lot.lotNumber ?: "Batch"} (${lot.remainingQuantity.toDisplayString()} rem)",
+                                text = "${lot.packageLabel ?: lot.lotNumber ?: "Batch"} (${lot.remainingQuantity.toDisplayString()} rem)",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -3236,7 +3646,9 @@ fun RecountOpenedPackageDialog(
     medication: Medication,
     openedLot: StockLot,
     onDismiss: () -> Unit,
-    onConfirm: (observedRemaining: ScaledQuantity, reason: String) -> Unit
+    onConfirm: (observedRemaining: ScaledQuantity, reason: String) -> Unit,
+    onDepleteClick: (() -> Unit)? = null,
+    onRevertClick: (() -> Unit)? = null
 ) {
     val semantic = MaterialTheme.noveloColors
     val pkgType = openedLot.packageType ?: PackageType.CUSTOM
@@ -3270,7 +3682,7 @@ fun RecountOpenedPackageDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Adjust remaining supply inside $pkgLabel (${medication.name}) only. Unopened packages remain untouched.",
+                    text = "Adjust remaining supply inside $pkgLabel (${medication.name}) only. Unopened packages remain untouched in sealed reserve.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -3278,6 +3690,7 @@ fun RecountOpenedPackageDialog(
                 Surface(
                     shape = MaterialTheme.shapes.small,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -3289,14 +3702,55 @@ fun RecountOpenedPackageDialog(
                             style = MaterialTheme.typography.labelMedium.tabular,
                             fontWeight = FontWeight.SemiBold
                         )
-                        if (delta != null && delta.rawScaledValue != 0L) {
+                        if (parsedObserved != null && delta != null) {
                             val sign = if (delta.isPositive()) "+" else ""
+                            val deltaStr = "$sign${delta.toDisplayString()} $unitAbbr"
+                            val movLabel = when {
+                                delta.rawScaledValue == 0L -> "No Balance Change"
+                                delta.isPositive() -> "Compensating Movement: +ADJUSTMENT_IN"
+                                else -> "Compensating Movement: -ADJUSTMENT_OUT"
+                            }
                             Text(
-                                text = "Ledger Reconciliation: $sign${delta.toDisplayString()} $unitAbbr",
-                                style = MaterialTheme.typography.labelSmall.tabular,
+                                text = "${openedLot.remainingQuantity.toDisplayString()} → ${parsedObserved.toDisplayString()} $unitAbbr ($deltaStr)",
+                                style = MaterialTheme.typography.titleSmall.tabular,
                                 fontWeight = FontWeight.Bold,
-                                color = if (delta.isPositive()) semantic.taken else semantic.warning
+                                color = if (delta.isPositive()) semantic.taken else if (delta.rawScaledValue < 0L) semantic.warning else MaterialTheme.colorScheme.onSurface
                             )
+                            Text(
+                                text = movLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Quick actions on opened container
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (onDepleteClick != null) {
+                        OutlinedButton(
+                            onClick = onDepleteClick,
+                            modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                            shape = MaterialTheme.shapes.small,
+                            border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.7f))
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = semantic.warning, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Mark finished", style = MaterialTheme.typography.labelSmall, color = semantic.warning, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    if (onRevertClick != null && openedLot.remainingQuantity == openedLot.initialQuantity) {
+                        OutlinedButton(
+                            onClick = onRevertClick,
+                            modifier = Modifier.weight(1f).heightIn(min = 38.dp),
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Revert to sealed", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

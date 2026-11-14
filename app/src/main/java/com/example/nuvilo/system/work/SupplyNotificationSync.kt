@@ -82,6 +82,18 @@ class SupplyNotificationSync(
             container.userPreferencesRepository.clearLowStockNotified(med.id)
         }
 
+        if (forecast.openedPackagesCount == 0 && unopenedLots.isNotEmpty()) {
+            notificationHelper.showPackageFinishedNotification(
+                medication = med,
+                packageLabel = depletedLotLabel,
+                packageType = med.packagingConfig?.packageType,
+                unopenedPackagesCount = unopenedLots.size,
+                isPrivacyMasked = preferences.isNotificationPrivacyMasked
+            )
+        } else if (forecast.openedPackagesCount > 0 || unopenedLots.isEmpty()) {
+            notificationHelper.cancelPackageFinishedNotification(med.id)
+        }
+
         // Cancel any active expiry or discard notifications for lots that are now EMPTY or DISCARDED
         for (lot in lots) {
             if (lot.packageStatus == PackageStatus.EMPTY || lot.packageStatus == PackageStatus.DISCARDED || !lot.remainingQuantity.isPositive()) {
