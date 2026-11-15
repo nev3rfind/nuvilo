@@ -104,6 +104,10 @@ import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.security.BiometricAuthResult
 import com.example.nuvilo.security.BiometricStatus
 import com.example.nuvilo.security.LockGracePeriod
+import com.example.nuvilo.system.notification.NuviloNotificationCategory
+import com.example.nuvilo.ui.haptics.HapticIntensity
+import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
+import com.example.nuvilo.ui.haptics.NuviloHapticEvent
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.viewmodel.ExportState
@@ -130,14 +134,17 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val nuviloHaptics = LocalNuviloHaptics.current
 
     var canExactAlarms by remember { mutableStateOf(viewModel.canScheduleExactAlarms()) }
     var notificationsEnabled by remember { mutableStateOf(viewModel.areNotificationsEnabled()) }
     var biometricStatus by remember { mutableStateOf(viewModel.getBiometricStatus()) }
+    var channelDiagnostics by remember(prefs) { mutableStateOf(viewModel.getChannelDiagnostics(prefs)) }
     var showTestSentMessage by rememberSaveable { mutableStateOf(false) }
     var showReconcileSuccess by rememberSaveable { mutableStateOf(false) }
     var biometricMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var diagnosticsExpanded by rememberSaveable { mutableStateOf(false) }
+    var categoriesExpanded by rememberSaveable { mutableStateOf(false) }
 
     // Backup/Restore Dialog states
     var showCreatePassphraseDialog by rememberSaveable { mutableStateOf(false) }
@@ -198,6 +205,7 @@ fun SettingsScreen(
                 canExactAlarms = viewModel.canScheduleExactAlarms()
                 notificationsEnabled = viewModel.areNotificationsEnabled()
                 biometricStatus = viewModel.getBiometricStatus()
+                channelDiagnostics = viewModel.getChannelDiagnostics(prefs)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -653,6 +661,248 @@ fun SettingsScreen(
                         )
                     }
                     else -> {}
+                }
+            }
+        }
+
+        // 3b. Tactile & Haptic Feedback Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Haptic & Tactile Feedback",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Subtle vibrations for dose confirmations, snoozes, package actions, and errors",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = prefs.hapticsEnabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.setHapticsEnabled(enabled)
+                            if (enabled) nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                        }
+                    )
+                }
+
+                if (prefs.hapticsEnabled) {
+                    Text(
+                        text = "Feedback Strength",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        HapticIntensity.entries.forEach { level ->
+                            val label = when (level) {
+                                HapticIntensity.LOW -> "Gentle"
+                                HapticIntensity.MEDIUM -> "Balanced"
+                                HapticIntensity.HIGH -> "Distinct"
+                            }
+                            FilterChip(
+                                selected = prefs.hapticIntensity == level,
+                                onClick = {
+                                    viewModel.setHapticIntensity(level)
+                                    nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier.heightIn(min = 48.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { nuviloHaptics.perform(NuviloHapticEvent.DOSE_TAKEN) },
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.heightIn(min = 48.dp)
+                        ) {
+                            Text("Test Haptic Feel")
+                        }
+                        if (!nuviloHaptics.isHardwareVibratorAvailable()) {
+                            Text(
+                                text = "Device vibrator unavailable",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = semantic.warning
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3c. Notification Categories Card (7 channels, silent+vibration default for reminders)
+        val categoriesChevron by animateFloatAsState(
+            targetValue = if (categoriesExpanded) 180f else 0f,
+            animationSpec = NoveloMotion.standardFloatSpring(),
+            label = "notifCategoriesChevron"
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            onClick = {
+                                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                categoriesExpanded = !categoriesExpanded
+                            },
+                            role = Role.Button
+                        )
+                        .padding(18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Notification Categories (7)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Medication reminders default to silent + vibration; customise per category",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = if (categoriesExpanded) "Collapse notification categories" else "Expand notification categories",
+                        modifier = Modifier.rotate(categoriesChevron),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = categoriesExpanded,
+                    enter = NoveloMotion.sectionExpand(),
+                    exit = NoveloMotion.sectionCollapse()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        val diagMap = channelDiagnostics.associateBy { it.category }
+                        NuviloNotificationCategory.entries.forEach { category ->
+                            val diag = diagMap[category]
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = category.title,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        val statusLabel = when {
+                                            diag?.isBlockedInSystem == true -> "Blocked in OS"
+                                            diag?.hasSoundInSystem == true && diag.hasVibrationInSystem -> "Sound + Vibrate"
+                                            diag?.hasVibrationInSystem == true -> "Silent · Vibrate"
+                                            else -> "Silent"
+                                        }
+                                        Text(
+                                            text = statusLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (diag?.isBlockedInSystem == true) semantic.warning else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Text(
+                                        text = category.summary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                viewModel.buildChannelSettingsIntent(category.channelId)?.let { intent ->
+                                                    context.startActivity(intent)
+                                                }
+                                            },
+                                            shape = MaterialTheme.shapes.small,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 48.dp)
+                                        ) {
+                                            Text("System Channel Settings", style = MaterialTheme.typography.labelMedium)
+                                        }
+                                        FilledTonalButton(
+                                            onClick = {
+                                                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                                viewModel.triggerTestNotification(category)
+                                                showTestSentMessage = true
+                                            },
+                                            shape = MaterialTheme.shapes.small,
+                                            modifier = Modifier.heightIn(min = 48.dp)
+                                        ) {
+                                            Text("Test", style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

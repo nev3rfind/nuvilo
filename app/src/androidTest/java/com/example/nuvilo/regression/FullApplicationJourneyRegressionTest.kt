@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.nuvilo.NoveloApplication
@@ -57,6 +58,7 @@ class FullApplicationJourneyRegressionTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         app = context.applicationContext as NoveloApplication
+        app.container.database.clearAllTables()
     }
 
     private fun sampleMedication(id: String = "journey_med_1") = Medication(
@@ -245,8 +247,12 @@ class FullApplicationJourneyRegressionTest {
                 }
             }
 
+            composeTestRule.waitUntil(timeoutMillis = 5_000) {
+                !detailVm.uiState.value.isLoading && detailVm.uiState.value.medication != null
+            }
+            composeTestRule.waitForIdle()
             composeTestRule.onAllNodesWithText("Metformin", substring = true)[0].assertIsDisplayed()
-            composeTestRule.onNodeWithText("Restock Supply").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Restock Supply").performScrollTo().assertIsDisplayed()
         }
     }
 

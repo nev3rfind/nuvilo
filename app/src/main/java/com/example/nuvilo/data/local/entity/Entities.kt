@@ -49,7 +49,40 @@ data class MedicationEntity(
     val isArchived: Boolean = false,
 
     @ColumnInfo(name = "created_at_epoch_ms")
-    val createdAtEpochMs: Long = System.currentTimeMillis()
+    val createdAtEpochMs: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "package_type")
+    val packageType: String? = null,
+
+    @ColumnInfo(name = "contents_per_package_raw")
+    val contentsPerPackageRaw: Long? = null,
+
+    @ColumnInfo(name = "net_content_label")
+    val netContentLabel: String? = null,
+
+    @ColumnInfo(name = "discard_after_opening_days")
+    val discardAfterOpeningDays: Int? = null,
+
+    @ColumnInfo(name = "tracking_precision", defaultValue = "'UNKNOWN'")
+    val trackingPrecision: String = "UNKNOWN",
+
+    @ColumnInfo(name = "gel_tracking_mode")
+    val gelTrackingMode: String? = null,
+
+    @ColumnInfo(name = "administration_site", defaultValue = "'NONE'")
+    val administrationSite: String = "NONE",
+
+    @ColumnInfo(name = "left_eye_quantity_raw")
+    val leftEyeQuantityRaw: Long? = null,
+
+    @ColumnInfo(name = "right_eye_quantity_raw")
+    val rightEyeQuantityRaw: Long? = null,
+
+    @ColumnInfo(name = "containers_per_admin_raw")
+    val containersPerAdminRaw: Long? = null,
+
+    @ColumnInfo(name = "low_stock_days_threshold")
+    val lowStockDaysThreshold: Int? = null
 )
 
 @Entity(
@@ -187,7 +220,31 @@ data class StockLotEntity(
     val createdAtEpochMs: Long = System.currentTimeMillis(),
 
     @ColumnInfo(name = "notes")
-    val notes: String? = null
+    val notes: String? = null,
+
+    @ColumnInfo(name = "package_type")
+    val packageType: String? = null,
+
+    @ColumnInfo(name = "package_label")
+    val packageLabel: String? = null,
+
+    @ColumnInfo(name = "package_status", defaultValue = "'UNOPENED'")
+    val packageStatus: String = "UNOPENED",
+
+    @ColumnInfo(name = "opened_at_epoch_ms")
+    val openedAtEpochMs: Long? = null,
+
+    @ColumnInfo(name = "discard_after_opening_days")
+    val discardAfterOpeningDays: Int? = null,
+
+    @ColumnInfo(name = "discard_after_opening_epoch_ms")
+    val discardAfterOpeningEpochMs: Long? = null,
+
+    @ColumnInfo(name = "discarded_at_epoch_ms")
+    val discardedAtEpochMs: Long? = null,
+
+    @ColumnInfo(name = "discard_reason")
+    val discardReason: String? = null
 )
 
 @Entity(

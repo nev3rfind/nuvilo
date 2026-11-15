@@ -322,7 +322,40 @@ No task or phase shall be marked complete without providing direct terminal exec
 
 ---
 
-## 11. Latest Verified Test Execution (Phase 8: Premium Product Experience & Complete UI/UX Overhaul)
+## 12. Latest Verified Test Execution (Phase 9: Intelligent Medication Consumption & Real-World Inventory)
+
+### On-Device Connected Tests (`connectedDebugAndroidTest` on `emulator-5554` / API 37)
+- **Status**: `BUILD SUCCESSFUL in 9m 45s`
+- **Result**: **159 test cases executed with 0 failures and 0 skipped (100% pass rate)**:
+  1. `com.example.nuvilo.ExampleInstrumentedTest` (1 test) [PASSED]
+  2. `com.example.nuvilo.data.BackupRestoreDatabaseTest` (3 tests) [PASSED]
+  3. `com.example.nuvilo.data.NoveloDatabaseMigrationTest` (2 tests: `migration1To2`, `migration3To4_preservesAllDataAndInfersPackageStatuses`) [PASSED]
+  4. `com.example.nuvilo.data.NoveloDatabaseTest` (8 tests) [PASSED]
+  5. `com.example.nuvilo.data.Phase9RepositoryFlowTest` (1 test: `eyeDropPackageLifecycle_openOnFirstDose_recountOnlyOpened_discardAndReversalAudit`) [PASSED]
+  6. `com.example.nuvilo.marketing.NuviloCampaignSeedTest` (1 test: `seedAndCaptureAllEightScreens`) [PASSED]
+  7. `com.example.nuvilo.phase9.Phase9UiAndAccessibilityTest` (5 tests: `discardPackageDialog_recordsWastageReason`, `addMedicationWizard_singleDoseEyeDrops_decouplesTreatedEyesFromContainerConsumption`, `restockDialog_packageMode_addsBottlesInDrops_andShowsCombinedImpact`, `recountOpenedPackageDialog_scopesToOpenedBottle`, `settingsScreen_hapticsAnd7NotificationCategories_meetTouchTargetAndTriggerHaptics`) [PASSED]
+  8. `com.example.nuvilo.regression.AlarmSchedulerRegressionTest` (7 tests) [PASSED]
+  9. `com.example.nuvilo.regression.BackgroundWorkerRegressionTest` (5 tests) [PASSED]
+  10. `com.example.nuvilo.regression.ComposeAccessibilityRegressionTest` (4 tests) [PASSED]
+  11. `com.example.nuvilo.regression.ComposeCalendarRegressionTest` (10 tests) [PASSED]
+  12. `com.example.nuvilo.regression.ComposeDashboardRegressionTest` (10 tests) [PASSED]
+  13. `com.example.nuvilo.regression.ComposeDialogRegressionTest` (10 tests) [PASSED]
+  14. `com.example.nuvilo.regression.ComposeMedicationDetailRegressionTest` (10 tests) [PASSED]
+  15. `com.example.nuvilo.regression.ComposeMedicationListRegressionTest` (10 tests) [PASSED]
+  16. `com.example.nuvilo.regression.ComposePrescriptionRegressionTest` (10 tests) [PASSED]
+  17. `com.example.nuvilo.regression.ComposeSettingsRegressionTest` (10 tests) [PASSED]
+  18. `com.example.nuvilo.regression.FullApplicationJourneyRegressionTest` (10 tests) [PASSED]
+  19. `com.example.nuvilo.regression.NotificationActionReceiverRegressionTest` (10 tests) [PASSED]
+  20. `com.example.nuvilo.regression.PrescriptionDatabaseRegressionTest` (10 tests) [PASSED]
+  21. `com.example.nuvilo.regression.RoomTransactionRegressionTest` (10 tests) [PASSED]
+  22. `com.example.nuvilo.system.NotificationAndSchedulerTest` (5 tests) [PASSED]
+  23. `com.example.nuvilo.ui.AccessibilityTest` (7 tests) [PASSED]
+
+### Static Analysis & Security Check
+- `lintDebug`: 0 errors.
+- `processReleaseManifest`: Zero `android.permission.INTERNET` or remote tracking SDKs.
+- `docs/screenshots/phase9/`: 12 verified Light and Dark screenshots captured and visually verified.
+
 
 ### Unit Tests (`testDebugUnitTest`)
 - **Result**: 52 unit tests executed across 10 test suites with 0 failures:

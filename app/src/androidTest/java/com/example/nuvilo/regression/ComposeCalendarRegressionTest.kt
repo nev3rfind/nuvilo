@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.nuvilo.data.local.NoveloDatabase
@@ -42,6 +44,7 @@ class ComposeCalendarRegressionTest {
 
     private lateinit var db: NoveloDatabase
     private lateinit var repository: NoveloRepositoryImpl
+    private lateinit var viewModelStore: ViewModelStore
     private lateinit var viewModel: AdherenceCalendarViewModel
 
     @Before
@@ -71,15 +74,25 @@ class ComposeCalendarRegressionTest {
             )
             repository.createMedication(med, schedule)
         }
+        viewModelStore = ViewModelStore()
         viewModel = AdherenceCalendarViewModel(
             medicationRepository = repository,
             doseRepository = repository
         )
+        viewModelStore.put("calendar_vm", viewModel)
+    }
+
+    private fun waitForCalendarLoaded() {
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            !viewModel.uiState.value.isLoading && viewModel.uiState.value.hasAnyScheduleOrHistory
+        }
+        composeTestRule.waitForIdle()
     }
 
     @After
     @Throws(IOException::class)
     fun tearDown() {
+        viewModelStore.clear()
         db.close()
     }
 
@@ -95,6 +108,7 @@ class ComposeCalendarRegressionTest {
             }
         }
 
+        waitForCalendarLoaded()
         composeTestRule.onNodeWithText("Adherence & History").assertIsDisplayed()
     }
 
@@ -110,8 +124,9 @@ class ComposeCalendarRegressionTest {
             }
         }
 
+        waitForCalendarLoaded()
         composeTestRule.onAllNodesWithText("Today")[0].assertIsDisplayed()
-        composeTestRule.onNodeWithText("Last 7 Days").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Last 7 Days").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -126,7 +141,8 @@ class ComposeCalendarRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Previous month").assertIsDisplayed()
+        waitForCalendarLoaded()
+        composeTestRule.onNodeWithContentDescription("Previous month").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Previous month").performClick()
     }
 
@@ -142,7 +158,8 @@ class ComposeCalendarRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Next month").assertIsDisplayed()
+        waitForCalendarLoaded()
+        composeTestRule.onNodeWithContentDescription("Next month").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Next month").performClick()
     }
 
@@ -158,8 +175,9 @@ class ComposeCalendarRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithText("7D").assertIsDisplayed()
-        composeTestRule.onNodeWithText("14D").assertIsDisplayed()
-        composeTestRule.onNodeWithText("30D").assertIsDisplayed()
+        waitForCalendarLoaded()
+        composeTestRule.onNodeWithText("7D").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("14D").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("30D").performScrollTo().assertIsDisplayed()
     }
 }

@@ -13,7 +13,9 @@ import com.example.nuvilo.data.repository.NoveloRepositoryImpl
 import com.example.nuvilo.domain.adherence.AdherenceCalculator
 import com.example.nuvilo.domain.prescription.PrescriptionManager
 import com.example.nuvilo.domain.schedule.ScheduleOccurrenceCalculator
+import com.example.nuvilo.domain.stock.ConsumptionCalculator
 import com.example.nuvilo.domain.stock.StockLedgerCalculator
+import com.example.nuvilo.domain.stock.SupplyForecastCalculator
 import com.example.nuvilo.security.AppLockManager
 import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.system.alarm.AlarmScheduler
@@ -27,6 +29,8 @@ interface AppContainer {
     val repository: NoveloRepositoryImpl
     val userPreferencesRepository: UserPreferencesRepository
     val stockCalculator: StockLedgerCalculator
+    val consumptionCalculator: ConsumptionCalculator
+    val supplyForecastCalculator: SupplyForecastCalculator
     val scheduleCalculator: ScheduleOccurrenceCalculator
     val adherenceCalculator: AdherenceCalculator
     val prescriptionManager: PrescriptionManager
@@ -45,6 +49,14 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
 
     override val stockCalculator: StockLedgerCalculator by lazy {
         StockLedgerCalculator()
+    }
+
+    override val consumptionCalculator: ConsumptionCalculator by lazy {
+        ConsumptionCalculator()
+    }
+
+    override val supplyForecastCalculator: SupplyForecastCalculator by lazy {
+        SupplyForecastCalculator(consumptionCalculator)
     }
 
     override val scheduleCalculator: ScheduleOccurrenceCalculator by lazy {

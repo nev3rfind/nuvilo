@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -88,12 +89,18 @@ import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.Medication
 import com.example.nuvilo.domain.model.MedicationForm
+import com.example.nuvilo.domain.model.PackageStatus
 import com.example.nuvilo.domain.model.RecordingMode
 import com.example.nuvilo.domain.model.ScaledQuantity
 import com.example.nuvilo.domain.model.ScheduleDefinition
 import com.example.nuvilo.domain.model.ScheduleType
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.model.TrackingPrecision
+import com.example.nuvilo.domain.stock.OccurrenceConsumption
+import com.example.nuvilo.domain.stock.SupplyForecast
+import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
+import com.example.nuvilo.ui.haptics.NuviloHapticEvent
 import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.NoveloPillShape
@@ -178,9 +185,11 @@ fun HeroDoseCard(
     onTakeClick: () -> Unit = onTake,
     onSkipClick: () -> Unit = onSkip,
     onSnoozeClick: () -> Unit = onSnooze,
-    onCardClick: () -> Unit = onClick
+    onCardClick: () -> Unit = onClick,
+    consumption: OccurrenceConsumption? = null,
+    supplyForecast: SupplyForecast? = null
 ) {
-    val haptics = LocalHapticFeedback.current
+    val nuviloHaptics = LocalNuviloHaptics.current
     val semantic = MaterialTheme.noveloColors
     val timeString = Instant.ofEpochMilli(occurrence.scheduledEpochMs)
         .atZone(ZoneId.systemDefault())
@@ -313,8 +322,10 @@ fun HeroDoseCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            val doseSummaryText = consumption?.summaryLabel
+                                ?: "${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.formatLabel(occurrence.doseQuantity)}"
                             Text(
-                                text = "${medication.strength} · Take ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.formatLabel(occurrence.doseQuantity)}",
+                                text = "${medication.strength} · Take $doseSummaryText",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -328,49 +339,209 @@ fun HeroDoseCard(
                 }
 
                 if (stockBalance != null) {
-                    val runwayStr = stockBalance.daysRemaining?.let { "~$it days supply left" }
-                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation} left"
+                    val activePkg = supplyForecast?.activeOpenedPackage
+                    val unopenedCount = supplyForecast?.unopenedPackagesCount ?: 0
+                    val hasPackageInventory = activePkg != null || unopenedCount > 0
+                    val totalPhysical = (if (activePkg != null) 1 else 0) + unopenedCount
+                    val pkgConfig = medication.effectivePackagingConfig
+                    val pkgName = pkgConfig.packageType.displayName
+                    val pkgPlural = pkgConfig.packageType.pluralName
                     val isReorderNeeded = stockBalance.isLowStock || (stockBalance.daysRemaining != null && stockBalance.daysRemaining <= 7)
 
-                    Surface(
-                        shape = NoveloPillShape,
-                        color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    if (hasPackageInventory) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = if (activePkg != null) {
+                                                "Open ${pkgName.lowercase()}: ${activePkg.remainingQuantity.toDisplayString()} / ${activePkg.initialQuantity.toDisplayString()} ${medication.effectiveConsumptionUnit.abbreviation}"
+                                            } else if (unopenedCount > 0) {
+                                                "No open ${pkgName.lowercase()} · $unopenedCount sealed in reserve"
+                                            } else {
+                                                "Supply exhausted (0 ${medication.effectiveConsumptionUnit.abbreviation})"
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Text(
+                                        text = "$totalPhysical $pkgPlural total",
+                                        style = MaterialTheme.typography.labelSmall.tabular,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Unopened: $unopenedCount ${if (unopenedCount == 1) pkgName.lowercase() else pkgPlural.lowercase()}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    val daysStr = (supplyForecast?.daysOfSupply ?: stockBalance.daysRemaining)?.let { "Estimated supply: ~$it days" }
+                                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}"
+                                    Text(
+                                        text = daysStr,
+                                        style = MaterialTheme.typography.bodySmall.tabular,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                val isNearlyEmpty = activePkg != null && (
+                                    activePkg.remainingQuantity.rawScaledValue <= 20_000L ||
+                                    activePkg.remainingQuantity.rawScaledValue <= (activePkg.initialQuantity.rawScaledValue / 10).coerceAtLeast(10_000L)
+                                )
+                                val isNoUnopenedRemaining = unopenedCount == 0 && activePkg != null
+                                val isExpiringSoon = supplyForecast?.daysUntilSoonestExpiry != null && supplyForecast.daysUntilSoonestExpiry <= 30
+                                val isPastDiscard = (supplyForecast?.packagesNeedingDiscardCount ?: 0) > 0 ||
+                                    (supplyForecast?.daysUntilActivePackageDiscard != null && supplyForecast.daysUntilActivePackageDiscard <= 0)
+
+                                if (isNearlyEmpty || isNoUnopenedRemaining || isExpiringSoon || isPastDiscard) {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        if (isPastDiscard) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.missed.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.missed.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "Past discard limit",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.missed,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (isNearlyEmpty) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.warning.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "$pkgName nearly empty",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.warning,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (isNoUnopenedRemaining) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.warning.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "No unopened ${pkgPlural.lowercase()} remaining",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.warning,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (isExpiringSoon && !isPastDiscard) {
+                                            Surface(
+                                                shape = NoveloPillShape,
+                                                color = semantic.warning.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, semantic.warning.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "Expiring soon",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = semantic.warning,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        val runwayStr = stockBalance.daysRemaining?.let { "~$it days supply left" }
+                            ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation} left"
+
+                        Surface(
+                            shape = NoveloPillShape,
+                            color = if (isReorderNeeded) semantic.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isReorderNeeded) semantic.warningBorder else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
-                                    contentDescription = null,
-                                    tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isReorderNeeded) Icons.Default.Warning else Icons.Default.Inventory2,
+                                        contentDescription = null,
+                                        tint = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = if (isReorderNeeded) "Low Supply: $runwayStr · Reorder from GP soon" else "Supply Runway: $runwayStr",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                                 Text(
-                                    text = if (isReorderNeeded) "Low Supply: $runwayStr · Reorder from GP soon" else "Supply Runway: $runwayStr",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.onSurface
+                                    text = "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}",
+                                    style = MaterialTheme.typography.labelSmall.tabular,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
                                 )
                             }
-                            Text(
-                                text = "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}",
-                                style = MaterialTheme.typography.labelSmall.tabular,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
-                            )
                         }
                     }
                 }
@@ -393,7 +564,7 @@ fun HeroDoseCard(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
                         onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            nuviloHaptics.perform(NuviloHapticEvent.DOSE_TAKEN)
                             onTakeClick()
                         },
                         modifier = Modifier
@@ -415,8 +586,10 @@ fun HeroDoseCard(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        val btnDoseSummary = consumption?.summaryLabel
+                            ?: "${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation}"
                         Text(
-                            text = "Confirm Dose Taken (${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.abbreviation})",
+                            text = "Confirm Dose Taken ($btnDoseSummary)",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -427,7 +600,10 @@ fun HeroDoseCard(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         FilledTonalButton(
-                            onClick = onSnoozeClick,
+                            onClick = {
+                                nuviloHaptics.perform(NuviloHapticEvent.DOSE_SNOOZED)
+                                onSnoozeClick()
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
@@ -449,7 +625,10 @@ fun HeroDoseCard(
                         }
 
                         OutlinedButton(
-                            onClick = onSkipClick,
+                            onClick = {
+                                nuviloHaptics.perform(NuviloHapticEvent.DOSE_SKIPPED)
+                                onSkipClick()
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
@@ -571,14 +750,18 @@ fun AlertBanner(
     lowStockCount: Int,
     expiringRxCount: Int,
     onActionClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    discardWarningCount: Int = 0
 ) {
-    if (lowStockCount <= 0 && expiringRxCount <= 0) return
+    if (lowStockCount <= 0 && expiringRxCount <= 0 && discardWarningCount <= 0) return
 
     val semantic = MaterialTheme.noveloColors
     val messages = buildList {
         if (lowStockCount > 0) {
             add("$lowStockCount medication(s) low on stock")
+        }
+        if (discardWarningCount > 0) {
+            add("$discardWarningCount pack(s) expiring or past open-use limit")
         }
         if (expiringRxCount > 0) {
             add("$expiringRxCount prescription(s) due for renewal")
@@ -724,9 +907,11 @@ fun TimelineDoseItem(
     onSkipClick: () -> Unit,
     onSnoozeClick: () -> Unit = {},
     onCardClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    consumption: OccurrenceConsumption? = null,
+    supplyForecast: SupplyForecast? = null
 ) {
-    val haptics = LocalHapticFeedback.current
+    val nuviloHaptics = LocalNuviloHaptics.current
     val semantic = MaterialTheme.noveloColors
     val timeString = Instant.ofEpochMilli(occurrence.scheduledEpochMs)
         .atZone(ZoneId.systemDefault())
@@ -821,8 +1006,10 @@ fun TimelineDoseItem(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        val doseSummary = consumption?.summaryLabel
+                            ?: "${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.formatLabel(occurrence.doseQuantity)}"
                         Text(
-                            text = "${medication.strength} · ${occurrence.doseQuantity.toDisplayString()} ${occurrence.unit.formatLabel(occurrence.doseQuantity)}",
+                            text = "${medication.strength} · $doseSummary",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -838,18 +1025,125 @@ fun TimelineDoseItem(
                 }
 
                 if (stockBalance != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        StockBadge(balance = stockBalance)
-                        if (stockBalance.daysRemaining != null) {
-                            Text(
-                                text = "~${stockBalance.daysRemaining}d supply runway",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    val activePkg = supplyForecast?.activeOpenedPackage
+                    val unopenedCount = supplyForecast?.unopenedPackagesCount ?: 0
+                    val hasPackageInventory = activePkg != null || unopenedCount > 0
+                    val totalPhysical = (if (activePkg != null) 1 else 0) + unopenedCount
+                    val pkgConfig = medication.effectivePackagingConfig
+                    val pkgPlural = pkgConfig.packageType.pluralName
+
+                    if (hasPackageInventory) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(13.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = if (activePkg != null) {
+                                                "Open ${pkgConfig.packageType.displayName.lowercase()}: ${activePkg.remainingQuantity.toDisplayString()}/${activePkg.initialQuantity.toDisplayString()} ${medication.effectiveConsumptionUnit.abbreviation}"
+                                            } else {
+                                                "$unopenedCount unopened $pkgPlural"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    val daysText = (supplyForecast?.daysOfSupply ?: stockBalance.daysRemaining)?.let { "~$it d" }
+                                        ?: "${stockBalance.currentBalance.toDisplayString()} ${stockBalance.unit.abbreviation}"
+                                    Text(
+                                        text = "$totalPhysical $pkgPlural ($daysText)",
+                                        style = MaterialTheme.typography.labelSmall.tabular,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                val isNearlyEmpty = activePkg != null && (
+                                    activePkg.remainingQuantity.rawScaledValue <= 20_000L ||
+                                    activePkg.remainingQuantity.rawScaledValue <= (activePkg.initialQuantity.rawScaledValue / 10).coerceAtLeast(10_000L)
+                                )
+                                val isNoUnopenedRemaining = unopenedCount == 0 && activePkg != null
+                                val isExpiringSoon = supplyForecast?.daysUntilSoonestExpiry != null && supplyForecast.daysUntilSoonestExpiry <= 30
+                                val isPastDiscard = (supplyForecast?.packagesNeedingDiscardCount ?: 0) > 0 ||
+                                    (supplyForecast?.daysUntilActivePackageDiscard != null && supplyForecast.daysUntilActivePackageDiscard <= 0)
+
+                                if (isNearlyEmpty || isNoUnopenedRemaining || isExpiringSoon || isPastDiscard) {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        if (isPastDiscard) {
+                                            Text(
+                                                text = "Past discard limit",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.missed,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isNearlyEmpty) {
+                                            Text(
+                                                text = "${pkgConfig.packageType.displayName} nearly empty",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.warning,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isNoUnopenedRemaining) {
+                                            Text(
+                                                text = "No unopened remaining",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.warning,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isExpiringSoon && !isPastDiscard) {
+                                            Text(
+                                                text = "Expiring soon",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = semantic.warning,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            StockBadge(balance = stockBalance)
+                            if (stockBalance.daysRemaining != null) {
+                                Text(
+                                    text = "~${stockBalance.daysRemaining}d supply runway",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -862,7 +1156,7 @@ fun TimelineDoseItem(
                     ) {
                         Button(
                             onClick = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                nuviloHaptics.perform(NuviloHapticEvent.DOSE_TAKEN)
                                 onTakeClick()
                             },
                             modifier = Modifier
@@ -884,7 +1178,10 @@ fun TimelineDoseItem(
                         }
 
                         FilledTonalButton(
-                            onClick = onSnoozeClick,
+                            onClick = {
+                                nuviloHaptics.perform(NuviloHapticEvent.DOSE_SNOOZED)
+                                onSnoozeClick()
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
@@ -904,7 +1201,10 @@ fun TimelineDoseItem(
                         }
 
                         OutlinedButton(
-                            onClick = onSkipClick,
+                            onClick = {
+                                nuviloHaptics.perform(NuviloHapticEvent.DOSE_SKIPPED)
+                                onSkipClick()
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
@@ -1117,6 +1417,152 @@ fun StockBadge(
  * Displays accent color tag, name, strength, dosage form, schedule summary pill, stock runway, and archive toggle.
  */
 @Composable
+fun TrackingPrecisionBadge(
+    precision: TrackingPrecision,
+    modifier: Modifier = Modifier
+) {
+    val semantic = MaterialTheme.noveloColors
+    val (bg, border, fg, label) = when (precision) {
+        TrackingPrecision.EXACT -> listOf(
+            semantic.takenContainer,
+            semantic.takenBorder,
+            semantic.taken,
+            "Exact count"
+        )
+        TrackingPrecision.ESTIMATED -> listOf(
+            semantic.assumedContainer,
+            semantic.assumedBorder,
+            semantic.assumed,
+            "Estimated"
+        )
+        TrackingPrecision.APPROXIMATE -> listOf(
+            semantic.warningContainer,
+            semantic.warningBorder,
+            semantic.warning,
+            "Approximate"
+        )
+        TrackingPrecision.UNKNOWN -> listOf(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.outlineVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            "Package tracking"
+        )
+    }
+    val icon = when (precision) {
+        TrackingPrecision.EXACT -> Icons.Default.VerifiedUser
+        TrackingPrecision.ESTIMATED -> Icons.Default.Info
+        TrackingPrecision.APPROXIMATE -> Icons.Default.Info
+        TrackingPrecision.UNKNOWN -> Icons.Default.Inventory2
+    }
+    Surface(
+        modifier = modifier,
+        shape = NoveloPillShape,
+        color = bg as Color,
+        border = BorderStroke(1.dp, border as Color)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = fg as Color,
+                modifier = Modifier.size(11.dp)
+            )
+            Text(
+                text = label as String,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = fg,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@Composable
+fun PackageStatusChip(
+    status: PackageStatus,
+    modifier: Modifier = Modifier
+) {
+    val semantic = MaterialTheme.noveloColors
+    val (bg, fg, label, icon) = when (status) {
+        PackageStatus.OPENED -> listOf(
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            "Opened",
+            Icons.Default.Inventory2
+        )
+        PackageStatus.UNOPENED -> listOf(
+            semantic.takenContainer,
+            semantic.taken,
+            "Sealed",
+            Icons.Default.CheckCircle
+        )
+        PackageStatus.EMPTY -> listOf(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            "Empty",
+            Icons.Default.Check
+        )
+        PackageStatus.EXPIRED -> listOf(
+            semantic.warningContainer,
+            semantic.warning,
+            "Expired",
+            Icons.Default.Warning
+        )
+        PackageStatus.DISCARDED -> listOf(
+            semantic.skippedContainer,
+            semantic.skipped,
+            "Discarded",
+            Icons.Default.Close
+        )
+        PackageStatus.DAMAGED -> listOf(
+            semantic.skippedContainer,
+            semantic.skipped,
+            "Damaged",
+            Icons.Default.Warning
+        )
+        PackageStatus.LOST -> listOf(
+            semantic.warningContainer,
+            semantic.warning,
+            "Lost",
+            Icons.Default.Warning
+        )
+    }
+    Surface(
+        modifier = modifier,
+        shape = NoveloPillShape,
+        color = bg as Color
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon as ImageVector,
+                contentDescription = null,
+                tint = fg as Color,
+                modifier = Modifier.size(11.dp)
+            )
+            Text(
+                text = label as String,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = fg,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 fun MedicationItemCard(
     medication: Medication,
     stockBalance: StockBalance?,
@@ -1125,7 +1571,8 @@ fun MedicationItemCard(
     onRestockClick: (() -> Unit)? = null,
     pendingPrescription: com.example.nuvilo.domain.model.Prescription? = null,
     modifier: Modifier = Modifier,
-    schedules: List<ScheduleDefinition> = emptyList()
+    schedules: List<ScheduleDefinition> = emptyList(),
+    supplyForecast: SupplyForecast? = null
 ) {
     val semantic = MaterialTheme.noveloColors
     val accentColor = parseAccentColor(medication.colorTagHex, MaterialTheme.colorScheme.primary)
@@ -1215,6 +1662,56 @@ fun MedicationItemCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+
+            if (supplyForecast != null && (supplyForecast.openedPackagesCount > 0 || supplyForecast.unopenedPackagesCount > 0 || supplyForecast.needsAttentionForExpiredOrOpenLimit)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val pkgType = medication.packagingConfig?.packageType
+                    val pkgSummary = buildString {
+                        if (supplyForecast.openedPackagesCount > 0) {
+                            append("${supplyForecast.openedPackagesCount} open")
+                        }
+                        if (supplyForecast.unopenedPackagesCount > 0) {
+                            if (isNotEmpty()) append(" · ")
+                            append("${supplyForecast.unopenedPackagesCount} sealed")
+                        }
+                        if (pkgType != null) {
+                            append(" ${pkgType.pluralName.lowercase()}")
+                        }
+                    }
+                    if (pkgSummary.isNotBlank()) {
+                        Surface(
+                            shape = NoveloPillShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                        ) {
+                            Text(
+                                text = pkgSummary,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                    TrackingPrecisionBadge(precision = supplyForecast.precision)
+                    if (supplyForecast.needsAttentionForExpiredOrOpenLimit) {
+                        Surface(
+                            shape = NoveloPillShape,
+                            color = semantic.warningContainer,
+                            border = BorderStroke(1.dp, semantic.warningBorder)
+                        ) {
+                            Text(
+                                text = "Check pack date",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = semantic.warning,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
                 }
             }
 

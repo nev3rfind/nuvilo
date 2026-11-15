@@ -39,15 +39,16 @@ flowchart TD
     subgraph Domain_Layer ["Domain Layer (Pure Kotlin)"]
         RecordDoseUseCase["RecordDoseUseCase (Idempotent)"]
         CalculateStockUseCase["CalculateStockUseCase (Exact)"]
+        SupplyForecastCalculator["SupplyForecastCalculator (FEFO Day Simulation)"]
         AdherenceCalculator["AdherenceCalculator (Pure Denominator)"]
         PrescriptionManager["PrescriptionManager (Neutral Requests / Collection Decrement)"]
         ScheduleAlarmsUseCase["ScheduleAlarmsUseCase"]
         ReconcileStockUseCase["ReconcileStockUseCase"]
-        Models["Domain Models (Medication, Schedule, LedgerEntry, Prescription)"]
+        Models["Domain Models (Medication, Schedule, LedgerEntry, PackagingConfig, StockLot, Prescription)"]
     end
 
     subgraph Data_Layer ["Data Layer (Room & DataStore)"]
-        NoveloDatabase[("Room Database (SQLite v3)")]
+        NoveloDatabase[("Room Database (SQLite v4)")]
         MedicationDao["MedicationDao"]
         ScheduleDao["ScheduleDao"]
         DoseEventDao["DoseDao"]
@@ -106,8 +107,14 @@ com.example.nuvilo/ (or com.novelo.app)
 │   │   └── AdherenceCalculator.kt # Pure Kotlin adherence math, deterministic occurrence resolution & DST handling
 │   ├── prescription/
 │   │   └── PrescriptionManager.kt # Domain state machine for repeat requests & collection decrements
+│   ├── stock/
+│   │   ├── StockLedgerCalculator.kt # Immutable ledger math, FEFO allocation, early depletion & reversal
+│   │   ├── ConsumptionCalculator.kt # Decoupled ophthalmic regimen & package consumption calculator
+│   │   ├── SupplyForecastCalculator.kt # Discrete day-by-day FEFO future supply simulator
+│   │   └── UnitIntegrityValidator.kt # Dimensional integrity guardrail
 │   ├── model/                    # Pure Kotlin domain data classes
 │   │   ├── DomainModels.kt       # Medication, Schedule, DoseEvent, StockLot, Prescription, PrescriptionEvent
+│   │   ├── PackagingModels.kt    # PackageType, PackageStatus, DepletionReason, AdministrationProfile
 │   │   ├── Enums.kt              # PrescriptionStatus, PrescriptionEventType, MovementType, DoseStatus
 │   │   └── ScaledQuantity.kt     # Exact scaled integer math (no floating point)
 │   ├── repository/               # Domain repository interfaces
@@ -128,7 +135,9 @@ com.example.nuvilo/ (or com.novelo.app)
 │   ├── receiver/
 │   │   └── BootAndChangeReceiver.kt # Reconciles alarms on boot, timezone, time set
 │   └── work/
-│       └── StockCheckWorker.kt   # WorkManager for daily low-stock evaluations
+│       ├── StockCheckWorker.kt   # WorkManager for daily low-stock evaluations
+│       ├── LowStockCheckWorker.kt # Scheduled low-stock runway evaluator
+│       └── SupplyNotificationSync.kt # Real-time notification drawer sync on package events
 └── ui/
     ├── common/                   # Reusable Design System components
     │   ├── TopAppBar.kt
@@ -184,10 +193,10 @@ com.example.nuvilo/ (or com.novelo.app)
   - Maintains an immutable audit trail of `PrescriptionEvent` entries.
 
 ### Data Layer (Room & SQLite)
-- **Room SQLite Database (v3)**:
+- **Room SQLite Database (v4)**:
   - `foreignKeys` enforce referential integrity between `medications`, `schedules`, `dose_events`, `stock_lots`, `stock_ledger`, `prescriptions`, and `prescription_events`.
   - Indices on `occurrenceId`, `medicationId`, `prescriptionId`, and `timestamp` ensure millisecond query times even over years of records.
-  - Migrations: `MIGRATION_1_2` (lot tracking and dose corrections), `MIGRATION_2_3` (prescriptions and prescription audit events).
+  - Migrations: `MIGRATION_1_2` (lot tracking and dose corrections), `MIGRATION_2_3` (prescriptions and prescription audit events), `MIGRATION_3_4` (packaging configurations, package statuses, opened/discard timestamps, and wastage reasons).
   - Schema export maintained at `app/schemas/` with automated migration tests.
 - **DataStore**: Stores key-value user preferences (Dark/Light mode, Biometric Lock enabled, Notification Privacy mode enabled, Quiet Hours start/end).
 
@@ -368,3 +377,24 @@ Nuvilo strictly enforces zero-network permissions:
 - **Touch Targets**: All interactive elements strictly enforce $\ge 48\times 48\,\text{dp}$ touch bounds (`heightIn(min = 48.dp)` and `minimumInteractiveComponentSize()`).
 - **Screen Reader Privacy Isolation**: When `LockScreen` is displayed, underlying medication data is completely omitted from the Compose composition hierarchy.
 - **Lifecycle Efficiency**: Flow collection across all screens uses `collectAsStateWithLifecycle()` to prevent background flow emissions when the activity is stopped.
+
+---
+
+## 10. Physical Package Inventory & Bottle Lifecycle Architecture (Phase 10)
+
+### 10.1 Three-Tier Clinical Unit Separation
+Nuvilo decouples physical purchasing from administration deductions:
+1. **Purchasing Unit (`PackageType`)**: Physical containers purchased by the patient (`BOTTLE`, `TUBE`, `SINGLE_DOSE_CONTAINER_BOX`, `BLISTER_PACK`, `INHALER`, `VIAL`).
+2. **Package Consumption Capacity (`contentsPerPackage`)**: Usable units contained inside a single sealed container (e.g., $300\text{ drops}$ per eye-drop bottle), stored as exact `ScaledQuantity`.
+3. **Administration Unit**: Prescribed dose consumed per scheduled event (e.g., $1\text{ drop}$ per eye $\times 2\text{ eyes} = 2\text{ drops}$).
+
+### 10.2 Package Lifecycle State Machine & Isolation
+Each physical container is tracked as an identifiable `StockLot` record progressing through 7 states:
+- `UNOPENED`: Factory-sealed reserve. Discard-after-opening timer is dormant. Excluded from dose deductions for containers requiring explicit unsealing (`requiresExplicitOpeningConfirmation`).
+- `OPENED`: Active container in use. All scheduled doses deduct strictly from this container. Sterility countdown (`discardAfterOpeningEpochMs`) is active.
+- `EMPTY`: All units consumed or marked finished early (`depletePackageEarly`).
+- `DISCARDED`, `EXPIRED`, `DAMAGED`, `LOST`: Terminal states where any unconsumed units are written off as `MovementType.WASTAGE` (`doseOccurrenceId = null`), ensuring zero synthetic dose fabrication.
+- **Reversibility**:
+  - `revertOpenedPackage`: Reverts an accidentally opened container back to `UNOPENED` if and only if zero units have been consumed (`remainingQuantity == initialQuantity`).
+  - `reopenDepletedPackage`: Restores an accidentally depleted container to `OPENED` via a compensating `MovementType.ADJUSTMENT_IN` ledger entry.
+

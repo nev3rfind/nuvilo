@@ -38,6 +38,17 @@ object JsonBackupManager {
                     put("colorTagHex", med.colorTagHex)
                     put("isArchived", med.isArchived)
                     put("createdAtEpochMs", med.createdAtEpochMs)
+                    if (med.packageType != null) put("packageType", med.packageType)
+                    if (med.contentsPerPackageRaw != null) put("contentsPerPackageRaw", med.contentsPerPackageRaw)
+                    if (med.netContentLabel != null) put("netContentLabel", med.netContentLabel)
+                    if (med.discardAfterOpeningDays != null) put("discardAfterOpeningDays", med.discardAfterOpeningDays)
+                    put("trackingPrecision", med.trackingPrecision)
+                    if (med.gelTrackingMode != null) put("gelTrackingMode", med.gelTrackingMode)
+                    put("administrationSite", med.administrationSite)
+                    if (med.leftEyeQuantityRaw != null) put("leftEyeQuantityRaw", med.leftEyeQuantityRaw)
+                    if (med.rightEyeQuantityRaw != null) put("rightEyeQuantityRaw", med.rightEyeQuantityRaw)
+                    if (med.containersPerAdminRaw != null) put("containersPerAdminRaw", med.containersPerAdminRaw)
+                    if (med.lowStockDaysThreshold != null) put("lowStockDaysThreshold", med.lowStockDaysThreshold)
                 })
             }
             put("medications", medsArray)
@@ -90,6 +101,14 @@ object JsonBackupManager {
                     if (lot.expiryDateEpochMs != null) put("expiryDateEpochMs", lot.expiryDateEpochMs)
                     put("createdAtEpochMs", lot.createdAtEpochMs)
                     if (lot.notes != null) put("notes", lot.notes)
+                    if (lot.packageType != null) put("packageType", lot.packageType)
+                    if (lot.packageLabel != null) put("packageLabel", lot.packageLabel)
+                    put("packageStatus", lot.packageStatus)
+                    if (lot.openedAtEpochMs != null) put("openedAtEpochMs", lot.openedAtEpochMs)
+                    if (lot.discardAfterOpeningDays != null) put("discardAfterOpeningDays", lot.discardAfterOpeningDays)
+                    if (lot.discardAfterOpeningEpochMs != null) put("discardAfterOpeningEpochMs", lot.discardAfterOpeningEpochMs)
+                    if (lot.discardedAtEpochMs != null) put("discardedAtEpochMs", lot.discardedAtEpochMs)
+                    if (lot.discardReason != null) put("discardReason", lot.discardReason)
                 })
             }
             put("stockLots", lotsArray)
@@ -198,7 +217,18 @@ object JsonBackupManager {
                     notes = obj.optString("notes", ""),
                     colorTagHex = obj.optString("colorTagHex", "#005EB8"),
                     isArchived = obj.optBoolean("isArchived", false),
-                    createdAtEpochMs = obj.optLong("createdAtEpochMs", System.currentTimeMillis())
+                    createdAtEpochMs = obj.optLong("createdAtEpochMs", System.currentTimeMillis()),
+                    packageType = if (obj.has("packageType") && !obj.isNull("packageType")) obj.getString("packageType") else null,
+                    contentsPerPackageRaw = if (obj.has("contentsPerPackageRaw") && !obj.isNull("contentsPerPackageRaw")) obj.getLong("contentsPerPackageRaw") else null,
+                    netContentLabel = if (obj.has("netContentLabel") && !obj.isNull("netContentLabel")) obj.getString("netContentLabel") else null,
+                    discardAfterOpeningDays = if (obj.has("discardAfterOpeningDays") && !obj.isNull("discardAfterOpeningDays")) obj.getInt("discardAfterOpeningDays") else null,
+                    trackingPrecision = obj.optString("trackingPrecision", "UNKNOWN"),
+                    gelTrackingMode = if (obj.has("gelTrackingMode") && !obj.isNull("gelTrackingMode")) obj.getString("gelTrackingMode") else null,
+                    administrationSite = obj.optString("administrationSite", "NONE"),
+                    leftEyeQuantityRaw = if (obj.has("leftEyeQuantityRaw") && !obj.isNull("leftEyeQuantityRaw")) obj.getLong("leftEyeQuantityRaw") else null,
+                    rightEyeQuantityRaw = if (obj.has("rightEyeQuantityRaw") && !obj.isNull("rightEyeQuantityRaw")) obj.getLong("rightEyeQuantityRaw") else null,
+                    containersPerAdminRaw = if (obj.has("containersPerAdminRaw") && !obj.isNull("containersPerAdminRaw")) obj.getLong("containersPerAdminRaw") else null,
+                    lowStockDaysThreshold = if (obj.has("lowStockDaysThreshold") && !obj.isNull("lowStockDaysThreshold")) obj.getInt("lowStockDaysThreshold") else null
                 )
             )
         }
@@ -259,7 +289,15 @@ object JsonBackupManager {
                     unit = obj.optString("unit", "TABLETS"),
                     expiryDateEpochMs = if (obj.has("expiryDateEpochMs") && !obj.isNull("expiryDateEpochMs")) obj.getLong("expiryDateEpochMs") else null,
                     createdAtEpochMs = obj.optLong("createdAtEpochMs", System.currentTimeMillis()),
-                    notes = if (obj.has("notes") && !obj.isNull("notes")) obj.getString("notes") else null
+                    notes = if (obj.has("notes") && !obj.isNull("notes")) obj.getString("notes") else null,
+                    packageType = if (obj.has("packageType") && !obj.isNull("packageType")) obj.getString("packageType") else null,
+                    packageLabel = if (obj.has("packageLabel") && !obj.isNull("packageLabel")) obj.getString("packageLabel") else null,
+                    packageStatus = obj.optString("packageStatus", "UNOPENED"),
+                    openedAtEpochMs = if (obj.has("openedAtEpochMs") && !obj.isNull("openedAtEpochMs")) obj.getLong("openedAtEpochMs") else null,
+                    discardAfterOpeningDays = if (obj.has("discardAfterOpeningDays") && !obj.isNull("discardAfterOpeningDays")) obj.getInt("discardAfterOpeningDays") else null,
+                    discardAfterOpeningEpochMs = if (obj.has("discardAfterOpeningEpochMs") && !obj.isNull("discardAfterOpeningEpochMs")) obj.getLong("discardAfterOpeningEpochMs") else null,
+                    discardedAtEpochMs = if (obj.has("discardedAtEpochMs") && !obj.isNull("discardedAtEpochMs")) obj.getLong("discardedAtEpochMs") else null,
+                    discardReason = if (obj.has("discardReason") && !obj.isNull("discardReason")) obj.getString("discardReason") else null
                 )
             )
         }
