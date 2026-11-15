@@ -285,4 +285,60 @@ class Phase10PackageInventoryAcceptanceTest {
         assertNull(reverted.openedAtEpochMs)
         assertNull(reverted.discardAfterOpeningEpochMs)
     }
+
+    @Test
+    fun legacyMedication_formLiquidMl_withDropsUnit_preservesDropsConsumptionUnitAndCalculatesBalance() {
+        // Reproduces physical device crash on SM-S948B where Hydro Forte was saved with
+        // form = LIQUID_ML, stockUnit = DROPS, packagingConfig = null, and ledger entries in DROPS.
+        val legacyHydroForte = Medication(
+            id = "e45fb1d6-0651-4582-b5f0-b188455ba19e",
+            name = "Hydro Forte",
+            strength = "lašas",
+            form = MedicationForm.LIQUID_ML,
+            stockUnit = StockUnit.DROPS,
+            openingStock = ScaledQuantity.ofWhole(300),
+            lowStockThreshold = ScaledQuantity.ofWhole(10),
+            recordingMode = RecordingMode.CONFIRM,
+            packagingConfig = null
+        )
+
+        // Invariant: effectiveConsumptionUnit MUST preserve stockUnit (DROPS), never override with ML!
+        assertEquals(StockUnit.DROPS, legacyHydroForte.effectiveConsumptionUnit)
+        assertEquals(StockUnit.DROPS, legacyHydroForte.effectivePackagingConfig.consumptionUnit)
+        assertEquals(PackageType.BOTTLE, legacyHydroForte.effectivePackagingConfig.packageType)
+        assertEquals(ScaledQuantity.ofWhole(300), legacyHydroForte.effectivePackagingConfig.contentsPerPackage)
+
+        val movements = listOf(
+            com.example.nuvilo.domain.model.StockLedgerEntry(
+                id = "mov-open",
+                medicationId = legacyHydroForte.id,
+                timestampEpochMs = 1000L,
+                movementType = MovementType.OPENING_BALANCE,
+                quantity = ScaledQuantity.ofWhole(300),
+                unit = StockUnit.DROPS,
+                reason = "Initial inventory registered"
+            ),
+            com.example.nuvilo.domain.model.StockLedgerEntry(
+                id = "mov-dose-1",
+                medicationId = legacyHydroForte.id,
+                timestampEpochMs = 2000L,
+                movementType = MovementType.DOSE_TAKEN,
+                quantity = ScaledQuantity.ofWhole(1),
+                unit = StockUnit.DROPS,
+                reason = "Confirmed dose taken",
+                doseOccurrenceId = "occ-1"
+            )
+        )
+
+        val balance = calculator.calculateBalance(
+            openingStock = ScaledQuantity.ZERO,
+            openingUnit = legacyHydroForte.effectiveConsumptionUnit,
+            movements = movements,
+            lowStockThreshold = legacyHydroForte.lowStockThreshold,
+            isEstimatedConsumption = true
+        )
+
+        assertEquals(ScaledQuantity.ofWhole(299), balance.currentBalance)
+        assertEquals(StockUnit.DROPS, balance.unit)
+    }
 }

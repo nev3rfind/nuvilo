@@ -174,7 +174,7 @@ class DashboardViewModel(
             val medMovements = movementsByMed[med.id].orEmpty()
             val hasOpening = medMovements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
-            val rawBalance = stockCalculator.calculateBalance(
+            val rawBalance = stockCalculator.calculateBalanceSafe(
                 openingStock = baseOpening,
                 openingUnit = med.effectiveConsumptionUnit,
                 movements = medMovements,
@@ -357,7 +357,7 @@ class MedicationViewModel(
 
             val hasOpening = medMovements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
-            val rawBalance = stockCalculator.calculateBalance(
+            val rawBalance = stockCalculator.calculateBalanceSafe(
                 openingStock = baseOpening,
                 openingUnit = med.effectiveConsumptionUnit,
                 movements = medMovements,
@@ -696,7 +696,7 @@ class MedicationDetailViewModel(
             val hasOpening = core.movements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
 
-            val rawBalance = stockCalculator.calculateBalance(
+            val rawBalance = stockCalculator.calculateBalanceSafe(
                 openingStock = baseOpening,
                 openingUnit = med.effectiveConsumptionUnit,
                 movements = core.movements,

@@ -94,18 +94,30 @@ data class PackagingConfig(
  * blister packs for tablets, tubes for ointments) rather than exposing raw drop or milliliter counters.
  */
 fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): PackagingConfig {
-    return when (form) {
-        MedicationForm.DROPS -> PackagingConfig(
+    if (stockUnit == StockUnit.CONTAINERS) {
+        return PackagingConfig(
+            packageType = PackageType.BOX_SINGLE_DOSE,
+            consumptionUnit = stockUnit,
+            contentsPerPackage = ScaledQuantity.ofWhole(30),
+            netContentLabel = "30 single-use containers",
+            discardAfterOpeningDays = null,
+            trackingPrecision = TrackingPrecision.EXACT
+        )
+    }
+    if (stockUnit == StockUnit.DROPS || form == MedicationForm.DROPS) {
+        return PackagingConfig(
             packageType = PackageType.BOTTLE,
-            consumptionUnit = StockUnit.DROPS,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(300),
             netContentLabel = "10 ml",
             discardAfterOpeningDays = 28,
             trackingPrecision = TrackingPrecision.ESTIMATED
         )
+    }
+    return when (form) {
         MedicationForm.LIQUID_ML -> PackagingConfig(
             packageType = PackageType.BOTTLE,
-            consumptionUnit = StockUnit.ML,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(100),
             netContentLabel = "100 ml",
             discardAfterOpeningDays = null,
@@ -113,7 +125,7 @@ fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): Pac
         )
         MedicationForm.TABLET, MedicationForm.CAPSULE -> PackagingConfig(
             packageType = PackageType.BLISTER_PACK,
-            consumptionUnit = if (form == MedicationForm.CAPSULE) StockUnit.CAPSULES else StockUnit.TABLETS,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(28),
             netContentLabel = "28 units",
             discardAfterOpeningDays = null,
@@ -121,7 +133,7 @@ fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): Pac
         )
         MedicationForm.INHALER_PUFFS -> PackagingConfig(
             packageType = PackageType.INHALER,
-            consumptionUnit = StockUnit.PUFFS,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(120),
             netContentLabel = "120 actuations",
             discardAfterOpeningDays = null,
@@ -129,7 +141,7 @@ fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): Pac
         )
         MedicationForm.TOPICAL_CREAM -> PackagingConfig(
             packageType = PackageType.TUBE,
-            consumptionUnit = StockUnit.GRAMS,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(30),
             netContentLabel = "30 g",
             discardAfterOpeningDays = 28,
@@ -138,7 +150,7 @@ fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): Pac
         )
         MedicationForm.INJECTION -> PackagingConfig(
             packageType = PackageType.VIAL,
-            consumptionUnit = StockUnit.UNITS,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(100),
             netContentLabel = "100 units",
             discardAfterOpeningDays = null,
@@ -146,7 +158,7 @@ fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): Pac
         )
         MedicationForm.PATCH -> PackagingConfig(
             packageType = PackageType.PATCH_BOX,
-            consumptionUnit = StockUnit.PATCHES,
+            consumptionUnit = stockUnit,
             contentsPerPackage = ScaledQuantity.ofWhole(7),
             netContentLabel = "7 patches",
             discardAfterOpeningDays = null,
@@ -157,7 +169,7 @@ fun inferDefaultPackagingConfig(form: MedicationForm, stockUnit: StockUnit): Pac
                 StockUnit.TABLETS, StockUnit.CAPSULES -> PackageType.BLISTER_PACK
                 StockUnit.ML, StockUnit.DROPS -> PackageType.BOTTLE
                 StockUnit.PUFFS -> PackageType.INHALER
-                StockUnit.GRAMS -> PackageType.TUBE
+                StockUnit.GRAMS, StockUnit.APPLICATIONS -> PackageType.TUBE
                 StockUnit.CONTAINERS -> PackageType.BOX_SINGLE_DOSE
                 StockUnit.PATCHES -> PackageType.PATCH_BOX
                 StockUnit.UNITS -> PackageType.VIAL

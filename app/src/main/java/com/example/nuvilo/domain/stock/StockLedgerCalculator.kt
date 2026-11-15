@@ -98,6 +98,52 @@ class StockLedgerCalculator {
     }
 
     /**
+     * Crash-safe wrapper around [calculateBalance] for UI and background observers.
+     * Preserves strict domain validation in [calculateBalance] while ensuring legacy or
+     * unit-migrated ledger entries never crash the application at runtime.
+     */
+    fun calculateBalanceSafe(
+        openingStock: ScaledQuantity,
+        openingUnit: StockUnit,
+        movements: List<StockLedgerEntry>,
+        lowStockThreshold: ScaledQuantity,
+        dailyConsumptionRate: ScaledQuantity? = null,
+        isEstimatedConsumption: Boolean = false
+    ): StockBalance {
+        return runCatching {
+            calculateBalance(
+                openingStock = openingStock,
+                openingUnit = openingUnit,
+                movements = movements,
+                lowStockThreshold = lowStockThreshold,
+                dailyConsumptionRate = dailyConsumptionRate,
+                isEstimatedConsumption = isEstimatedConsumption
+            )
+        }.getOrElse {
+            val compatibleMovements = movements.filter { it.unit == openingUnit }
+            runCatching {
+                calculateBalance(
+                    openingStock = openingStock,
+                    openingUnit = openingUnit,
+                    movements = compatibleMovements,
+                    lowStockThreshold = lowStockThreshold,
+                    dailyConsumptionRate = dailyConsumptionRate,
+                    isEstimatedConsumption = isEstimatedConsumption
+                )
+            }.getOrElse {
+                StockBalance(
+                    currentBalance = openingStock,
+                    unit = openingUnit,
+                    isEstimate = isEstimatedConsumption,
+                    isNegative = openingStock.isNegative(),
+                    daysRemaining = null,
+                    isLowStock = openingStock <= lowStockThreshold
+                )
+            }
+        }
+    }
+
+    /**
      * Allocates a required dose quantity against available lots using First Expired, First Out (FEFO).
      * If expiry dates are equal or null, falls back to First In, First Out (FIFO) by createdAt.
      *

@@ -215,6 +215,8 @@ interface StockRepository {
     fun observeStagedNextPackage(
         medicationId: String
     ): Flow<StockLot?>
+
+    suspend fun ensureLegacyPackagesBootstrapped(): Result<Unit> = Result.success(Unit)
 }
 
 class NoveloRepositoryImpl(
@@ -553,13 +555,64 @@ class NoveloRepositoryImpl(
             val hasOpeningEntry = movements.any { it.movementType == MovementType.OPENING_BALANCE }
             val baseOpening = if (hasOpeningEntry) ScaledQuantity.ZERO else medication.openingStock
 
-            stockCalculator.calculateBalance(
+            stockCalculator.calculateBalanceSafe(
                 openingStock = baseOpening,
-                openingUnit = medication.stockUnit,
+                openingUnit = medication.effectiveConsumptionUnit,
                 movements = movements,
                 lowStockThreshold = medication.lowStockThreshold,
                 isEstimatedConsumption = medication.form.isEstimatedConsumption
             )
+        }
+    }
+
+    override suspend fun ensureLegacyPackagesBootstrapped(): Result<Unit> = runCatching {
+        database.withTransaction {
+            val allMeds = medicationDao.getAllMedications().map { it.toDomain() }
+            for (med in allMeds) {
+                val existingLots = stockLotDao.getLotsForMedication(med.id)
+                if (existingLots.isEmpty()) {
+                    val movements = stockLedgerDao.getMovementsForMedication(med.id).map { it.toDomain() }
+                    val hasOpening = movements.any { it.movementType == MovementType.OPENING_BALANCE }
+                    val baseOpening = if (hasOpening) ScaledQuantity.ZERO else med.openingStock
+                    val currentBalance = stockCalculator.calculateBalanceSafe(
+                        openingStock = baseOpening,
+                        openingUnit = med.effectiveConsumptionUnit,
+                        movements = movements,
+                        lowStockThreshold = med.lowStockThreshold,
+                        isEstimatedConsumption = med.form.isEstimatedConsumption
+                    ).currentBalance
+
+                    if (currentBalance.isPositive() || med.openingStock.isPositive()) {
+                        val pkgConfig = med.effectivePackagingConfig
+                        val nominalCap = pkgConfig.contentsPerPackage ?: med.openingStock
+                        val initialCapRaw = maxOf(
+                            med.openingStock.rawScaledValue,
+                            currentBalance.rawScaledValue,
+                            nominalCap.rawScaledValue
+                        )
+                        val discardDays = pkgConfig.discardAfterOpeningDays
+                        val discardEpochMs = discardDays?.let { med.createdAtEpochMs + it * 86_400_000L }
+                        val lot = StockLotEntity(
+                            id = "bootstrap-lot-${med.id}",
+                            medicationId = med.id,
+                            lotNumber = null,
+                            initialQuantityRaw = initialCapRaw,
+                            remainingQuantityRaw = currentBalance.rawScaledValue.coerceAtLeast(0L),
+                            unit = med.effectiveConsumptionUnit.name,
+                            expiryDateEpochMs = null,
+                            createdAtEpochMs = med.createdAtEpochMs,
+                            notes = pkgConfig.netContentLabel?.let { "${pkgConfig.packageType.displayName} ($it)" },
+                            packageType = pkgConfig.packageType.name,
+                            packageLabel = "${pkgConfig.packageType.displayName} #1",
+                            packageStatus = if (currentBalance.isPositive()) PackageStatus.OPENED.name else PackageStatus.EMPTY.name,
+                            openedAtEpochMs = med.createdAtEpochMs,
+                            discardAfterOpeningDays = discardDays,
+                            discardAfterOpeningEpochMs = discardEpochMs
+                        )
+                        stockLotDao.insertLots(listOf(lot))
+                    }
+                }
+            }
         }
     }
 

@@ -106,6 +106,7 @@ class MainActivity : FragmentActivity() {
         handleIncomingIntent(intent)
 
         lifecycleScope.launch {
+            appContainer.repository.ensureLegacyPackagesBootstrapped()
             val prefs = appContainer.userPreferencesRepository.userPreferencesFlow.first()
             appLockManager.initialize(prefs.isBiometricLockEnabled)
         }
