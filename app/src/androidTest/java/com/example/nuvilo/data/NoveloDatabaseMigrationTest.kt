@@ -401,4 +401,184 @@ class NoveloDatabaseMigrationTest {
 
         v3Db.close()
     }
+
+    @Test
+    fun migration4To5_preservesExistingDataAndAddsPpcAndMedicationPrescriptionColumns() {
+        val factory = FrameworkSQLiteOpenHelperFactory()
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(4) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `medications` (
+                            `id` TEXT NOT NULL,
+                            `name` TEXT NOT NULL,
+                            `strength` TEXT NOT NULL,
+                            `form` TEXT NOT NULL,
+                            `stock_unit` TEXT NOT NULL,
+                            `opening_stock_raw` INTEGER NOT NULL,
+                            `low_stock_threshold_raw` INTEGER NOT NULL,
+                            `recording_mode` TEXT NOT NULL,
+                            `notes` TEXT NOT NULL,
+                            `color_tag_hex` TEXT NOT NULL,
+                            `is_archived` INTEGER NOT NULL,
+                            `created_at_epoch_ms` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`)
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_medications_is_archived` ON `medications` (`is_archived`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_medications_name` ON `medications` (`name`)")
+
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `schedules` (
+                            `id` TEXT NOT NULL,
+                            `medication_id` TEXT NOT NULL,
+                            `schedule_type` TEXT NOT NULL,
+                            `target_times_csv` TEXT NOT NULL,
+                            `days_of_week_csv` TEXT NOT NULL,
+                            `dose_quantity_raw` INTEGER NOT NULL,
+                            `start_date_epoch_day` INTEGER NOT NULL,
+                            `end_date_epoch_day` INTEGER,
+                            `instructions` TEXT NOT NULL,
+                            PRIMARY KEY(`id`),
+                            FOREIGN KEY(`medication_id`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_schedules_medication_id` ON `schedules` (`medication_id`)")
+
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `dose_events` (
+                            `occurrence_id` TEXT NOT NULL,
+                            `medication_id` TEXT NOT NULL,
+                            `scheduled_epoch_ms` INTEGER NOT NULL,
+                            `dose_quantity_raw` INTEGER NOT NULL,
+                            `unit` TEXT NOT NULL,
+                            `status` TEXT NOT NULL,
+                            `recorded_epoch_ms` INTEGER,
+                            `notes` TEXT,
+                            PRIMARY KEY(`occurrence_id`),
+                            FOREIGN KEY(`medication_id`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_dose_events_medication_id` ON `dose_events` (`medication_id`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_dose_events_scheduled_epoch_ms` ON `dose_events` (`scheduled_epoch_ms`)")
+
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `stock_ledger_entries` (
+                            `id` TEXT NOT NULL,
+                            `medication_id` TEXT NOT NULL,
+                            `timestamp_epoch_ms` INTEGER NOT NULL,
+                            `movement_type` TEXT NOT NULL,
+                            `quantity_raw` INTEGER NOT NULL,
+                            `unit` TEXT NOT NULL,
+                            `reason` TEXT,
+                            `dose_occurrence_id` TEXT,
+                            `restock_lot_number` TEXT,
+                            `is_estimate` INTEGER NOT NULL,
+                            PRIMARY KEY(`id`),
+                            FOREIGN KEY(`medication_id`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_ledger_entries_medication_id` ON `stock_ledger_entries` (`medication_id`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_ledger_entries_timestamp_epoch_ms` ON `stock_ledger_entries` (`timestamp_epoch_ms`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_stock_ledger_entries_dose_occurrence_id` ON `stock_ledger_entries` (`dose_occurrence_id`)")
+
+                    NoveloDatabase.MIGRATION_1_2.migrate(db)
+                    NoveloDatabase.MIGRATION_2_3.migrate(db)
+                    NoveloDatabase.MIGRATION_3_4.migrate(db)
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+
+        val v4Db = factory.create(config).writableDatabase
+
+        // Insert v4 medication & prescription records (matching Schema v4 columns)
+        v4Db.execSQL(
+            """
+            INSERT INTO medications (
+                id, name, strength, form, stock_unit, opening_stock_raw, low_stock_threshold_raw,
+                recording_mode, notes, color_tag_hex, is_archived, created_at_epoch_ms,
+                package_type, contents_per_package_raw, net_content_label, discard_after_opening_days,
+                tracking_precision, gel_tracking_mode, administration_site,
+                left_eye_quantity_raw, right_eye_quantity_raw, containers_per_admin_raw, low_stock_days_threshold
+            ) VALUES (
+                'med_v4', 'Latanoprost', '50 mcg/mL', 'DROPS', 'DROPS', 80000, 15000,
+                'CONFIRM', 'Nightly drops', '#005EB8', 0, 1700000000000,
+                'BOTTLE', 80000, '2.5 mL', 28,
+                'ESTIMATED', 'EXACT_SINGLE_DOSE', 'BOTH_EYES',
+                1000, 1000, 1000, 7
+            )
+            """.trimIndent()
+        )
+        v4Db.execSQL(
+            """
+            INSERT INTO prescriptions (
+                id, medication_id, reference_number, issue_date_epoch_day, expiry_date_epoch_day,
+                quantity_prescribed_raw, unit, repeats_authorised, repeats_remaining,
+                has_pending_repeat_request, pharmacy_name, notes, status,
+                created_at_epoch_ms, updated_at_epoch_ms
+            ) VALUES (
+                'rx_v4', 'med_v4', 'NHS-RX-100', 20000, 20180,
+                80000, 'DROPS', 6, 4,
+                0, 'Boots Pharmacy', 'Repeat monthly', 'ACTIVE',
+                1700000000000, 1700000000000
+            )
+            """.trimIndent()
+        )
+
+        // Execute v4 -> v5 migration
+        NoveloDatabase.MIGRATION_4_5.migrate(v4Db)
+
+        // Verify medications preserved + new columns defaulted
+        val medCursor = v4Db.query("SELECT name, administration_route, notifications_enabled FROM medications WHERE id = 'med_v4'")
+        assertTrue(medCursor.moveToFirst())
+        assertEquals("Latanoprost", medCursor.getString(0))
+        assertTrue(medCursor.isNull(1))
+        assertEquals(1, medCursor.getInt(2))
+        medCursor.close()
+
+        // Verify prescriptions preserved + new columns nullable
+        val rxCursor = v4Db.query("SELECT reference_number, repeat_requested_date_epoch_day, dispensed_date_epoch_day FROM prescriptions WHERE id = 'rx_v4'")
+        assertTrue(rxCursor.moveToFirst())
+        assertEquals("NHS-RX-100", rxCursor.getString(0))
+        assertTrue(rxCursor.isNull(1))
+        assertTrue(rxCursor.isNull(2))
+        rxCursor.close()
+
+        // Verify ppc_certificates table created and writable
+        v4Db.execSQL(
+            """
+            INSERT INTO ppc_certificates (
+                id, coverage_type, exemption_category, start_date_epoch_day, expiry_date_epoch_day,
+                is_ongoing, is_manual_expiry_override, reference_number, notes,
+                remind_30_days, remind_14_days, remind_7_days, remind_on_expiry,
+                reminder_hour, reminder_minute, is_archived, renewed_from_id,
+                created_at_epoch_ms, updated_at_epoch_ms
+            ) VALUES (
+                'ppc_1', 'PPC_12_MONTH', NULL, 20100, 20465,
+                0, 0, '1234567890', 'Annual PPC',
+                1, 1, 1, 1, 9, 0, 0, NULL, 1700000000000, 1700000000000
+            )
+            """.trimIndent()
+        )
+        val ppcCursor = v4Db.query("SELECT coverage_type, start_date_epoch_day, expiry_date_epoch_day, remind_30_days FROM ppc_certificates WHERE id = 'ppc_1'")
+        assertTrue(ppcCursor.moveToFirst())
+        assertEquals("PPC_12_MONTH", ppcCursor.getString(0))
+        assertEquals(20100L, ppcCursor.getLong(1))
+        assertEquals(20465L, ppcCursor.getLong(2))
+        assertEquals(1, ppcCursor.getInt(3))
+        ppcCursor.close()
+
+        v4Db.close()
+    }
 }

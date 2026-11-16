@@ -100,7 +100,8 @@ class Phase9RepositoryFlowTest {
         assertTrue(initialLots.all { it.packageStatus == PackageStatus.UNOPENED })
         assertTrue(initialLots.all { it.remainingQuantity == ScaledQuantity.ofWhole(300) })
 
-        // 1. First dose taken (2 drops across both eyes) -> auto-opens Bottle #1, stamps 28-day discard, leaves Bottle #2 unopened
+        // Open Bottle #1 explicitly per Phase 10 strict sterility rule, then record first dose
+        repository.openPackage(initialLots.sortedBy { it.packageLabel }.first().id)
         val occ1 = "occ_${medId}_$nowMs"
         val doseRes = repository.recordDose(
             occurrenceId = occ1,

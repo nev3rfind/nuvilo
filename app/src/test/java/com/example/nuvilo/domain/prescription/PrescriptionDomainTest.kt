@@ -143,4 +143,29 @@ class PrescriptionDomainTest {
         assertEquals(5L, expiringIn5Days.daysUntilExpiry(todayEpochDay))
         assertFalse(expiringIn30Days.isExpiringSoon(todayEpochDay, warningWindowDays = 14L))
     }
+
+    @Test
+    fun requestAndCollectRepeat_recordsDistinctRequestAndDispensedDates() {
+        val rx = samplePrescription(repeatsAuthorised = 3, repeatsRemaining = 3)
+        val requestDay = todayEpochDay
+        val collectDay = todayEpochDay + 3L
+
+        val requested = manager.requestRepeat(
+            prescription = rx,
+            existingEvents = emptyList(),
+            currentDateEpochDay = requestDay,
+            actionIdempotencyKey = "req_date_1"
+        )
+        assertEquals(requestDay, requested.updatedPrescription.repeatRequestedDateEpochDay)
+        assertNull(requested.updatedPrescription.dispensedDateEpochDay)
+
+        val collected = manager.collectRepeat(
+            prescription = requested.updatedPrescription,
+            existingEvents = listOfNotNull(requested.auditEvent),
+            currentDateEpochDay = collectDay,
+            actionIdempotencyKey = "col_date_1"
+        )
+        assertEquals(requestDay, collected.updatedPrescription.repeatRequestedDateEpochDay)
+        assertEquals(collectDay, collected.updatedPrescription.dispensedDateEpochDay)
+    }
 }

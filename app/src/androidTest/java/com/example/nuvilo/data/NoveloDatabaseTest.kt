@@ -432,6 +432,9 @@ class NoveloDatabaseTest {
         assertEquals(3_000L, lotSoon?.remainingQuantity?.rawScaledValue)
         assertEquals(10_000L, lotLater?.remainingQuantity?.rawScaledValue)
 
+        // Open LOT-LATER explicitly per Phase 10 strict sterility rule before taking dose 2
+        repository.openPackage(lotLater!!.id, nowEpochMs = 1500L)
+
         // Take dose of 4 capsules (3 from LOT-SOON, 1 from LOT-LATER)
         repository.recordDose(
             occurrenceId = "occ_fefo_2",
