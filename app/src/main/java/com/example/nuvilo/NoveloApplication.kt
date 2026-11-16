@@ -20,6 +20,8 @@ import com.example.nuvilo.security.AppLockManager
 import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.system.alarm.AlarmScheduler
 import com.example.nuvilo.system.alarm.AlarmSchedulerImpl
+import com.example.nuvilo.system.alarm.PpcAlarmScheduler
+import com.example.nuvilo.system.alarm.PpcAlarmSchedulerImpl
 import com.example.nuvilo.system.notification.NotificationHelper
 import com.example.nuvilo.system.work.LowStockCheckWorker
 import java.util.concurrent.TimeUnit
@@ -36,6 +38,7 @@ interface AppContainer {
     val prescriptionManager: PrescriptionManager
     val notificationHelper: NotificationHelper
     val alarmScheduler: AlarmScheduler
+    val ppcAlarmScheduler: PpcAlarmScheduler
     val appLockManager: AppLockManager
     val biometricAuthManager: BiometricAuthManager
     val backupRestoreRepository: BackupRestoreRepository
@@ -102,6 +105,13 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
             doseDao = database.doseDao(),
             userPreferencesRepository = userPreferencesRepository,
             scheduleCalculator = scheduleCalculator
+        )
+    }
+
+    override val ppcAlarmScheduler: PpcAlarmScheduler by lazy {
+        PpcAlarmSchedulerImpl(
+            context = context,
+            loadAllCertificates = { repository.getAllPpcCertificates() }
         )
     }
 

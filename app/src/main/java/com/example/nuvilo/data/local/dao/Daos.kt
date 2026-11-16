@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.nuvilo.data.local.entity.DoseEventEntity
 import com.example.nuvilo.data.local.entity.MedicationEntity
+import com.example.nuvilo.data.local.entity.PpcCertificateEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEventEntity
 import com.example.nuvilo.data.local.entity.ScheduleEntity
@@ -41,6 +42,9 @@ interface MedicationDao {
     @Delete
     suspend fun deleteMedication(medication: MedicationEntity)
 
+    @Query("DELETE FROM medications WHERE id = :id")
+    suspend fun deleteMedicationById(id: String)
+
     @Query("SELECT * FROM medications")
     suspend fun getAllMedications(): List<MedicationEntity>
 
@@ -68,6 +72,9 @@ interface ScheduleDao {
     @Query("DELETE FROM schedules WHERE medication_id = :medicationId")
     suspend fun deleteSchedulesForMedication(medicationId: String)
 
+    @Query("SELECT COUNT(*) FROM schedules WHERE medication_id = :medicationId")
+    suspend fun countSchedulesForMedication(medicationId: String): Int
+
     @Query("SELECT * FROM schedules")
     suspend fun getAllSchedules(): List<ScheduleEntity>
 
@@ -92,6 +99,9 @@ interface DoseDao {
     @Query("SELECT * FROM dose_events WHERE medication_id = :medicationId ORDER BY scheduled_epoch_ms DESC")
     fun observeDosesForMedication(medicationId: String): Flow<List<DoseEventEntity>>
 
+    @Query("SELECT COUNT(*) FROM dose_events WHERE medication_id = :medicationId")
+    suspend fun countDosesForMedication(medicationId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertDoseEvent(dose: DoseEventEntity)
 
@@ -115,6 +125,9 @@ interface StockLotDao {
 
     @Query("SELECT * FROM stock_lots WHERE medication_id = :medicationId ORDER BY expiry_date_epoch_ms ASC, created_at_epoch_ms ASC")
     suspend fun getLotsForMedication(medicationId: String): List<StockLotEntity>
+
+    @Query("SELECT COUNT(*) FROM stock_lots WHERE medication_id = :medicationId")
+    suspend fun countLotsForMedication(medicationId: String): Int
 
     @Query("SELECT * FROM stock_lots WHERE id = :id")
     suspend fun getLotById(id: String): StockLotEntity?
@@ -151,6 +164,9 @@ interface StockLedgerDao {
 
     @Query("SELECT * FROM stock_ledger_entries WHERE medication_id = :medicationId ORDER BY timestamp_epoch_ms ASC")
     suspend fun getMovementsForMedication(medicationId: String): List<StockLedgerEntryEntity>
+
+    @Query("SELECT COUNT(*) FROM stock_ledger_entries WHERE medication_id = :medicationId")
+    suspend fun countMovementsForMedication(medicationId: String): Int
 
     @Query("SELECT * FROM stock_ledger_entries ORDER BY timestamp_epoch_ms DESC")
     fun observeAllMovements(): Flow<List<StockLedgerEntryEntity>>
@@ -226,4 +242,43 @@ interface PrescriptionDao {
 
     @Query("DELETE FROM prescription_events")
     suspend fun deleteAllPrescriptionEvents()
+
+    @Query("SELECT COUNT(*) FROM prescriptions WHERE medication_id = :medicationId")
+    suspend fun countPrescriptionsForMedication(medicationId: String): Int
+
+    @Query("SELECT COUNT(*) FROM prescription_events WHERE medication_id = :medicationId")
+    suspend fun countPrescriptionEventsForMedication(medicationId: String): Int
+}
+
+@Dao
+interface PpcDao {
+    @Query("SELECT * FROM ppc_certificates WHERE is_archived = 0 ORDER BY start_date_epoch_day DESC")
+    fun observeActivePpcCertificates(): Flow<List<PpcCertificateEntity>>
+
+    @Query("SELECT * FROM ppc_certificates ORDER BY is_archived ASC, start_date_epoch_day DESC")
+    fun observeAllPpcCertificates(): Flow<List<PpcCertificateEntity>>
+
+    @Query("SELECT * FROM ppc_certificates")
+    suspend fun getAllPpcCertificates(): List<PpcCertificateEntity>
+
+    @Query("SELECT * FROM ppc_certificates WHERE id = :id")
+    suspend fun getPpcCertificateById(id: String): PpcCertificateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPpcCertificate(certificate: PpcCertificateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPpcCertificates(certificates: List<PpcCertificateEntity>)
+
+    @Update
+    suspend fun updatePpcCertificate(certificate: PpcCertificateEntity)
+
+    @Query("UPDATE ppc_certificates SET is_archived = :archived, updated_at_epoch_ms = :updatedAtEpochMs WHERE id = :id")
+    suspend fun setArchived(id: String, archived: Boolean, updatedAtEpochMs: Long)
+
+    @Query("DELETE FROM ppc_certificates WHERE id = :id")
+    suspend fun deletePpcCertificateById(id: String)
+
+    @Query("DELETE FROM ppc_certificates")
+    suspend fun deleteAllPpcCertificates()
 }

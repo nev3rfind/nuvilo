@@ -95,6 +95,14 @@ object BackupValidator {
             }
         }
 
+        val ppcIds = mutableSetOf<String>()
+        for (ppc in backup.ppcCertificates) {
+            if (ppc.id.isBlank()) return BackupValidationResult.Invalid("PPC certificate with blank ID detected")
+            if (!ppcIds.add(ppc.id)) {
+                return BackupValidationResult.Invalid("Duplicate PPC certificate ID detected: ${ppc.id}")
+            }
+        }
+
         val preview = BackupPreview(
             exportTimestampEpochMs = backup.exportTimestampEpochMs,
             schemaVersion = backup.schemaVersion,
@@ -105,7 +113,8 @@ object BackupValidator {
             stockLotCount = backup.stockLots.size,
             stockLedgerEntryCount = backup.stockLedgerEntries.size,
             prescriptionCount = backup.prescriptions.size,
-            prescriptionEventCount = backup.prescriptionEvents.size
+            prescriptionEventCount = backup.prescriptionEvents.size,
+            ppcCertificateCount = backup.ppcCertificates.size
         )
 
         return BackupValidationResult.Valid(backup, preview)

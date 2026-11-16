@@ -15,13 +15,18 @@ data class Medication(
     val createdAtEpochMs: Long = System.currentTimeMillis(),
     val packagingConfig: PackagingConfig? = null,
     val administrationProfile: AdministrationProfile = AdministrationProfile(),
-    val lowStockDaysThreshold: Int? = null
+    val lowStockDaysThreshold: Int? = null,
+    val administrationRoute: AdministrationRoute? = null,
+    val notificationsEnabled: Boolean = true
 ) {
     val effectivePackagingConfig: PackagingConfig
         get() = packagingConfig ?: inferDefaultPackagingConfig(form, stockUnit)
 
     val effectiveConsumptionUnit: StockUnit
         get() = effectivePackagingConfig.consumptionUnit
+
+    val effectiveAdministrationRoute: AdministrationRoute
+        get() = administrationRoute ?: AdministrationRoute.defaultForForm(form)
 }
 
 data class StockLot(
@@ -115,7 +120,9 @@ data class Prescription(
     val notes: String? = null,
     val status: PrescriptionStatus = PrescriptionStatus.ACTIVE,
     val createdAtEpochMs: Long = System.currentTimeMillis(),
-    val updatedAtEpochMs: Long = System.currentTimeMillis()
+    val updatedAtEpochMs: Long = System.currentTimeMillis(),
+    val repeatRequestedDateEpochDay: Long? = null,
+    val dispensedDateEpochDay: Long? = null
 ) {
     /**
      * Computes the authoritative status at [currentDateEpochDay].
@@ -163,3 +170,115 @@ data class PrescriptionEvent(
     val actionIdempotencyKey: String? = null,
     val notes: String? = null
 )
+
+/**
+ * Counts of historical and configuration records associated with a medication,
+ * used by the Safe Delete workflow to prevent accidental cascade deletion of audit history.
+ */
+data class MedicationHistoryCounts(
+    val medicationId: String,
+    val scheduleCount: Int = 0,
+    val doseEventCount: Int = 0,
+    val stockMovementCount: Int = 0,
+    val stockLotCount: Int = 0,
+    val prescriptionCount: Int = 0,
+    val prescriptionEventCount: Int = 0
+) {
+    val hasDoseHistory: Boolean get() = doseEventCount > 0
+    val hasStockMovements: Boolean get() = stockMovementCount > 0
+    val hasPrescriptionHistory: Boolean get() = prescriptionCount > 0 || prescriptionEventCount > 0
+    val hasAnyHistory: Boolean get() = hasDoseHistory || hasStockMovements || hasPrescriptionHistory
+}
+
+/**
+ * Snapshot of a medication and its schedules when safely deleted with no historical records,
+ * enabling a safe Undo via Snackbar.
+ */
+data class DeletedMedicationSnapshot(
+    val medication: Medication,
+    val schedules: List<ScheduleDefinition>
+)
+
+sealed interface MedicationDeleteOutcome {
+    data class Deleted(
+        val medicationId: String,
+        val medicationName: String,
+        val snapshot: DeletedMedicationSnapshot?,
+        val canUndo: Boolean
+    ) : MedicationDeleteOutcome
+
+    data class RequiresExplicitConsent(
+        val medicationId: String,
+        val medicationName: String,
+        val counts: MedicationHistoryCounts
+    ) : MedicationDeleteOutcome
+}
+
+data class MedicationEditImpact(
+    val hasPackageConfigChanged: Boolean,
+    val hasDoseOrScheduleChanged: Boolean,
+    val hasUnitChanged: Boolean,
+    val impactSummaries: List<String>
+) {
+    val hasAnyCalculationImpact: Boolean
+        get() = hasPackageConfigChanged || hasDoseOrScheduleChanged || hasUnitChanged
+}
+
+object MedicationEditImpactAnalyzer {
+    fun analyze(
+        previousMedication: Medication,
+        updatedMedication: Medication,
+        previousSchedules: List<ScheduleDefinition> = emptyList(),
+        updatedSchedules: List<ScheduleDefinition> = emptyList()
+    ): MedicationEditImpact {
+        val summaries = mutableListOf<String>()
+
+        val prevPkg = previousMedication.effectivePackagingConfig
+        val nextPkg = updatedMedication.effectivePackagingConfig
+        val unitChanged = previousMedication.effectiveConsumptionUnit != updatedMedication.effectiveConsumptionUnit
+        val packageConfigChanged =
+            prevPkg.packageType != nextPkg.packageType ||
+                prevPkg.contentsPerPackage != nextPkg.contentsPerPackage ||
+                prevPkg.discardAfterOpeningDays != nextPkg.discardAfterOpeningDays
+
+        val prevDoseSum = previousSchedules.sumOf { it.doseQuantityPerOccurrence.rawScaledValue }
+        val nextDoseSum = updatedSchedules.sumOf { it.doseQuantityPerOccurrence.rawScaledValue }
+        val prevTimes = previousSchedules.flatMap { it.targetTimesMinuteOfDay }
+        val nextTimes = updatedSchedules.flatMap { it.targetTimesMinuteOfDay }
+        val doseOrScheduleChanged =
+            previousSchedules.isNotEmpty() && updatedSchedules.isNotEmpty() && (
+                prevDoseSum != nextDoseSum ||
+                    prevTimes != nextTimes ||
+                    previousMedication.administrationProfile != updatedMedication.administrationProfile
+                )
+
+        if (unitChanged) {
+            summaries += "Stock unit changed from ${previousMedication.effectiveConsumptionUnit.abbreviation} to ${updatedMedication.effectiveConsumptionUnit.abbreviation} for future entries; past ledger entries keep their original recorded units."
+        }
+        if (prevPkg.packageType != nextPkg.packageType || prevPkg.contentsPerPackage != nextPkg.contentsPerPackage) {
+            val capText = nextPkg.contentsPerPackage?.toDisplayString() ?: "configured"
+            summaries += "Future package restocks and days-of-supply forecasts will use $capText ${updatedMedication.effectiveConsumptionUnit.abbreviation} per ${nextPkg.packageType.displayName.lowercase()}. Existing physical lots and past ledger entries are not rewritten."
+        }
+        if (prevPkg.discardAfterOpeningDays != nextPkg.discardAfterOpeningDays) {
+            val daysText = nextPkg.discardAfterOpeningDays?.let { "$it days after opening" } ?: "no post-opening expiry limit"
+            summaries += "Newly opened packages will use $daysText. Already-opened packages keep their existing open-expiry date unless edited individually."
+        }
+        if (doseOrScheduleChanged) {
+            summaries += "Future scheduled doses and estimated days remaining will use the updated dose/schedule. Historical dose events remain unchanged."
+        }
+        if (previousMedication.notificationsEnabled != updatedMedication.notificationsEnabled) {
+            summaries += if (updatedMedication.notificationsEnabled) {
+                "Scheduled dose reminders are enabled for upcoming doses."
+            } else {
+                "Future dose reminders are paused while keeping schedule and stock tracking active."
+            }
+        }
+
+        return MedicationEditImpact(
+            hasPackageConfigChanged = packageConfigChanged,
+            hasDoseOrScheduleChanged = doseOrScheduleChanged,
+            hasUnitChanged = unitChanged,
+            impactSummaries = summaries
+        )
+    }
+}

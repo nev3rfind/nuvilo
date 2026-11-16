@@ -10,8 +10,13 @@ import com.example.nuvilo.data.mapper.toEntity
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.DepletionReason
+import com.example.nuvilo.domain.model.DeletedMedicationSnapshot
 import com.example.nuvilo.domain.model.EarlyDepletionOutcome
 import com.example.nuvilo.domain.model.Medication
+import com.example.nuvilo.domain.model.MedicationDeleteOutcome
+import com.example.nuvilo.domain.model.MedicationEditImpact
+import com.example.nuvilo.domain.model.MedicationEditImpactAnalyzer
+import com.example.nuvilo.domain.model.MedicationHistoryCounts
 import com.example.nuvilo.domain.model.MovementType
 import com.example.nuvilo.domain.model.PackageStatus
 import com.example.nuvilo.domain.model.PackageType
@@ -27,6 +32,7 @@ import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.domain.model.TrackingPrecision
+import com.example.nuvilo.domain.ppc.PpcCertificate
 import com.example.nuvilo.domain.prescription.PrescriptionManager
 import com.example.nuvilo.domain.stock.StockLedgerCalculator
 import kotlinx.coroutines.flow.Flow
@@ -49,8 +55,12 @@ interface MedicationRepository {
         lotNumber: String? = null
     ): Result<Unit>
     suspend fun updateMedication(medication: Medication): Result<Unit>
+    suspend fun updateMedicationWithSchedule(medication: Medication, schedule: ScheduleDefinition?): Result<MedicationEditImpact>
     suspend fun updateSchedule(schedule: ScheduleDefinition): Result<Unit> = Result.success(Unit)
     suspend fun setArchived(id: String, archived: Boolean): Result<Unit>
+    suspend fun getMedicationHistoryCounts(medicationId: String): MedicationHistoryCounts
+    suspend fun deleteMedicationSafely(medicationId: String, confirmCascadeWithHistory: Boolean = false): Result<MedicationDeleteOutcome>
+    suspend fun undoDeleteMedication(snapshot: DeletedMedicationSnapshot): Result<Unit>
 }
 
 interface DoseRepository {
@@ -219,11 +229,26 @@ interface StockRepository {
     suspend fun ensureLegacyPackagesBootstrapped(): Result<Unit> = Result.success(Unit)
 }
 
+interface PpcRepository {
+    fun observeAllPpcCertificates(): Flow<List<PpcCertificate>>
+    fun observeActivePpcCertificates(): Flow<List<PpcCertificate>>
+    suspend fun getAllPpcCertificates(): List<PpcCertificate>
+    suspend fun getPpcCertificateById(id: String): PpcCertificate?
+    suspend fun savePpcCertificate(certificate: PpcCertificate): Result<Unit>
+    suspend fun setPpcCertificateArchived(id: String, archived: Boolean): Result<Unit>
+    suspend fun deletePpcCertificate(id: String): Result<Unit>
+    suspend fun renewPpcCertificate(
+        previousId: String,
+        newCertificate: PpcCertificate,
+        archivePrevious: Boolean = true
+    ): Result<Unit>
+}
+
 class NoveloRepositoryImpl(
     private val database: NoveloDatabase,
     private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator(),
     private val prescriptionManager: PrescriptionManager = PrescriptionManager()
-) : MedicationRepository, DoseRepository, StockRepository, PrescriptionRepository {
+) : MedicationRepository, DoseRepository, StockRepository, PrescriptionRepository, PpcRepository {
 
     private val medicationDao = database.medicationDao()
     private val scheduleDao = database.scheduleDao()
@@ -231,6 +256,7 @@ class NoveloRepositoryImpl(
     private val stockLotDao = database.stockLotDao()
     private val stockLedgerDao = database.stockLedgerDao()
     private val prescriptionDao = database.prescriptionDao()
+    private val ppcDao = database.ppcDao()
 
     override fun observeActiveMedications(): Flow<List<Medication>> =
         medicationDao.observeActiveMedications().map { list -> list.map { it.toDomain() } }
@@ -352,12 +378,91 @@ class NoveloRepositoryImpl(
         medicationDao.updateMedication(medication.toEntity())
     }
 
+    override suspend fun updateMedicationWithSchedule(
+        medication: Medication,
+        schedule: ScheduleDefinition?
+    ): Result<MedicationEditImpact> = runCatching {
+        database.withTransaction {
+            val previousMed = medicationDao.getMedicationById(medication.id)?.toDomain()
+                ?: throw IllegalArgumentException("Medication not found")
+            val previousSchedules = scheduleDao.getSchedulesForMedication(medication.id).map { it.toDomain() }
+            medicationDao.updateMedication(medication.toEntity())
+            val nextSchedules = if (schedule != null) {
+                scheduleDao.insertSchedule(schedule.toEntity())
+                listOf(schedule)
+            } else {
+                previousSchedules
+            }
+            MedicationEditImpactAnalyzer.analyze(
+                previousMedication = previousMed,
+                updatedMedication = medication,
+                previousSchedules = previousSchedules,
+                updatedSchedules = nextSchedules
+            )
+        }
+    }
+
     override suspend fun updateSchedule(schedule: ScheduleDefinition): Result<Unit> = runCatching {
         scheduleDao.insertSchedule(schedule.toEntity())
     }
 
     override suspend fun setArchived(id: String, archived: Boolean): Result<Unit> = runCatching {
         medicationDao.setArchived(id, archived)
+    }
+
+    override suspend fun getMedicationHistoryCounts(medicationId: String): MedicationHistoryCounts =
+        MedicationHistoryCounts(
+            medicationId = medicationId,
+            scheduleCount = scheduleDao.countSchedulesForMedication(medicationId),
+            doseEventCount = doseDao.countDosesForMedication(medicationId),
+            stockMovementCount = stockLedgerDao.countMovementsForMedication(medicationId),
+            stockLotCount = stockLotDao.countLotsForMedication(medicationId),
+            prescriptionCount = prescriptionDao.countPrescriptionsForMedication(medicationId),
+            prescriptionEventCount = prescriptionDao.countPrescriptionEventsForMedication(medicationId)
+        )
+
+    override suspend fun deleteMedicationSafely(
+        medicationId: String,
+        confirmCascadeWithHistory: Boolean
+    ): Result<MedicationDeleteOutcome> = runCatching {
+        database.withTransaction {
+            val medEntity = medicationDao.getMedicationById(medicationId)
+                ?: throw IllegalArgumentException("Medication not found")
+            val counts = getMedicationHistoryCounts(medicationId)
+            if (counts.hasAnyHistory && !confirmCascadeWithHistory) {
+                MedicationDeleteOutcome.RequiresExplicitConsent(
+                    medicationId = medicationId,
+                    medicationName = medEntity.name,
+                    counts = counts
+                )
+            } else {
+                val schedules = scheduleDao.getSchedulesForMedication(medicationId).map { it.toDomain() }
+                val snapshot = if (!counts.hasAnyHistory) {
+                    DeletedMedicationSnapshot(
+                        medication = medEntity.toDomain(),
+                        schedules = schedules
+                    )
+                } else {
+                    null
+                }
+                medicationDao.deleteMedicationById(medicationId)
+                MedicationDeleteOutcome.Deleted(
+                    medicationId = medicationId,
+                    medicationName = medEntity.name,
+                    snapshot = snapshot,
+                    canUndo = snapshot != null
+                )
+            }
+        }
+    }
+
+    override suspend fun undoDeleteMedication(snapshot: DeletedMedicationSnapshot): Result<Unit> = runCatching {
+        database.withTransaction {
+            medicationDao.insertMedication(snapshot.medication.toEntity())
+            if (snapshot.schedules.isNotEmpty()) {
+                scheduleDao.insertSchedules(snapshot.schedules.map { it.toEntity() })
+            }
+        }
     }
 
     override fun observeDosesInRange(startEpochMs: Long, endEpochMs: Long): Flow<List<DoseOccurrence>> =
@@ -1158,6 +1263,51 @@ class NoveloRepositoryImpl(
                 notes = notes ?: "Prescription archived"
             )
             prescriptionDao.insertPrescriptionEvent(event)
+        }
+    }
+
+    // ---- PPC Certificate Repository ----
+
+    override fun observeAllPpcCertificates(): Flow<List<PpcCertificate>> =
+        ppcDao.observeAllPpcCertificates().map { list -> list.map { it.toDomain() } }
+
+    override fun observeActivePpcCertificates(): Flow<List<PpcCertificate>> =
+        ppcDao.observeActivePpcCertificates().map { list -> list.map { it.toDomain() } }
+
+    override suspend fun getAllPpcCertificates(): List<PpcCertificate> =
+        ppcDao.getAllPpcCertificates().map { it.toDomain() }
+
+    override suspend fun getPpcCertificateById(id: String): PpcCertificate? =
+        ppcDao.getPpcCertificateById(id)?.toDomain()
+
+    override suspend fun savePpcCertificate(certificate: PpcCertificate): Result<Unit> = runCatching {
+        val now = System.currentTimeMillis()
+        ppcDao.insertPpcCertificate(certificate.copy(updatedAtEpochMs = now).toEntity())
+    }
+
+    override suspend fun setPpcCertificateArchived(id: String, archived: Boolean): Result<Unit> = runCatching {
+        ppcDao.setArchived(id = id, archived = archived, updatedAtEpochMs = System.currentTimeMillis())
+    }
+
+    override suspend fun deletePpcCertificate(id: String): Result<Unit> = runCatching {
+        ppcDao.deletePpcCertificateById(id)
+    }
+
+    override suspend fun renewPpcCertificate(
+        previousId: String,
+        newCertificate: PpcCertificate,
+        archivePrevious: Boolean
+    ): Result<Unit> = runCatching {
+        database.withTransaction {
+            val now = System.currentTimeMillis()
+            if (archivePrevious) {
+                ppcDao.setArchived(id = previousId, archived = true, updatedAtEpochMs = now)
+            }
+            val linked = newCertificate.copy(
+                renewedFromId = previousId,
+                updatedAtEpochMs = now
+            )
+            ppcDao.insertPpcCertificate(linked.toEntity())
         }
     }
 }
