@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
@@ -61,6 +62,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
@@ -81,6 +84,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -102,12 +106,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.adherence.AdherenceSummary
 import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.AdministrationRoute
 import com.example.nuvilo.domain.model.AdministrationSite
 import com.example.nuvilo.domain.model.DepletionReason
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.GelTrackingMode
 import com.example.nuvilo.domain.model.Medication
+import com.example.nuvilo.domain.model.MedicationDeleteOutcome
+import com.example.nuvilo.domain.model.MedicationEditImpact
 import com.example.nuvilo.domain.model.MedicationForm
 import com.example.nuvilo.domain.model.MovementType
 import com.example.nuvilo.domain.model.PackageStatus
@@ -195,6 +202,12 @@ fun MedicationDetailScreen(
         }
     }
 
+    LaunchedEffect(uiState.isDeleted) {
+        if (uiState.isDeleted) {
+            onNavigateBack()
+        }
+    }
+
     val med = uiState.medication
 
     Scaffold(
@@ -239,6 +252,13 @@ fun MedicationDetailScreen(
                             Icon(
                                 imageVector = if (med.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
                                 contentDescription = if (med.isArchived) "Restore Medication" else "Archive Medication"
+                            )
+                        }
+                        IconButton(onClick = { viewModel.requestDeleteMedication(confirmCascadeWithHistory = false) }) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Delete medication",
+                                tint = MaterialTheme.colorScheme.error
                             )
                         }
                     }
@@ -302,6 +322,16 @@ fun MedicationDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 36.dp)
                 ) {
+                    val editImpact = uiState.lastEditImpact
+                    if (editImpact != null && editImpact.impactSummaries.isNotEmpty()) {
+                        item(key = "edit_impact_banner", contentType = "edit_impact") {
+                            EditImpactBannerCard(
+                                impact = editImpact,
+                                onDismiss = { viewModel.clearEditImpact() }
+                            )
+                        }
+                    }
+
                     // 1. Unified Hero Medication & Stock Runway Card
                     item(key = "hero_stock_card", contentType = "hero_card") {
                         val todayEpochDay = LocalDate.now().toEpochDay()
@@ -449,7 +479,7 @@ fun MedicationDetailScreen(
         EditMedicationDialog(
             medication = med,
             onDismiss = { showEditMedicationDialog = false },
-            onConfirmWithPackaging = { name, strength, form, unit, threshold, mode, notes, colorHex, packagingConfig, administrationProfile, lowStockDaysThreshold ->
+            onConfirmFull = { name, strength, form, unit, threshold, mode, notes, colorHex, packagingConfig, administrationProfile, lowStockDaysThreshold, administrationRoute, notificationsEnabled ->
                 nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                 viewModel.updateMedication(
                     name = name,
@@ -462,7 +492,9 @@ fun MedicationDetailScreen(
                     colorTagHex = colorHex,
                     packagingConfig = packagingConfig,
                     administrationProfile = administrationProfile,
-                    lowStockDaysThreshold = lowStockDaysThreshold
+                    lowStockDaysThreshold = lowStockDaysThreshold,
+                    administrationRoute = administrationRoute,
+                    notificationsEnabled = notificationsEnabled
                 )
                 showEditMedicationDialog = false
             }
@@ -658,7 +690,7 @@ fun MedicationDetailScreen(
                 showPrescriptionFormDialog = false
                 prescriptionToEdit = null
             },
-            onConfirm = { ref, issueDay, expiryDay, qty, repeatsAuth, repeatsRem, pharmacy, notes ->
+            onConfirm = { ref, issueDay, expiryDay, qty, repeatsAuth, repeatsRem, pharmacy, notes, repeatReqDay, dispensedDay ->
                 viewModel.savePrescription(
                     existingPrescription = prescriptionToEdit,
                     referenceNumber = ref,
@@ -668,7 +700,9 @@ fun MedicationDetailScreen(
                     repeatsAuthorised = repeatsAuth,
                     repeatsRemaining = repeatsRem,
                     pharmacyName = pharmacy,
-                    notes = notes
+                    notes = notes,
+                    repeatRequestedDateEpochDay = repeatReqDay,
+                    dispensedDateEpochDay = dispensedDay
                 )
                 showPrescriptionFormDialog = false
                 prescriptionToEdit = null
@@ -717,6 +751,162 @@ fun MedicationDetailScreen(
             )
         }
     }
+
+    uiState.pendingDeleteConsent?.let { consent ->
+        SafeDeleteConsentDialog(
+            consent = consent,
+            onDismiss = { viewModel.dismissDeleteConsent() },
+            onArchiveInstead = {
+                viewModel.dismissDeleteConsent()
+                viewModel.setArchived(true)
+            },
+            onConfirmPermanentDelete = {
+                viewModel.requestDeleteMedication(confirmCascadeWithHistory = true)
+            }
+        )
+    }
+}
+
+@Composable
+private fun EditImpactBannerCard(
+    impact: MedicationEditImpact,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = NoveloCardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Medication Update Summary",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Text("Dismiss")
+                }
+            }
+            impact.impactSummaries.forEach { line ->
+                Text(
+                    text = "• $line",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafeDeleteConsentDialog(
+    consent: MedicationDeleteOutcome.RequiresExplicitConsent,
+    onDismiss: () -> Unit,
+    onArchiveInstead: () -> Unit,
+    onConfirmPermanentDelete: () -> Unit
+) {
+    val counts = consent.counts
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        },
+        title = {
+            Text(
+                text = "Delete ${consent.medicationName}?",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "This medication has recorded history. Deleting it permanently removes all associated records and cannot be undone. Consider archiving to preserve your audit trail.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Records to be permanently removed:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("• Dose events: ${counts.doseEventCount}", style = MaterialTheme.typography.bodySmall.tabular)
+                        Text("• Stock ledger entries: ${counts.stockMovementCount}", style = MaterialTheme.typography.bodySmall.tabular)
+                        Text("• Stock packages/lots: ${counts.stockLotCount}", style = MaterialTheme.typography.bodySmall.tabular)
+                        Text("• Prescriptions: ${counts.prescriptionCount}", style = MaterialTheme.typography.bodySmall.tabular)
+                        Text("• Schedules: ${counts.scheduleCount}", style = MaterialTheme.typography.bodySmall.tabular)
+                    }
+                }
+                OutlinedButton(
+                    onClick = onArchiveInstead,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                ) {
+                    Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Archive Instead (Preserve History)")
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirmPermanentDelete,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("Delete Permanently")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -2515,6 +2705,21 @@ fun EditMedicationDialog(
         packagingConfig: PackagingConfig?,
         administrationProfile: AdministrationProfile,
         lowStockDaysThreshold: Int?
+    ) -> Unit)? = null,
+    onConfirmFull: ((
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        lowStockThreshold: String,
+        recordingMode: RecordingMode,
+        notes: String,
+        colorTagHex: String,
+        packagingConfig: PackagingConfig?,
+        administrationProfile: AdministrationProfile,
+        lowStockDaysThreshold: Int?,
+        administrationRoute: AdministrationRoute,
+        notificationsEnabled: Boolean
     ) -> Unit)? = null
 ) {
     val existingPackaging = medication.packagingConfig
@@ -2523,6 +2728,10 @@ fun EditMedicationDialog(
     var name by rememberSaveable { mutableStateOf(medication.name) }
     var strength by rememberSaveable { mutableStateOf(medication.strength) }
     var selectedFormName by rememberSaveable { mutableStateOf(medication.form.name) }
+    var selectedRouteName by rememberSaveable {
+        mutableStateOf((medication.administrationRoute ?: AdministrationRoute.defaultForForm(medication.form)).name)
+    }
+    var notificationsEnabled by rememberSaveable { mutableStateOf(medication.notificationsEnabled) }
     var selectedUnitName by rememberSaveable { mutableStateOf(medication.stockUnit.name) }
     var lowStockThresholdStr by rememberSaveable { mutableStateOf(medication.lowStockThreshold.toDisplayString()) }
     var lowStockDaysStr by rememberSaveable { mutableStateOf(medication.lowStockDaysThreshold?.toString() ?: "") }
@@ -2565,6 +2774,8 @@ fun EditMedicationDialog(
     }
 
     val selectedForm = runCatching { MedicationForm.valueOf(selectedFormName) }.getOrDefault(medication.form)
+    val selectedRoute = runCatching { AdministrationRoute.valueOf(selectedRouteName) }
+        .getOrDefault(medication.administrationRoute ?: AdministrationRoute.defaultForForm(medication.form))
     val selectedUnit = runCatching { StockUnit.valueOf(selectedUnitName) }.getOrDefault(medication.stockUnit)
     val selectedMode = runCatching { RecordingMode.valueOf(selectedModeName) }.getOrDefault(medication.recordingMode)
     val selectedPackageType = runCatching { PackageType.valueOf(selectedPackageTypeName) }
@@ -2682,7 +2893,45 @@ fun EditMedicationDialog(
                     }
                 }
 
-                if (onConfirmWithPackaging != null) {
+                Text("Administration Route", style = MaterialTheme.typography.labelLarge)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    AdministrationRoute.entries.forEach { route ->
+                        FilterChip(
+                            selected = selectedRoute == route,
+                            onClick = { selectedRouteName = route.name },
+                            label = { Text(route.displayName) }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "Dose Reminders",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        Text(
+                            text = if (notificationsEnabled) "Notifications active for scheduled doses" else "Reminders muted for this medication",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = { notificationsEnabled = it }
+                    )
+                }
+
+                if (onConfirmWithPackaging != null || onConfirmFull != null) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                     Text("Packaging & Shelf Life", style = MaterialTheme.typography.labelLarge)
 
@@ -2836,7 +3085,7 @@ fun EditMedicationDialog(
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
-                    if (onConfirmWithPackaging != null) {
+                    if (onConfirmWithPackaging != null || onConfirmFull != null) {
                         OutlinedTextField(
                             value = lowStockDaysStr,
                             onValueChange = { lowStockDaysStr = it },
@@ -2903,7 +3152,8 @@ fun EditMedicationDialog(
                         val trimmedName = name.trim()
                         val trimmedStrength = strength.trim()
                         val trimmedNotes = notes.trim()
-                        if (onConfirmWithPackaging != null) {
+                        val isConfirmFull = onConfirmFull != null
+                        if (isConfirmFull || onConfirmWithPackaging != null) {
                             val updatedPackaging = PackagingConfig(
                                 packageType = selectedPackageType,
                                 consumptionUnit = effectiveConsumptionUnit,
@@ -2942,19 +3192,37 @@ fun EditMedicationDialog(
                             } else {
                                 AdministrationProfile(site = AdministrationSite.NONE)
                             }
-                            onConfirmWithPackaging(
-                                trimmedName,
-                                trimmedStrength,
-                                selectedForm,
-                                effectiveConsumptionUnit,
-                                lowStockThresholdStr,
-                                selectedMode,
-                                trimmedNotes,
-                                selectedColorHex,
-                                updatedPackaging,
-                                updatedAdmin,
-                                lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 }
-                            )
+                            if (onConfirmFull != null) {
+                                onConfirmFull(
+                                    trimmedName,
+                                    trimmedStrength,
+                                    selectedForm,
+                                    effectiveConsumptionUnit,
+                                    lowStockThresholdStr,
+                                    selectedMode,
+                                    trimmedNotes,
+                                    selectedColorHex,
+                                    updatedPackaging,
+                                    updatedAdmin,
+                                    lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
+                                    selectedRoute,
+                                    notificationsEnabled
+                                )
+                            } else {
+                                onConfirmWithPackaging?.invoke(
+                                    trimmedName,
+                                    trimmedStrength,
+                                    selectedForm,
+                                    effectiveConsumptionUnit,
+                                    lowStockThresholdStr,
+                                    selectedMode,
+                                    trimmedNotes,
+                                    selectedColorHex,
+                                    updatedPackaging,
+                                    updatedAdmin,
+                                    lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 }
+                                )
+                            }
                         } else {
                             onConfirm(
                                 trimmedName,
@@ -4785,6 +5053,7 @@ private data class PrescriptionBadgeSpec(
     val text: String
 )
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AddEditPrescriptionDialog(
     existingPrescription: Prescription?,
@@ -4798,7 +5067,9 @@ private fun AddEditPrescriptionDialog(
         repeatsAuthorised: Int,
         repeatsRemaining: Int,
         pharmacyName: String?,
-        notes: String?
+        notes: String?,
+        repeatRequestedDateEpochDay: Long?,
+        dispensedDateEpochDay: Long?
     ) -> Unit
 ) {
     val today = LocalDate.now()
@@ -4810,12 +5081,27 @@ private fun AddEditPrescriptionDialog(
     var referenceNumber by rememberSaveable { mutableStateOf(existingPrescription?.referenceNumber ?: "") }
     var issueDateStr by rememberSaveable { mutableStateOf(initialIssueStr) }
     var expiryDateStr by rememberSaveable { mutableStateOf(initialExpiryStr) }
+    var repeatRequestedEpochDay by rememberSaveable { mutableStateOf(existingPrescription?.repeatRequestedDateEpochDay) }
+    var dispensedEpochDay by rememberSaveable { mutableStateOf(existingPrescription?.dispensedDateEpochDay) }
+    var showIssueDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showExpiryDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showRepeatReqDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showDispensedDatePicker by rememberSaveable { mutableStateOf(false) }
     var quantityStr by rememberSaveable { mutableStateOf(existingPrescription?.quantityPrescribed?.toDisplayString() ?: "28") }
     var repeatsAuthStr by rememberSaveable { mutableStateOf((existingPrescription?.repeatsAuthorised ?: 6).toString()) }
     var repeatsRemStr by rememberSaveable { mutableStateOf((existingPrescription?.repeatsRemaining ?: 6).toString()) }
     var pharmacyName by rememberSaveable { mutableStateOf(existingPrescription?.pharmacyName ?: "") }
     var notes by rememberSaveable { mutableStateOf(existingPrescription?.notes ?: "") }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val parsedIssueDate = remember(issueDateStr) {
+        runCatching { LocalDate.parse(issueDateStr.trim()) }.getOrNull()
+    }
+    val parsedExpiryDate = remember(expiryDateStr) {
+        expiryDateStr.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { LocalDate.parse(it) }.getOrNull()
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -4845,26 +5131,81 @@ private fun AddEditPrescriptionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedTextField(
-                        value = issueDateStr,
-                        onValueChange = {
-                            issueDateStr = it
-                            errorMessage = null
-                        },
-                        label = { Text("Issue (YYYY-MM-DD) *") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = expiryDateStr,
-                        onValueChange = {
-                            expiryDateStr = it
-                            errorMessage = null
-                        },
-                        label = { Text("Expiry (YYYY-MM-DD)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+                    OutlinedButton(
+                        onClick = { showIssueDatePicker = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = "Issue Date *",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = parsedIssueDate?.format(DATE_FORMATTER) ?: issueDateStr,
+                                style = MaterialTheme.typography.labelLarge.tabular,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { showExpiryDatePicker = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = "Expiry Date",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = parsedExpiryDate?.format(DATE_FORMATTER)
+                                    ?: if (expiryDateStr.isBlank()) "No expiry" else expiryDateStr,
+                                style = MaterialTheme.typography.labelLarge.tabular,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val baseIssue = parsedIssueDate ?: today
+                    listOf(
+                        "+3m" to baseIssue.plusMonths(3).toString(),
+                        "+6m" to baseIssue.plusMonths(6).toString(),
+                        "+12m" to baseIssue.plusMonths(12).toString(),
+                        "No expiry" to ""
+                    ).forEach { (label, value) ->
+                        FilterChip(
+                            selected = expiryDateStr == value,
+                            onClick = {
+                                expiryDateStr = value
+                                errorMessage = null
+                            },
+                            label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
                 }
                 OutlinedTextField(
                     value = quantityStr,
@@ -4915,6 +5256,51 @@ private fun AddEditPrescriptionDialog(
                     label = { Text("Notes (Optional)") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showRepeatReqDatePicker = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = "Repeat Requested",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = repeatRequestedEpochDay?.let { LocalDate.ofEpochDay(it).format(DATE_FORMATTER) } ?: "Not set",
+                                style = MaterialTheme.typography.labelMedium.tabular,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { showDispensedDatePicker = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = "Dispensed Date",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = dispensedEpochDay?.let { LocalDate.ofEpochDay(it).format(DATE_FORMATTER) } ?: "Not set",
+                                style = MaterialTheme.typography.labelMedium.tabular,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
                 if (errorMessage != null) {
                     Text(
                         text = errorMessage!!,
@@ -4963,7 +5349,9 @@ private fun AddEditPrescriptionDialog(
                         repeatsAuth,
                         repeatsRem,
                         pharmacyName.trim().takeIf { it.isNotEmpty() },
-                        notes.trim().takeIf { it.isNotEmpty() }
+                        notes.trim().takeIf { it.isNotEmpty() },
+                        repeatRequestedEpochDay,
+                        dispensedEpochDay
                     )
                 }
             ) {
@@ -4976,6 +5364,130 @@ private fun AddEditPrescriptionDialog(
             }
         }
     )
+
+    if (showIssueDatePicker) {
+        val initialMillis = (parsedIssueDate ?: today)
+            .atStartOfDay(ZoneId.of("UTC"))
+            .toInstant()
+            .toEpochMilli()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showIssueDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val picked = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            issueDateStr = picked.toString()
+                            errorMessage = null
+                        }
+                        showIssueDatePicker = false
+                    }
+                ) { Text("Select") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIssueDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showExpiryDatePicker) {
+        val initialMillis = (parsedExpiryDate ?: (parsedIssueDate ?: today).plusMonths(6))
+            .atStartOfDay(ZoneId.of("UTC"))
+            .toInstant()
+            .toEpochMilli()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showExpiryDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val picked = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                            expiryDateStr = picked.toString()
+                            errorMessage = null
+                        }
+                        showExpiryDatePicker = false
+                    }
+                ) { Text("Select") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExpiryDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showRepeatReqDatePicker) {
+        val initialMillis = (repeatRequestedEpochDay?.let { LocalDate.ofEpochDay(it) } ?: today)
+            .atStartOfDay(ZoneId.of("UTC"))
+            .toInstant()
+            .toEpochMilli()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showRepeatReqDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            repeatRequestedEpochDay = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate().toEpochDay()
+                        }
+                        showRepeatReqDatePicker = false
+                    }
+                ) { Text("Select") }
+            },
+            dismissButton = {
+                Row {
+                    if (repeatRequestedEpochDay != null) {
+                        TextButton(onClick = {
+                            repeatRequestedEpochDay = null
+                            showRepeatReqDatePicker = false
+                        }) { Text("Clear") }
+                    }
+                    TextButton(onClick = { showRepeatReqDatePicker = false }) { Text("Cancel") }
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showDispensedDatePicker) {
+        val initialMillis = (dispensedEpochDay?.let { LocalDate.ofEpochDay(it) } ?: today)
+            .atStartOfDay(ZoneId.of("UTC"))
+            .toInstant()
+            .toEpochMilli()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDispensedDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            dispensedEpochDay = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate().toEpochDay()
+                        }
+                        showDispensedDatePicker = false
+                    }
+                ) { Text("Select") }
+            },
+            dismissButton = {
+                Row {
+                    if (dispensedEpochDay != null) {
+                        TextButton(onClick = {
+                            dispensedEpochDay = null
+                            showDispensedDatePicker = false
+                        }) { Text("Clear") }
+                    }
+                    TextButton(onClick = { showDispensedDatePicker = false }) { Text("Cancel") }
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 @Composable

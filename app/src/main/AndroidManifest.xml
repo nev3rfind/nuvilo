@@ -41,6 +41,11 @@
             android:name=".system.alarm.AlarmReceiver"
             android:exported="false" />
 
+        <!-- PPC Alarm Receiver: private to app, receives PPC renewal/expiry AlarmManager triggers -->
+        <receiver
+            android:name=".system.alarm.PpcAlarmReceiver"
+            android:exported="false" />
+
         <!-- Notification Action Receiver: private to app, processes Take/Skip/Snooze actions -->
         <receiver
             android:name=".system.notification.NotificationActionReceiver"

@@ -82,7 +82,13 @@ data class MedicationEntity(
     val containersPerAdminRaw: Long? = null,
 
     @ColumnInfo(name = "low_stock_days_threshold")
-    val lowStockDaysThreshold: Int? = null
+    val lowStockDaysThreshold: Int? = null,
+
+    @ColumnInfo(name = "administration_route")
+    val administrationRoute: String? = null,
+
+    @ColumnInfo(name = "notifications_enabled", defaultValue = "1")
+    val notificationsEnabled: Boolean = true
 )
 
 @Entity(
@@ -361,7 +367,13 @@ data class PrescriptionEntity(
     val createdAtEpochMs: Long = System.currentTimeMillis(),
 
     @ColumnInfo(name = "updated_at_epoch_ms")
-    val updatedAtEpochMs: Long = System.currentTimeMillis()
+    val updatedAtEpochMs: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "repeat_requested_date_epoch_day")
+    val repeatRequestedDateEpochDay: Long? = null,
+
+    @ColumnInfo(name = "dispensed_date_epoch_day")
+    val dispensedDateEpochDay: Long? = null
 )
 
 @Entity(
@@ -406,4 +418,71 @@ data class PrescriptionEventEntity(
 
     @ColumnInfo(name = "notes")
     val notes: String? = null
+)
+
+@Entity(
+    tableName = "ppc_certificates",
+    indices = [
+        Index(value = ["is_archived"]),
+        Index(value = ["expiry_date_epoch_day"])
+    ]
+)
+data class PpcCertificateEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String,
+
+    @ColumnInfo(name = "coverage_type")
+    val coverageType: String,
+
+    @ColumnInfo(name = "exemption_category")
+    val exemptionCategory: String? = null,
+
+    @ColumnInfo(name = "start_date_epoch_day")
+    val startDateEpochDay: Long,
+
+    @ColumnInfo(name = "expiry_date_epoch_day")
+    val expiryDateEpochDay: Long? = null,
+
+    @ColumnInfo(name = "is_ongoing", defaultValue = "0")
+    val isOngoing: Boolean = false,
+
+    @ColumnInfo(name = "is_manual_expiry_override", defaultValue = "0")
+    val isManualExpiryOverride: Boolean = false,
+
+    @ColumnInfo(name = "reference_number")
+    val referenceNumber: String? = null,
+
+    @ColumnInfo(name = "notes")
+    val notes: String? = null,
+
+    @ColumnInfo(name = "remind_30_days", defaultValue = "1")
+    val remind30Days: Boolean = true,
+
+    @ColumnInfo(name = "remind_14_days", defaultValue = "1")
+    val remind14Days: Boolean = true,
+
+    @ColumnInfo(name = "remind_7_days", defaultValue = "1")
+    val remind7Days: Boolean = true,
+
+    @ColumnInfo(name = "remind_on_expiry", defaultValue = "1")
+    val remindOnExpiry: Boolean = true,
+
+    @ColumnInfo(name = "reminder_hour", defaultValue = "9")
+    val reminderHour: Int = 9,
+
+    @ColumnInfo(name = "reminder_minute", defaultValue = "0")
+    val reminderMinute: Int = 0,
+
+    @ColumnInfo(name = "is_archived", defaultValue = "0")
+    val isArchived: Boolean = false,
+
+    @ColumnInfo(name = "renewed_from_id")
+    val renewedFromId: String? = null,
+
+    @ColumnInfo(name = "created_at_epoch_ms")
+    val createdAtEpochMs: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "updated_at_epoch_ms")
+    val updatedAtEpochMs: Long = System.currentTimeMillis()
 )

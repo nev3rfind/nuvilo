@@ -4,8 +4,8 @@
 > **Package / Application ID**: `com.nuvilomed.app` (internal namespace: `com.example.nuvilo`)  
 > **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
 > **Active Branch**: `feat/18-physical-package-inventory` (Phase 10 feature branch; stacked on `feat/16-intelligent-medication-inventory` / `main`)  
-> **Latest Verified Milestone**: Phase 10 — Physical Package Inventory, Bottle Lifecycle & Intelligent Stock Management (Issue [#18](https://github.com/nev3rfind/nuvilo/issues/18))  
-> **Date**: 2026-11-14  
+> **Latest Verified Milestone**: Phase 11 — Whole-App UI/UX Audit, Medication CRUD/Safe Delete, Prescription Dates & NHS PPC Tracking  
+> **Date**: 2026-11-16  
 
 ---
 
@@ -36,7 +36,7 @@ Before any PR, branch, or release claim, all quality gates must pass. As of comm
 | Quality Gate | Gradle Task | Target / Environment | Count / Result | Pass Rate | Status |
 | :--- | :--- | :--- | :---: | :---: | :---: |
 | **JVM Unit Tests** | `.\gradlew.bat testDebugUnitTest` | OpenJDK 21 (Android Studio JBR) | **136 / 136** | 100.0% | **PASSED** |
-| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest` | `emulator-5554` (Android 17 / API 37) | **159 / 159** | 100.0% | **PASSED** |
+| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest` | `SM-S948B` (`R3GL5059FTZ`, Android 17) | **173 / 173** | 100.0% | **PASSED** |
 | **Grand Total Automated Tests** | — | **JVM + Android Instrumentation** | **295 / 295** | **100.0%** | **PASSED** |
 | **Static Analysis / Lint** | `.\gradlew.bat lintDebug` | 119 active checks | **0 Errors** | 100.0% | **PASSED** |
 | **Release Build & Shrinking** | `.\gradlew.bat assembleRelease` | R8 Minification + ProGuard | APK Generated | Zero Issues | **PASSED** |

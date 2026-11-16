@@ -2,6 +2,7 @@ package com.example.nuvilo.data.backup
 
 import com.example.nuvilo.data.local.entity.DoseEventEntity
 import com.example.nuvilo.data.local.entity.MedicationEntity
+import com.example.nuvilo.data.local.entity.PpcCertificateEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEventEntity
 import com.example.nuvilo.data.local.entity.ScheduleEntity
@@ -48,6 +49,7 @@ object CsvZipBackupManager {
                 put("stock_ledger_entries", backup.stockLedgerEntries.size)
                 put("prescriptions", backup.prescriptions.size)
                 put("prescription_events", backup.prescriptionEvents.size)
+                put("ppc_certificates", backup.ppcCertificates.size)
             })
         }
         writeEntry("manifest.json", manifest.toString(2))
@@ -176,6 +178,40 @@ object CsvZipBackupManager {
             ))
         }
         writeEntry("prescription_events.csv", buildCsv(rxEventRows))
+
+        // 9. ppc_certificates.csv
+        val ppcRows = mutableListOf<List<String>>()
+        ppcRows.add(listOf(
+            "id", "coverage_type", "exemption_category", "start_date_epoch_day", "expiry_date_epoch_day",
+            "is_ongoing", "is_manual_expiry_override", "reference_number", "notes",
+            "remind_30_days", "remind_14_days", "remind_7_days", "remind_on_expiry",
+            "reminder_hour", "reminder_minute", "is_archived", "renewed_from_id",
+            "created_at_epoch_ms", "updated_at_epoch_ms"
+        ))
+        backup.ppcCertificates.forEach { p ->
+            ppcRows.add(listOf(
+                p.id,
+                p.coverageType,
+                p.exemptionCategory ?: NULL_TOKEN,
+                p.startDateEpochDay.toString(),
+                p.expiryDateEpochDay?.toString() ?: NULL_TOKEN,
+                p.isOngoing.toString(),
+                p.isManualExpiryOverride.toString(),
+                p.referenceNumber ?: NULL_TOKEN,
+                p.notes ?: NULL_TOKEN,
+                p.remind30Days.toString(),
+                p.remind14Days.toString(),
+                p.remind7Days.toString(),
+                p.remindOnExpiry.toString(),
+                p.reminderHour.toString(),
+                p.reminderMinute.toString(),
+                p.isArchived.toString(),
+                p.renewedFromId ?: NULL_TOKEN,
+                p.createdAtEpochMs.toString(),
+                p.updatedAtEpochMs.toString()
+            ))
+        }
+        writeEntry("ppc_certificates.csv", buildCsv(ppcRows))
 
         zipOut.finish()
     }
@@ -408,6 +444,39 @@ object CsvZipBackupManager {
             }
         }
 
+        // 9. PPC Certificates (optional for backward compatibility with v1..v4 backups)
+        val ppcCertificates = mutableListOf<PpcCertificateEntity>()
+        files["ppc_certificates.csv"]?.let { csv ->
+            val rows = parseCsv(csv)
+            for (i in 1 until rows.size) {
+                val r = rows[i]
+                if (r.isEmpty()) continue
+                ppcCertificates.add(
+                    PpcCertificateEntity(
+                        id = r[0],
+                        coverageType = r[1],
+                        exemptionCategory = parseNullableString(r.getOrNull(2)),
+                        startDateEpochDay = r[3].toLong(),
+                        expiryDateEpochDay = parseNullableLong(r.getOrNull(4)),
+                        isOngoing = r.getOrElse(5) { "false" }.toBoolean(),
+                        isManualExpiryOverride = r.getOrElse(6) { "false" }.toBoolean(),
+                        referenceNumber = parseNullableString(r.getOrNull(7)),
+                        notes = parseNullableString(r.getOrNull(8)),
+                        remind30Days = r.getOrElse(9) { "true" }.toBoolean(),
+                        remind14Days = r.getOrElse(10) { "true" }.toBoolean(),
+                        remind7Days = r.getOrElse(11) { "true" }.toBoolean(),
+                        remindOnExpiry = r.getOrElse(12) { "true" }.toBoolean(),
+                        reminderHour = r.getOrElse(13) { "9" }.toIntOrNull() ?: 9,
+                        reminderMinute = r.getOrElse(14) { "0" }.toIntOrNull() ?: 0,
+                        isArchived = r.getOrElse(15) { "false" }.toBoolean(),
+                        renewedFromId = parseNullableString(r.getOrNull(16)),
+                        createdAtEpochMs = r.getOrElse(17) { System.currentTimeMillis().toString() }.toLong(),
+                        updatedAtEpochMs = r.getOrElse(18) { System.currentTimeMillis().toString() }.toLong()
+                    )
+                )
+            }
+        }
+
         return NoveloDataBackup(
             formatVersion = formatVersion,
             appVersion = appVersion,
@@ -419,7 +488,8 @@ object CsvZipBackupManager {
             stockLots = stockLots,
             stockLedgerEntries = stockLedgerEntries,
             prescriptions = prescriptions,
-            prescriptionEvents = prescriptionEvents
+            prescriptionEvents = prescriptionEvents,
+            ppcCertificates = ppcCertificates
         )
     }
 

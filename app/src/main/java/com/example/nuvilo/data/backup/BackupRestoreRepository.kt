@@ -25,7 +25,8 @@ class BackupRestoreRepositoryImpl(
             stockLots = database.stockLotDao().getAllLots(),
             stockLedgerEntries = database.stockLedgerDao().getAllMovements(),
             prescriptions = database.prescriptionDao().getAllPrescriptions(),
-            prescriptionEvents = database.prescriptionDao().getAllPrescriptionEvents()
+            prescriptionEvents = database.prescriptionDao().getAllPrescriptionEvents(),
+            ppcCertificates = database.ppcDao().getAllPpcCertificates()
         )
     }
 
@@ -42,6 +43,7 @@ class BackupRestoreRepositoryImpl(
 
         database.withTransaction {
             // 1. Delete in reverse dependency order
+            database.ppcDao().deleteAllPpcCertificates()
             database.prescriptionDao().deleteAllPrescriptionEvents()
             database.prescriptionDao().deleteAllPrescriptions()
             database.stockLedgerDao().deleteAllMovements()
@@ -71,6 +73,9 @@ class BackupRestoreRepositoryImpl(
             }
             if (backup.prescriptionEvents.isNotEmpty()) {
                 database.prescriptionDao().insertPrescriptionEvents(backup.prescriptionEvents)
+            }
+            if (backup.ppcCertificates.isNotEmpty()) {
+                database.ppcDao().insertPpcCertificates(backup.ppcCertificates)
             }
         }
     }

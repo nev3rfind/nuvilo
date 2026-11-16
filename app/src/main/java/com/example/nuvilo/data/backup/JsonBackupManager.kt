@@ -2,6 +2,7 @@ package com.example.nuvilo.data.backup
 
 import com.example.nuvilo.data.local.entity.DoseEventEntity
 import com.example.nuvilo.data.local.entity.MedicationEntity
+import com.example.nuvilo.data.local.entity.PpcCertificateEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEventEntity
 import com.example.nuvilo.data.local.entity.ScheduleEntity
@@ -170,6 +171,33 @@ object JsonBackupManager {
                 })
             }
             put("prescriptionEvents", eventsArray)
+
+            // 8. PPC Certificates
+            val ppcArray = JSONArray()
+            backup.ppcCertificates.forEach { ppc ->
+                ppcArray.put(JSONObject().apply {
+                    put("id", ppc.id)
+                    put("coverageType", ppc.coverageType)
+                    if (ppc.exemptionCategory != null) put("exemptionCategory", ppc.exemptionCategory)
+                    put("startDateEpochDay", ppc.startDateEpochDay)
+                    if (ppc.expiryDateEpochDay != null) put("expiryDateEpochDay", ppc.expiryDateEpochDay)
+                    put("isOngoing", ppc.isOngoing)
+                    put("isManualExpiryOverride", ppc.isManualExpiryOverride)
+                    if (ppc.referenceNumber != null) put("referenceNumber", ppc.referenceNumber)
+                    if (ppc.notes != null) put("notes", ppc.notes)
+                    put("remind30Days", ppc.remind30Days)
+                    put("remind14Days", ppc.remind14Days)
+                    put("remind7Days", ppc.remind7Days)
+                    put("remindOnExpiry", ppc.remindOnExpiry)
+                    put("reminderHour", ppc.reminderHour)
+                    put("reminderMinute", ppc.reminderMinute)
+                    put("isArchived", ppc.isArchived)
+                    if (ppc.renewedFromId != null) put("renewedFromId", ppc.renewedFromId)
+                    put("createdAtEpochMs", ppc.createdAtEpochMs)
+                    put("updatedAtEpochMs", ppc.updatedAtEpochMs)
+                })
+            }
+            put("ppcCertificates", ppcArray)
         }
 
         return root.toString(2)
@@ -369,6 +397,36 @@ object JsonBackupManager {
             )
         }
 
+        // 8. Parse PPC Certificates (optional for backward compatibility with v1..v4 backups)
+        val ppcCertificates = mutableListOf<PpcCertificateEntity>()
+        val ppcArray = root.optJSONArray("ppcCertificates") ?: JSONArray()
+        for (i in 0 until ppcArray.length()) {
+            val obj = ppcArray.getJSONObject(i)
+            ppcCertificates.add(
+                PpcCertificateEntity(
+                    id = obj.getString("id"),
+                    coverageType = obj.getString("coverageType"),
+                    exemptionCategory = if (obj.has("exemptionCategory") && !obj.isNull("exemptionCategory")) obj.getString("exemptionCategory") else null,
+                    startDateEpochDay = obj.getLong("startDateEpochDay"),
+                    expiryDateEpochDay = if (obj.has("expiryDateEpochDay") && !obj.isNull("expiryDateEpochDay")) obj.getLong("expiryDateEpochDay") else null,
+                    isOngoing = obj.optBoolean("isOngoing", false),
+                    isManualExpiryOverride = obj.optBoolean("isManualExpiryOverride", false),
+                    referenceNumber = if (obj.has("referenceNumber") && !obj.isNull("referenceNumber")) obj.getString("referenceNumber") else null,
+                    notes = if (obj.has("notes") && !obj.isNull("notes")) obj.getString("notes") else null,
+                    remind30Days = obj.optBoolean("remind30Days", true),
+                    remind14Days = obj.optBoolean("remind14Days", true),
+                    remind7Days = obj.optBoolean("remind7Days", true),
+                    remindOnExpiry = obj.optBoolean("remindOnExpiry", true),
+                    reminderHour = obj.optInt("reminderHour", 9),
+                    reminderMinute = obj.optInt("reminderMinute", 0),
+                    isArchived = obj.optBoolean("isArchived", false),
+                    renewedFromId = if (obj.has("renewedFromId") && !obj.isNull("renewedFromId")) obj.getString("renewedFromId") else null,
+                    createdAtEpochMs = obj.optLong("createdAtEpochMs", System.currentTimeMillis()),
+                    updatedAtEpochMs = obj.optLong("updatedAtEpochMs", System.currentTimeMillis())
+                )
+            )
+        }
+
         return NoveloDataBackup(
             formatVersion = formatVersion,
             appVersion = appVersion,
@@ -380,7 +438,8 @@ object JsonBackupManager {
             stockLots = stockLots,
             stockLedgerEntries = stockLedgerEntries,
             prescriptions = prescriptions,
-            prescriptionEvents = prescriptionEvents
+            prescriptionEvents = prescriptionEvents,
+            ppcCertificates = ppcCertificates
         )
     }
 }

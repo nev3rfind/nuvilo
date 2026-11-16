@@ -51,6 +51,7 @@ class PrescriptionManager {
 
         val updated = prescription.copy(
             hasPendingRepeatRequest = true,
+            repeatRequestedDateEpochDay = currentDateEpochDay,
             updatedAtEpochMs = nowEpochMs
         )
         val event = PrescriptionEvent(
@@ -99,6 +100,7 @@ class PrescriptionManager {
         val updated = prescription.copy(
             repeatsRemaining = newRemaining,
             hasPendingRepeatRequest = false,
+            dispensedDateEpochDay = currentDateEpochDay,
             status = newStatus,
             updatedAtEpochMs = nowEpochMs
         )

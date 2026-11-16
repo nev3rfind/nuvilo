@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -75,6 +77,7 @@ import com.example.nuvilo.ui.components.DoseStatusBadge
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.NoveloBulletKpiCard
 import com.example.nuvilo.ui.components.SectionHeader
+import com.example.nuvilo.ui.theme.LocalMotionEnabled
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.theme.tabular
@@ -101,12 +104,14 @@ fun AdherenceCalendarScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -448,10 +453,14 @@ private fun MonthlyCalendarCard(
             }
 
             // Animated Month Grid
+            val motionEnabled = LocalMotionEnabled.current
             AnimatedContent(
                 targetState = yearMonth,
                 transitionSpec = {
-                    NoveloMotion.directionalHorizontalTransition(targetState > initialState)
+                    NoveloMotion.directionalHorizontalTransition(
+                        forward = targetState > initialState,
+                        motionEnabled = motionEnabled
+                    )
                 },
                 label = "calendarMonthGridTransition"
             ) { targetYm ->
@@ -542,6 +551,7 @@ private fun CalendarDayCell(
 
     Box(
         modifier = modifier
+            .heightIn(min = 48.dp)
             .aspectRatio(0.95f)
             .semantics {
                 contentDescription = "$dateDesc: $stateLabel" + if (isSelected) ", selected" else ""

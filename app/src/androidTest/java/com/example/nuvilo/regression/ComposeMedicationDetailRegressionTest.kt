@@ -66,8 +66,8 @@ class ComposeMedicationDetailRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Restock Supplies").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Quantity Added", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Restock Supply").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Number of", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -154,7 +154,7 @@ class ComposeMedicationDetailRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Ledger Impact Preview (+RESTOCK)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("LIVE RESTOCK SUMMARY").assertIsDisplayed()
     }
 
     @Test
@@ -172,6 +172,6 @@ class ComposeMedicationDetailRegressionTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Actual Observed Count", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Actual Total Observed Count", substring = true).assertIsDisplayed()
     }
 }

@@ -16,6 +16,7 @@ import com.example.nuvilo.data.preferences.UserPreferences
 import com.example.nuvilo.data.preferences.UserPreferencesRepository
 import com.example.nuvilo.data.repository.DoseRepository
 import com.example.nuvilo.data.repository.MedicationRepository
+import com.example.nuvilo.data.repository.PpcRepository
 import com.example.nuvilo.data.repository.PrescriptionRepository
 import com.example.nuvilo.data.repository.StockRepository
 import com.example.nuvilo.domain.adherence.AdherenceCalculator
@@ -26,11 +27,16 @@ import com.example.nuvilo.domain.adherence.HistoryDateFilter
 import com.example.nuvilo.domain.adherence.MonthlyCalendarData
 import com.example.nuvilo.domain.adherence.ResolvedDoseOccurrence
 import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.AdministrationRoute
 import com.example.nuvilo.domain.model.DepletionReason
+import com.example.nuvilo.domain.model.DeletedMedicationSnapshot
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.Medication
+import com.example.nuvilo.domain.model.MedicationDeleteOutcome
+import com.example.nuvilo.domain.model.MedicationEditImpact
 import com.example.nuvilo.domain.model.MedicationForm
+import com.example.nuvilo.domain.model.MedicationHistoryCounts
 import com.example.nuvilo.domain.model.MovementType
 import com.example.nuvilo.domain.model.PackageStatus
 import com.example.nuvilo.domain.model.PackageType
@@ -46,6 +52,11 @@ import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockLedgerEntry
 import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
+import com.example.nuvilo.domain.ppc.PpcCalculator
+import com.example.nuvilo.domain.ppc.PpcCertificate
+import com.example.nuvilo.domain.ppc.PpcEvaluation
+import com.example.nuvilo.domain.ppc.PpcOverlapResult
+import com.example.nuvilo.domain.ppc.PpcStatus
 import com.example.nuvilo.domain.schedule.ScheduleOccurrenceCalculator
 import com.example.nuvilo.domain.stock.ConsumptionCalculator
 import com.example.nuvilo.domain.stock.OccurrenceConsumption
@@ -56,12 +67,14 @@ import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.security.BiometricStatus
 import com.example.nuvilo.security.LockGracePeriod
 import com.example.nuvilo.system.alarm.AlarmScheduler
+import com.example.nuvilo.system.alarm.PpcAlarmScheduler
 import com.example.nuvilo.system.notification.ChannelRuntimeDiagnostic
 import com.example.nuvilo.system.notification.NotificationHelper
 import com.example.nuvilo.system.notification.NuviloNotificationCategory
 import com.example.nuvilo.ui.haptics.HapticIntensity
 import java.io.ByteArrayInputStream
 import java.io.OutputStream
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -98,13 +111,15 @@ data class DashboardUiState(
     val lowStockCount: Int = 0,
     val expiringPrescriptionsCount: Int = 0,
     val discardWarningCount: Int = 0,
+    val ppcEvaluation: PpcEvaluation = PpcEvaluation(null, PpcStatus.NO_RECORD, null, null, null),
     val isLoading: Boolean = true
 )
 
 private data class DashboardStockBundle(
     val movements: List<StockLedgerEntry>,
     val lots: List<StockLot>,
-    val prescriptions: List<Prescription>
+    val prescriptions: List<Prescription>,
+    val ppcCertificates: List<PpcCertificate> = emptyList()
 )
 
 class DashboardViewModel(
@@ -112,11 +127,13 @@ class DashboardViewModel(
     private val doseRepository: DoseRepository,
     private val stockRepository: StockRepository,
     private val prescriptionRepository: PrescriptionRepository? = null,
+    private val ppcRepository: PpcRepository? = null,
     private val alarmScheduler: AlarmScheduler? = null,
     private val scheduleCalculator: ScheduleOccurrenceCalculator = ScheduleOccurrenceCalculator(),
     private val stockCalculator: StockLedgerCalculator = StockLedgerCalculator(),
     private val consumptionCalculator: ConsumptionCalculator = ConsumptionCalculator(),
-    private val supplyForecastCalculator: SupplyForecastCalculator = SupplyForecastCalculator(consumptionCalculator)
+    private val supplyForecastCalculator: SupplyForecastCalculator = SupplyForecastCalculator(consumptionCalculator),
+    private val ppcCalculator: PpcCalculator = PpcCalculator()
 ) : ViewModel() {
 
     private val zoneId = ZoneId.systemDefault()
@@ -125,9 +142,10 @@ class DashboardViewModel(
     private val stockBundleFlow = combine(
         stockRepository.observeAllMovements(),
         stockRepository.observeAllLots(),
-        prescriptionRepository?.observeAllPrescriptions() ?: flowOf(emptyList())
-    ) { movements, lots, prescriptions ->
-        DashboardStockBundle(movements, lots, prescriptions)
+        prescriptionRepository?.observeAllPrescriptions() ?: flowOf(emptyList()),
+        ppcRepository?.observeActivePpcCertificates() ?: flowOf(emptyList())
+    ) { movements, lots, prescriptions, ppcCertificates ->
+        DashboardStockBundle(movements, lots, prescriptions, ppcCertificates)
     }
 
     val uiState: StateFlow<DashboardUiState> = combine(
@@ -235,6 +253,11 @@ class DashboardViewModel(
             else -> "Good evening"
         }
 
+        val ppcEvaluation = ppcCalculator.selectPrimaryEvaluation(
+            certificates = stockBundle.ppcCertificates,
+            today = today
+        )
+
         DashboardUiState(
             formattedDate = today.format(dateFormatter),
             greeting = greeting,
@@ -246,6 +269,7 @@ class DashboardViewModel(
             lowStockCount = lowStockCount,
             expiringPrescriptionsCount = expiringRxCount,
             discardWarningCount = discardWarningCount,
+            ppcEvaluation = ppcEvaluation,
             isLoading = false
         )
     }.stateIn(
@@ -307,7 +331,11 @@ data class MedicationListItem(
 data class MedicationListUiState(
     val activeMedications: List<MedicationListItem> = emptyList(),
     val archivedMedications: List<MedicationListItem> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val pendingDeleteConsent: MedicationDeleteOutcome.RequiresExplicitConsent? = null,
+    val undoableDelete: DeletedMedicationSnapshot? = null,
+    val actionMessage: String? = null,
+    val errorMessage: String? = null
 )
 
 class MedicationViewModel(
@@ -319,7 +347,12 @@ class MedicationViewModel(
     private val supplyForecastCalculator: SupplyForecastCalculator = SupplyForecastCalculator()
 ) : ViewModel() {
 
-    val uiState: StateFlow<MedicationListUiState> = combine(
+    private val _pendingDeleteConsent = MutableStateFlow<MedicationDeleteOutcome.RequiresExplicitConsent?>(null)
+    private val _undoableDelete = MutableStateFlow<DeletedMedicationSnapshot?>(null)
+    private val _actionMessage = MutableStateFlow<String?>(null)
+    private val _errorMessage = MutableStateFlow<String?>(null)
+
+    private val listDataFlow: Flow<MedicationListUiState> = combine(
         medicationRepository.observeAllMedications(),
         medicationRepository.observeAllSchedules(),
         stockRepository.observeAllMovements(),
@@ -397,6 +430,21 @@ class MedicationViewModel(
             activeMedications = active,
             archivedMedications = archived,
             isLoading = false
+        )
+    }
+
+    val uiState: StateFlow<MedicationListUiState> = combine(
+        listDataFlow,
+        _pendingDeleteConsent,
+        _undoableDelete,
+        _actionMessage,
+        _errorMessage
+    ) { base, consent, undoable, actionMsg, errMsg ->
+        base.copy(
+            pendingDeleteConsent = consent,
+            undoableDelete = undoable,
+            actionMessage = actionMsg,
+            errorMessage = errMsg
         )
     }.stateIn(
         scope = viewModelScope,
@@ -568,6 +616,54 @@ class MedicationViewModel(
         }
     }
 
+    fun deleteMedicationSafely(medicationId: String, confirmCascadeWithHistory: Boolean = false) {
+        viewModelScope.launch {
+            val result = medicationRepository.deleteMedicationSafely(
+                medicationId = medicationId,
+                confirmCascadeWithHistory = confirmCascadeWithHistory
+            )
+            result.onSuccess { outcome ->
+                when (outcome) {
+                    is MedicationDeleteOutcome.RequiresExplicitConsent -> {
+                        _pendingDeleteConsent.value = outcome
+                    }
+                    is MedicationDeleteOutcome.Deleted -> {
+                        _pendingDeleteConsent.value = null
+                        _undoableDelete.value = if (outcome.canUndo) outcome.snapshot else null
+                        _actionMessage.value = "${outcome.medicationName} deleted"
+                        alarmScheduler?.reconcileUpcomingReminders()
+                    }
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Failed to delete medication"
+            }
+        }
+    }
+
+    fun undoDeleteMedication() {
+        val snapshot = _undoableDelete.value ?: return
+        viewModelScope.launch {
+            val result = medicationRepository.undoDeleteMedication(snapshot)
+            if (result.isSuccess) {
+                _undoableDelete.value = null
+                _actionMessage.value = "${snapshot.medication.name} restored"
+                alarmScheduler?.reconcileUpcomingReminders()
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to restore medication"
+            }
+        }
+    }
+
+    fun dismissPendingDeleteConsent() {
+        _pendingDeleteConsent.value = null
+    }
+
+    fun clearActionMessages() {
+        _actionMessage.value = null
+        _errorMessage.value = null
+        _undoableDelete.value = null
+    }
+
     fun restockMedication(
         medicationId: String,
         quantity: ScaledQuantity,
@@ -607,7 +703,11 @@ data class MedicationDetailUiState(
     val errorMessage: String? = null,
     val actionSuccessMessage: String? = null,
     val stagedNextPackage: StockLot? = null,
-    val earlyDepletedLots: List<StockLot> = emptyList()
+    val earlyDepletedLots: List<StockLot> = emptyList(),
+    val historyCounts: MedicationHistoryCounts? = null,
+    val lastEditImpact: MedicationEditImpact? = null,
+    val pendingDeleteConsent: MedicationDeleteOutcome.RequiresExplicitConsent? = null,
+    val isDeleted: Boolean = false
 )
 
 private data class CoreMedData(
@@ -642,6 +742,9 @@ class MedicationDetailViewModel(
     private val _actionSuccessMessage = MutableStateFlow<String?>(null)
     private val _historyDateFilter = MutableStateFlow(HistoryDateFilter.ALL_TIME)
     private val _historyOutcomeFilter = MutableStateFlow(DoseOutcomeFilter.ALL)
+    private val _lastEditImpact = MutableStateFlow<MedicationEditImpact?>(null)
+    private val _pendingDeleteConsent = MutableStateFlow<MedicationDeleteOutcome.RequiresExplicitConsent?>(null)
+    private val _isDeleted = MutableStateFlow(false)
 
     private val coreDataFlow = combine(
         medicationRepository.observeMedication(medicationId),
@@ -760,7 +863,16 @@ class MedicationDetailViewModel(
                 medicationAdherenceSummary = adherenceSummary,
                 isLoading = false,
                 stagedNextPackage = stagedNext,
-                earlyDepletedLots = earlyDepleted
+                earlyDepletedLots = earlyDepleted,
+                historyCounts = MedicationHistoryCounts(
+                    medicationId = medicationId,
+                    scheduleCount = medSchedules.size,
+                    doseEventCount = core.doses.size,
+                    stockMovementCount = core.movements.size,
+                    stockLotCount = core.lots.size,
+                    prescriptionCount = extra.prescriptions.size,
+                    prescriptionEventCount = extra.prescriptionEvents.size
+                )
             )
         }
     }
@@ -768,11 +880,16 @@ class MedicationDetailViewModel(
     val uiState: StateFlow<MedicationDetailUiState> = combine(
         dataFlow,
         _errorMessage,
-        _actionSuccessMessage
-    ) { data, errorMsg, successMsg ->
+        _actionSuccessMessage,
+        _lastEditImpact,
+        _pendingDeleteConsent
+    ) { data, errorMsg, successMsg, editImpact, deleteConsent ->
         data.copy(
             errorMessage = errorMsg ?: data.errorMessage,
-            actionSuccessMessage = successMsg
+            actionSuccessMessage = successMsg,
+            lastEditImpact = editImpact,
+            pendingDeleteConsent = deleteConsent,
+            isDeleted = _isDeleted.value
         )
     }.stateIn(
         scope = viewModelScope,
@@ -1066,7 +1183,9 @@ class MedicationDetailViewModel(
         repeatsRemaining: Int,
         pharmacyName: String?,
         notes: String?,
-        status: PrescriptionStatus = PrescriptionStatus.ACTIVE
+        status: PrescriptionStatus = PrescriptionStatus.ACTIVE,
+        repeatRequestedDateEpochDay: Long? = existingPrescription?.repeatRequestedDateEpochDay,
+        dispensedDateEpochDay: Long? = existingPrescription?.dispensedDateEpochDay
     ) {
         viewModelScope.launch {
             val repo = prescriptionRepository ?: return@launch
@@ -1086,7 +1205,9 @@ class MedicationDetailViewModel(
                 notes = notes?.trim()?.takeIf { it.isNotEmpty() },
                 status = status,
                 createdAtEpochMs = existingPrescription?.createdAtEpochMs ?: System.currentTimeMillis(),
-                updatedAtEpochMs = System.currentTimeMillis()
+                updatedAtEpochMs = System.currentTimeMillis(),
+                repeatRequestedDateEpochDay = repeatRequestedDateEpochDay,
+                dispensedDateEpochDay = dispensedDateEpochDay
             )
             val result = if (existingPrescription == null) {
                 repo.createPrescription(rx)
@@ -1195,7 +1316,9 @@ class MedicationDetailViewModel(
         colorTagHex: String,
         packagingConfig: PackagingConfig? = null,
         administrationProfile: AdministrationProfile? = null,
-        lowStockDaysThreshold: Int? = null
+        lowStockDaysThreshold: Int? = null,
+        administrationRoute: AdministrationRoute? = null,
+        notificationsEnabled: Boolean? = null
     ) {
         viewModelScope.launch {
             val current = uiState.value.medication ?: return@launch
@@ -1212,16 +1335,126 @@ class MedicationDetailViewModel(
                 notes = notes.trim(),
                 colorTagHex = colorTagHex,
                 packagingConfig = packagingConfig ?: current.packagingConfig,
-                administrationProfile = administrationProfile ?: current.administrationProfile
+                administrationProfile = administrationProfile ?: current.administrationProfile,
+                administrationRoute = administrationRoute ?: current.administrationRoute,
+                notificationsEnabled = notificationsEnabled ?: current.notificationsEnabled
             )
-            val result = medicationRepository.updateMedication(updated)
-            if (result.isSuccess) {
+            val result = medicationRepository.updateMedicationWithSchedule(updated, null)
+            result.onSuccess { impact ->
+                _lastEditImpact.value = impact.takeIf { it.hasAnyCalculationImpact || it.impactSummaries.isNotEmpty() }
                 alarmScheduler?.reconcileUpcomingReminders()
                 _actionSuccessMessage.value = "Medication details updated"
-            } else {
-                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to update medication"
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Failed to update medication"
             }
         }
+    }
+
+    fun updateMedicationAndSchedule(
+        name: String,
+        strength: String,
+        form: MedicationForm,
+        unit: StockUnit,
+        lowStockThresholdStr: String,
+        recordingMode: RecordingMode,
+        notes: String,
+        colorTagHex: String,
+        packagingConfig: PackagingConfig? = null,
+        administrationProfile: AdministrationProfile? = null,
+        lowStockDaysThreshold: Int? = null,
+        administrationRoute: AdministrationRoute? = null,
+        notificationsEnabled: Boolean? = null,
+        existingSchedule: ScheduleDefinition? = null,
+        targetTimesMinuteOfDay: List<Int>? = null,
+        daysOfWeek: Set<Int>? = null,
+        doseQuantityStr: String? = null,
+        scheduleInstructions: String? = null
+    ) {
+        viewModelScope.launch {
+            val current = uiState.value.medication ?: return@launch
+            val threshold = runCatching { ScaledQuantity.fromDisplayString(lowStockThresholdStr) }
+                .getOrDefault(current.lowStockThreshold)
+            val updated = current.copy(
+                name = name.trim(),
+                strength = strength.trim(),
+                form = form,
+                stockUnit = packagingConfig?.consumptionUnit ?: unit,
+                lowStockThreshold = threshold,
+                lowStockDaysThreshold = lowStockDaysThreshold ?: current.lowStockDaysThreshold,
+                recordingMode = recordingMode,
+                notes = notes.trim(),
+                colorTagHex = colorTagHex,
+                packagingConfig = packagingConfig ?: current.packagingConfig,
+                administrationProfile = administrationProfile ?: current.administrationProfile,
+                administrationRoute = administrationRoute ?: current.administrationRoute,
+                notificationsEnabled = notificationsEnabled ?: current.notificationsEnabled
+            )
+            val updatedSchedule = if (targetTimesMinuteOfDay != null && doseQuantityStr != null) {
+                val doseQty = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }.getOrNull()
+                if (doseQty == null || !doseQty.isPositive()) {
+                    _errorMessage.value = "Dose quantity must be greater than zero"
+                    return@launch
+                }
+                if (targetTimesMinuteOfDay.isEmpty()) {
+                    _errorMessage.value = "At least one dose time is required"
+                    return@launch
+                }
+                val resolvedDays = daysOfWeek ?: emptySet()
+                ScheduleDefinition(
+                    id = existingSchedule?.id ?: UUID.randomUUID().toString(),
+                    medicationId = medicationId,
+                    scheduleType = if (resolvedDays.isEmpty()) ScheduleType.DAILY else ScheduleType.SPECIFIC_WEEKDAYS,
+                    targetTimesMinuteOfDay = targetTimesMinuteOfDay.distinct().sorted(),
+                    daysOfWeek = resolvedDays,
+                    doseQuantityPerOccurrence = doseQty,
+                    startDateEpochDay = existingSchedule?.startDateEpochDay ?: LocalDate.now(zoneId).toEpochDay(),
+                    endDateEpochDay = existingSchedule?.endDateEpochDay,
+                    instructions = (scheduleInstructions ?: existingSchedule?.instructions.orEmpty()).trim()
+                )
+            } else {
+                null
+            }
+            val result = medicationRepository.updateMedicationWithSchedule(updated, updatedSchedule)
+            result.onSuccess { impact ->
+                _lastEditImpact.value = impact.takeIf { it.hasAnyCalculationImpact || it.impactSummaries.isNotEmpty() }
+                alarmScheduler?.reconcileUpcomingReminders()
+                _actionSuccessMessage.value = "Medication details updated"
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Failed to update medication"
+            }
+        }
+    }
+
+    fun requestDeleteMedication(confirmCascadeWithHistory: Boolean = false) {
+        viewModelScope.launch {
+            val result = medicationRepository.deleteMedicationSafely(
+                medicationId = medicationId,
+                confirmCascadeWithHistory = confirmCascadeWithHistory
+            )
+            result.onSuccess { outcome ->
+                when (outcome) {
+                    is MedicationDeleteOutcome.RequiresExplicitConsent -> {
+                        _pendingDeleteConsent.value = outcome
+                    }
+                    is MedicationDeleteOutcome.Deleted -> {
+                        _pendingDeleteConsent.value = null
+                        _isDeleted.value = true
+                        alarmScheduler?.reconcileUpcomingReminders()
+                        _actionSuccessMessage.value = "${outcome.medicationName} deleted"
+                    }
+                }
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "Failed to delete medication"
+            }
+        }
+    }
+
+    fun dismissDeleteConsent() {
+        _pendingDeleteConsent.value = null
+    }
+
+    fun clearEditImpact() {
+        _lastEditImpact.value = null
     }
 
     fun saveSchedule(
@@ -1666,6 +1899,136 @@ class SettingsViewModel(
     }
 }
 
+data class PpcUiState(
+    val certificates: List<PpcCertificate> = emptyList(),
+    val activeCertificates: List<PpcCertificate> = emptyList(),
+    val archivedCertificates: List<PpcCertificate> = emptyList(),
+    val primaryEvaluation: PpcEvaluation = PpcEvaluation(null, PpcStatus.NO_RECORD, null, null, null),
+    val isLoading: Boolean = true,
+    val actionMessage: String? = null,
+    val errorMessage: String? = null
+)
+
+class PpcViewModel(
+    private val ppcRepository: PpcRepository,
+    private val ppcAlarmScheduler: PpcAlarmScheduler? = null,
+    private val ppcCalculator: PpcCalculator = PpcCalculator()
+) : ViewModel() {
+
+    private val _actionMessage = MutableStateFlow<String?>(null)
+    private val _errorMessage = MutableStateFlow<String?>(null)
+
+    val uiState: StateFlow<PpcUiState> = combine(
+        ppcRepository.observeAllPpcCertificates(),
+        _actionMessage,
+        _errorMessage
+    ) { certs, actionMsg, errMsg ->
+        val today = LocalDate.now()
+        val active = certs.filter { !it.isArchived }
+        val archived = certs.filter { it.isArchived }
+        val primary = ppcCalculator.selectPrimaryEvaluation(active, today)
+        PpcUiState(
+            certificates = certs,
+            activeCertificates = active,
+            archivedCertificates = archived,
+            primaryEvaluation = primary,
+            isLoading = false,
+            actionMessage = actionMsg,
+            errorMessage = errMsg
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = PpcUiState(isLoading = true)
+    )
+
+    fun saveCertificate(certificate: PpcCertificate) {
+        viewModelScope.launch {
+            val result = ppcRepository.savePpcCertificate(certificate)
+            if (result.isSuccess) {
+                ppcAlarmScheduler?.reconcileAllPpcAlarms()
+                _actionMessage.value = "Certificate saved"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to save certificate"
+            }
+        }
+    }
+
+    fun archiveCertificate(id: String) {
+        viewModelScope.launch {
+            val result = ppcRepository.setPpcCertificateArchived(id, archived = true)
+            if (result.isSuccess) {
+                ppcAlarmScheduler?.cancelAlarmsForCertificate(id)
+                ppcAlarmScheduler?.reconcileAllPpcAlarms()
+                _actionMessage.value = "Certificate archived"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to archive certificate"
+            }
+        }
+    }
+
+    fun unarchiveCertificate(id: String) {
+        viewModelScope.launch {
+            val result = ppcRepository.setPpcCertificateArchived(id, archived = false)
+            if (result.isSuccess) {
+                ppcAlarmScheduler?.reconcileAllPpcAlarms()
+                _actionMessage.value = "Certificate restored"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to restore certificate"
+            }
+        }
+    }
+
+    fun deleteCertificate(id: String) {
+        viewModelScope.launch {
+            val result = ppcRepository.deletePpcCertificate(id)
+            if (result.isSuccess) {
+                ppcAlarmScheduler?.cancelAlarmsForCertificate(id)
+                _actionMessage.value = "Certificate deleted"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to delete certificate"
+            }
+        }
+    }
+
+    fun renewCertificate(
+        previousId: String,
+        newCertificate: PpcCertificate,
+        archivePrevious: Boolean = true
+    ) {
+        viewModelScope.launch {
+            val result = ppcRepository.renewPpcCertificate(previousId, newCertificate, archivePrevious)
+            if (result.isSuccess) {
+                if (archivePrevious) {
+                    ppcAlarmScheduler?.cancelAlarmsForCertificate(previousId)
+                }
+                ppcAlarmScheduler?.reconcileAllPpcAlarms()
+                _actionMessage.value = "Certificate renewed"
+            } else {
+                _errorMessage.value = result.exceptionOrNull()?.message ?: "Failed to renew certificate"
+            }
+        }
+    }
+
+    fun findOverlaps(
+        candidateStart: LocalDate,
+        candidateExpiry: LocalDate?,
+        excludeCertificateId: String? = null
+    ): List<PpcOverlapResult> {
+        return ppcCalculator.findOverlaps(
+            candidateStart = candidateStart,
+            candidateExpiry = candidateExpiry,
+            existingCertificates = uiState.value.activeCertificates,
+            excludeCertificateId = excludeCertificateId
+        )
+    }
+
+    fun clearMessage() {
+        _actionMessage.value = null
+        _errorMessage.value = null
+    }
+}
+
 class ViewModelFactory(
     private val appContainer: com.example.nuvilo.AppContainer
 ) : ViewModelProvider.Factory {
@@ -1678,11 +2041,18 @@ class ViewModelFactory(
                     doseRepository = appContainer.repository,
                     stockRepository = appContainer.repository,
                     prescriptionRepository = appContainer.repository,
+                    ppcRepository = appContainer.repository,
                     alarmScheduler = appContainer.alarmScheduler,
                     scheduleCalculator = appContainer.scheduleCalculator,
                     stockCalculator = appContainer.stockCalculator,
                     consumptionCalculator = appContainer.consumptionCalculator,
                     supplyForecastCalculator = appContainer.supplyForecastCalculator
+                ) as T
+            }
+            modelClass.isAssignableFrom(PpcViewModel::class.java) -> {
+                PpcViewModel(
+                    ppcRepository = appContainer.repository,
+                    ppcAlarmScheduler = appContainer.ppcAlarmScheduler
                 ) as T
             }
             modelClass.isAssignableFrom(MedicationViewModel::class.java) -> {

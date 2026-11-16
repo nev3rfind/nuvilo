@@ -78,3 +78,30 @@ enum class PrescriptionEventType(val displayName: String) {
     STATUS_CHANGED("Status Changed"),
     ARCHIVED("Prescription Archived")
 }
+
+enum class AdministrationRoute(val displayName: String) {
+    ORAL("Oral"),
+    OPHTHALMIC("Ophthalmic (Eye)"),
+    OTIC("Otic (Ear)"),
+    INHALATION("Inhalation"),
+    TOPICAL("Topical (Skin)"),
+    TRANSDERMAL("Transdermal (Patch)"),
+    SUBCUTANEOUS("Subcutaneous Injection"),
+    INTRAMUSCULAR("Intramuscular Injection"),
+    NASAL("Nasal"),
+    SUBLINGUAL("Sublingual"),
+    RECTAL("Rectal"),
+    OTHER("Other");
+
+    companion object {
+        fun defaultForForm(form: MedicationForm): AdministrationRoute = when (form) {
+            MedicationForm.TABLET, MedicationForm.CAPSULE, MedicationForm.LIQUID_ML -> ORAL
+            MedicationForm.DROPS -> OPHTHALMIC
+            MedicationForm.INHALER_PUFFS -> INHALATION
+            MedicationForm.TOPICAL_CREAM -> TOPICAL
+            MedicationForm.INJECTION -> SUBCUTANEOUS
+            MedicationForm.PATCH -> TRANSDERMAL
+            MedicationForm.OTHER -> OTHER
+        }
+    }
+}

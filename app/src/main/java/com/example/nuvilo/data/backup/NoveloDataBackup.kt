@@ -2,6 +2,7 @@ package com.example.nuvilo.data.backup
 
 import com.example.nuvilo.data.local.entity.DoseEventEntity
 import com.example.nuvilo.data.local.entity.MedicationEntity
+import com.example.nuvilo.data.local.entity.PpcCertificateEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEventEntity
 import com.example.nuvilo.data.local.entity.ScheduleEntity
@@ -19,11 +20,12 @@ data class NoveloDataBackup(
     val stockLots: List<StockLotEntity> = emptyList(),
     val stockLedgerEntries: List<StockLedgerEntryEntity> = emptyList(),
     val prescriptions: List<PrescriptionEntity> = emptyList(),
-    val prescriptionEvents: List<PrescriptionEventEntity> = emptyList()
+    val prescriptionEvents: List<PrescriptionEventEntity> = emptyList(),
+    val ppcCertificates: List<PpcCertificateEntity> = emptyList()
 ) {
     companion object {
         const val CURRENT_FORMAT_VERSION = 1
-        const val CURRENT_SCHEMA_VERSION = 4
+        const val CURRENT_SCHEMA_VERSION = 5
     }
 
     val totalRecordsCount: Int
@@ -33,7 +35,8 @@ data class NoveloDataBackup(
                 stockLots.size +
                 stockLedgerEntries.size +
                 prescriptions.size +
-                prescriptionEvents.size
+                prescriptionEvents.size +
+                ppcCertificates.size
 }
 
 data class BackupPreview(
@@ -46,7 +49,8 @@ data class BackupPreview(
     val stockLotCount: Int,
     val stockLedgerEntryCount: Int,
     val prescriptionCount: Int,
-    val prescriptionEventCount: Int
+    val prescriptionEventCount: Int,
+    val ppcCertificateCount: Int = 0
 )
 
 sealed interface BackupValidationResult {

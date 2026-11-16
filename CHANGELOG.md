@@ -8,6 +8,25 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 11: Whole-App UI/UX Audit, Medication CRUD/Safe Delete, Prescription Dates & NHS PPC Tracking**:
+  - **Offline NHS Prescription Prepayment Certificate (PPC) & Free Exemptions**:
+    - Added `PpcModels.kt` and `PpcCalculator.kt` with exact `java.time.LocalDate` calendar-month math (3-month, 12-month, leap-year/month-end handling, ongoing exemptions, manual expiry override, overlap detection, and renewal draft generation).
+    - Added `PpcAlarmScheduler.kt` (`PpcAlarmSchedulerImpl`, `PpcAlarmPlanner`, `PpcAlarmReceiver`) for configurable 30/14/7/0-day local renewal/expiry reminders with Privacy Mode masking and boot/timezone reconciliation.
+    - Added `PpcManagementScreen.kt` with 4-step progressive creation/edit wizard, current status card (*"Based on your recorded certificate dates"*), overlap warnings, renewal, archive/restore, and delete confirmation, plus `PpcStatusBannerCard` on `DashboardScreen`.
+    - Integrated `ppcCertificates` into JSON and CSV ZIP backup/restore with full v1–v4 backward compatibility.
+  - **Medication CRUD, Archive/Restore & Safe Delete**:
+    - Full medication editing (`AdministrationRoute`, `notificationsEnabled`, schedule & packaging) with `EditImpactBannerCard` explaining future stock/forecast impact without rewriting historical records.
+    - Safe Delete workflow (`deleteMedicationSafely`, `SafeDeleteConsentDialog`) distinguishing medications with vs without history, offering "Archive Instead (Preserve History)" when history exists and Undo Snackbar for safe deletes without history.
+  - **Enhanced Prescription Dates**:
+    - Added `repeatRequestedDateEpochDay` and `dispensedDateEpochDay` with Material 3 `DatePickerDialog`s and quick expiry presets (`+3m`, `+6m`, `+12m`, `No expiry`).
+  - **Room Database Schema v5 (`MIGRATION_4_5`)**:
+    - Added `ppc_certificates` table, `medications.administration_route`, `medications.notifications_enabled`, `prescriptions.repeat_requested_date_epoch_day`, and `prescriptions.dispensed_date_epoch_day`, with exported `5.json` schema and `NoveloDatabaseMigrationTest.migration4To5`.
+  - **Whole-App UI/UX & Accessibility Polish**:
+    - Fixed edge-to-edge double-padding across `MainActivity`, `DashboardScreen`, `MedicationListScreen`, and `AdherenceCalendarScreen`, added `imePadding()` + `verticalScroll` to dialogs, enforced $\ge 48\text{dp}$ touch targets, eliminated duplicate TalkBack labels, and added `LocalMotionEnabled` reduced-motion support.
+  - **QA Verification**:
+    - `testDebugUnitTest` PASSED, `connectedDebugAndroidTest` **173/173 PASSED** on `SM-S948B` (`R3GL5059FTZ`), `lintDebug` 0 errors, `assembleRelease` PASSED with 0 `android.permission.INTERNET` and 0 remote SDKs.
+
+### Added
 - **Phase 10: Physical Package Inventory, Bottle Lifecycle & Intelligent Stock Management (Refs #18)**:
   - **Three-Tier Clinical Unit Architecture**: Decoupled Purchasing Units (`PackageType`: bottles, tubes, single-dose boxes, blister packs), Package Consumption Capacity (e.g., 300 drops per bottle), and Administration Units (e.g., 1 drop per eye × 2 eyes = 2 drops).
   - **Authoritative Packaging Resolution (`effectivePackagingConfig`)**: Implemented `inferDefaultPackagingConfig(form, stockUnit)` ensuring 100% of medications in Nuvilo have a clinical packaging profile without falling back to raw liquid or drop counters.

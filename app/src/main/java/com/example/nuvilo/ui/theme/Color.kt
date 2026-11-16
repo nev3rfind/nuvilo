@@ -95,15 +95,15 @@ val NeutralTextTertiaryLight = Color(0xFF64748B)
 val NeutralOutlineLight = Color(0xFFCBD5E1)
 val NeutralOutlineVariantLight = Color(0xFFE2E8F0)
 
-// Dark Mode Neutrals (Slate 900 background + Slate 800 cards)
-val NeutralBackgroundDark = Color(0xFF0F172A)
-val NeutralSurfaceDark = Color(0xFF1E293B)
-val NeutralSurfaceVariantDark = Color(0xFF334155)
+// Dark Mode Neutrals (Phase 11 Layered Slate-Obsidian hierarchy: #0C1015 -> #121820 -> #1E293B)
+val NeutralBackgroundDark = Color(0xFF0C1015)
+val NeutralSurfaceDark = Color(0xFF121820)
+val NeutralSurfaceVariantDark = Color(0xFF1E293B)
 val NeutralTextPrimaryDark = Color(0xFFF8FAFC)
 val NeutralTextSecondaryDark = Color(0xFF94A3B8)
 val NeutralTextTertiaryDark = Color(0xFF64748B)
 val NeutralOutlineDark = Color(0xFF475569)
-val NeutralOutlineVariantDark = Color(0xFF334155)
+val NeutralOutlineVariantDark = Color(0xFF263244)
 
 /**
  * Curated medication accent tags for visual differentiation across regimens.
@@ -191,7 +191,7 @@ val DarkNoveloSemanticColors = NoveloSemanticColors(
     warningContainer = StatusWarningContainerDark,
     warningBorder = StatusWarningBorderDark,
     cardBorder = NeutralOutlineVariantDark,
-    elevatedSurface = Color(0xFF243248),
+    elevatedSurface = Color(0xFF1E293B),
     heroGradientStart = Color(0xFF0C4A6E),
     heroGradientEnd = Color(0xFF075985),
     interactionBlue = NoveloInteractionBlueDark,

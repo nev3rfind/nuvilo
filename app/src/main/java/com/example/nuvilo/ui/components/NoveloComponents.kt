@@ -97,10 +97,13 @@ import com.example.nuvilo.domain.model.ScheduleType
 import com.example.nuvilo.domain.model.StockBalance
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.domain.model.TrackingPrecision
+import com.example.nuvilo.domain.ppc.PpcEvaluation
+import com.example.nuvilo.domain.ppc.PpcStatus
 import com.example.nuvilo.domain.stock.OccurrenceConsumption
 import com.example.nuvilo.domain.stock.SupplyForecast
 import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
 import com.example.nuvilo.ui.haptics.NuviloHapticEvent
+import com.example.nuvilo.ui.theme.NoveloBannerShape
 import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.NoveloPillShape
@@ -393,7 +396,7 @@ fun HeroDoseCard(
                                         )
                                     }
                                     Text(
-                                        text = "$totalPhysical $pkgPlural total",
+                                        text = if (totalPhysical == 1) "$totalPhysical $pkgName total" else "$totalPhysical $pkgPlural total",
                                         style = MaterialTheme.typography.labelSmall.tabular,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isReorderNeeded) semantic.warning else MaterialTheme.colorScheme.primary
@@ -1818,9 +1821,9 @@ fun MedicationItemCard(
                     if (onRestockClick != null) {
                         OutlinedButton(
                             onClick = onRestockClick,
-                            modifier = Modifier.heightIn(min = 36.dp),
+                            modifier = Modifier.heightIn(min = 48.dp),
                             shape = NoveloPillShape,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                         ) {
                             Icon(
@@ -1831,7 +1834,7 @@ fun MedicationItemCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "+ Stock",
+                                text = "Stock",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -2396,6 +2399,169 @@ fun NoveloDataRow(
         }
     }
 }
+
+/**
+ * Compact NHS Prescription Prepayment Certificate (PPC) & Free Exemption status banner card
+ * for the Dashboard. Pairs semantic color, icon, and text, uses tabular numerals for days
+ * remaining, and preserves the offline-first disclaimer ("Based on your recorded certificate dates").
+ */
+@Composable
+fun PpcStatusBannerCard(
+    evaluation: PpcEvaluation,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val semantic = MaterialTheme.noveloColors
+    val cert = evaluation.certificate
+
+    val (containerColor, borderColor, accentColor, icon, badgeLabel) = when (evaluation.status) {
+        PpcStatus.ACTIVE -> PpcBannerStyle(
+            container = semantic.takenContainer.copy(alpha = 0.72f),
+            border = semantic.takenBorder,
+            accent = semantic.taken,
+            icon = Icons.Default.VerifiedUser,
+            badge = if (cert?.isOngoing == true) {
+                "Active · Ongoing"
+            } else {
+                evaluation.remainingDays?.let { d ->
+                    if (d == 1L) "Active · 1 day left" else "Active · $d days left"
+                } ?: "Active"
+            }
+        )
+        PpcStatus.EXPIRING_SOON -> PpcBannerStyle(
+            container = semantic.warningContainer,
+            border = semantic.warningBorder,
+            accent = semantic.warning,
+            icon = Icons.Default.Warning,
+            badge = evaluation.remainingDays?.let { d ->
+                when (d) {
+                    0L -> "Expires today"
+                    1L -> "Expiring · 1 day left"
+                    else -> "Expiring · $d days left"
+                }
+            } ?: "Expiring Soon"
+        )
+        PpcStatus.EXPIRED -> PpcBannerStyle(
+            container = semantic.missedContainer,
+            border = semantic.missedBorder,
+            accent = semantic.missed,
+            icon = Icons.Default.ErrorOutline,
+            badge = "Expired"
+        )
+        PpcStatus.NOT_YET_VALID -> PpcBannerStyle(
+            container = semantic.assumedContainer,
+            border = semantic.assumedBorder,
+            accent = semantic.assumed,
+            icon = Icons.Default.HourglassTop,
+            badge = evaluation.daysUntilStart?.let { d ->
+                if (d == 1L) "Starts in 1 day" else "Starts in $d days"
+            } ?: "Scheduled"
+        )
+        PpcStatus.NO_RECORD -> PpcBannerStyle(
+            container = MaterialTheme.colorScheme.surface,
+            border = MaterialTheme.colorScheme.outlineVariant,
+            accent = MaterialTheme.colorScheme.primary,
+            icon = Icons.Default.VerifiedUser,
+            badge = "Set up"
+        )
+    }
+
+    val titleText = cert?.coverageType?.shortLabel ?: "NHS Prescription Prepayment (PPC)"
+    val subtitleText = if (cert == null) {
+        "Track your 3-month, 12-month PPC, or free exemption dates locally"
+    } else {
+        evaluation.statusBasisNotice
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(
+                onClick = onClick,
+                onClickLabel = "Manage NHS Prescription Prepayment Certificate",
+                role = Role.Button
+            ),
+        shape = NoveloBannerShape,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, borderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = titleText,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitleText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Surface(
+                shape = NoveloPillShape,
+                color = accentColor.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
+            ) {
+                Text(
+                    text = badgeLabel,
+                    style = MaterialTheme.typography.labelSmall.tabular,
+                    fontWeight = FontWeight.Bold,
+                    color = accentColor,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    maxLines = 1
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+private data class PpcBannerStyle(
+    val container: Color,
+    val border: Color,
+    val accent: Color,
+    val icon: ImageVector,
+    val badge: String
+)
 
 @Preview(showBackground = true)
 @Composable

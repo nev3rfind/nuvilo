@@ -2,13 +2,20 @@ package com.example.nuvilo.data.mapper
 
 import com.example.nuvilo.data.local.entity.DoseEventEntity
 import com.example.nuvilo.data.local.entity.MedicationEntity
+import com.example.nuvilo.data.local.entity.PpcCertificateEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEntity
 import com.example.nuvilo.data.local.entity.PrescriptionEventEntity
 import com.example.nuvilo.data.local.entity.ScheduleEntity
 import com.example.nuvilo.data.local.entity.StockLedgerEntryEntity
 import com.example.nuvilo.data.local.entity.StockLotEntity
 import com.example.nuvilo.domain.model.AdministrationProfile
+import com.example.nuvilo.domain.model.AdministrationRoute
 import com.example.nuvilo.domain.model.AdministrationSite
+import com.example.nuvilo.domain.ppc.ExemptionCategory
+import com.example.nuvilo.domain.ppc.PpcCertificate
+import com.example.nuvilo.domain.ppc.PpcCoverageType
+import com.example.nuvilo.domain.ppc.PpcReminderConfig
+import java.time.LocalDate
 import com.example.nuvilo.domain.model.DoseOccurrence
 import com.example.nuvilo.domain.model.DoseStatus
 import com.example.nuvilo.domain.model.GelTrackingMode
@@ -70,7 +77,9 @@ fun MedicationEntity.toDomain(): Medication {
             rightEyeQuantity = rightEyeQuantityRaw?.let { ScaledQuantity(it) },
             containersPerAdministration = containersPerAdminRaw?.let { ScaledQuantity(it) }
         ),
-        lowStockDaysThreshold = lowStockDaysThreshold
+        lowStockDaysThreshold = lowStockDaysThreshold,
+        administrationRoute = administrationRoute?.let { runCatching { AdministrationRoute.valueOf(it) }.getOrNull() },
+        notificationsEnabled = notificationsEnabled
     )
 }
 
@@ -100,7 +109,9 @@ fun Medication.toEntity(): MedicationEntity {
         leftEyeQuantityRaw = administrationProfile.leftEyeQuantity?.rawScaledValue,
         rightEyeQuantityRaw = administrationProfile.rightEyeQuantity?.rawScaledValue,
         containersPerAdminRaw = administrationProfile.containersPerAdministration?.rawScaledValue,
-        lowStockDaysThreshold = lowStockDaysThreshold
+        lowStockDaysThreshold = lowStockDaysThreshold,
+        administrationRoute = administrationRoute?.name,
+        notificationsEnabled = notificationsEnabled
     )
 }
 
@@ -271,7 +282,9 @@ fun PrescriptionEntity.toDomain(): Prescription = Prescription(
     notes = notes,
     status = runCatching { PrescriptionStatus.valueOf(status) }.getOrDefault(PrescriptionStatus.ACTIVE),
     createdAtEpochMs = createdAtEpochMs,
-    updatedAtEpochMs = updatedAtEpochMs
+    updatedAtEpochMs = updatedAtEpochMs,
+    repeatRequestedDateEpochDay = repeatRequestedDateEpochDay,
+    dispensedDateEpochDay = dispensedDateEpochDay
 )
 
 fun Prescription.toEntity(): PrescriptionEntity = PrescriptionEntity(
@@ -289,7 +302,9 @@ fun Prescription.toEntity(): PrescriptionEntity = PrescriptionEntity(
     notes = notes,
     status = status.name,
     createdAtEpochMs = createdAtEpochMs,
-    updatedAtEpochMs = updatedAtEpochMs
+    updatedAtEpochMs = updatedAtEpochMs,
+    repeatRequestedDateEpochDay = repeatRequestedDateEpochDay,
+    dispensedDateEpochDay = dispensedDateEpochDay
 )
 
 fun PrescriptionEventEntity.toDomain(): PrescriptionEvent = PrescriptionEvent(
@@ -312,4 +327,50 @@ fun PrescriptionEvent.toEntity(): PrescriptionEventEntity = PrescriptionEventEnt
     repeatsRemainingAfter = repeatsRemainingAfter,
     actionIdempotencyKey = actionIdempotencyKey,
     notes = notes
+)
+
+fun PpcCertificateEntity.toDomain(): PpcCertificate = PpcCertificate(
+    id = id,
+    coverageType = runCatching { PpcCoverageType.valueOf(coverageType) }.getOrDefault(PpcCoverageType.PPC_12_MONTH),
+    exemptionCategory = exemptionCategory?.let { runCatching { ExemptionCategory.valueOf(it) }.getOrNull() },
+    startDate = LocalDate.ofEpochDay(startDateEpochDay),
+    expiryDate = expiryDateEpochDay?.let { LocalDate.ofEpochDay(it) },
+    isOngoing = isOngoing,
+    isManualExpiryOverride = isManualExpiryOverride,
+    referenceNumber = referenceNumber,
+    notes = notes,
+    reminderConfig = PpcReminderConfig(
+        remind30DaysBefore = remind30Days,
+        remind14DaysBefore = remind14Days,
+        remind7DaysBefore = remind7Days,
+        remindOnExpiryDay = remindOnExpiry,
+        reminderHour = reminderHour,
+        reminderMinute = reminderMinute
+    ),
+    isArchived = isArchived,
+    renewedFromId = renewedFromId,
+    createdAtEpochMs = createdAtEpochMs,
+    updatedAtEpochMs = updatedAtEpochMs
+)
+
+fun PpcCertificate.toEntity(): PpcCertificateEntity = PpcCertificateEntity(
+    id = id,
+    coverageType = coverageType.name,
+    exemptionCategory = exemptionCategory?.name,
+    startDateEpochDay = startDate.toEpochDay(),
+    expiryDateEpochDay = expiryDate?.toEpochDay(),
+    isOngoing = isOngoing,
+    isManualExpiryOverride = isManualExpiryOverride,
+    referenceNumber = referenceNumber,
+    notes = notes,
+    remind30Days = reminderConfig.remind30DaysBefore,
+    remind14Days = reminderConfig.remind14DaysBefore,
+    remind7Days = reminderConfig.remind7DaysBefore,
+    remindOnExpiry = reminderConfig.remindOnExpiryDay,
+    reminderHour = reminderConfig.reminderHour,
+    reminderMinute = reminderConfig.reminderMinute,
+    isArchived = isArchived,
+    renewedFromId = renewedFromId,
+    createdAtEpochMs = createdAtEpochMs,
+    updatedAtEpochMs = updatedAtEpochMs
 )

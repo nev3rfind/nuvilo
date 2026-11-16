@@ -362,7 +362,7 @@ class AccessibilityTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Ledger Impact Preview (+RESTOCK)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("LIVE RESTOCK SUMMARY").assertIsDisplayed()
         composeTestRule.onNodeWithText("Confirm Restock").assertIsDisplayed()
     }
 

@@ -30,6 +30,9 @@ class BootAndChangeReceiver : BroadcastReceiver() {
                 // Reconcile and reschedule upcoming dose reminders
                 container.alarmScheduler.reconcileUpcomingReminders()
 
+                // Reconcile and reschedule PPC expiry/renewal reminders
+                container.ppcAlarmScheduler.reconcileAllPpcAlarms()
+
                 // Re-enqueue deferrable background maintenance
                 container.enqueuePeriodicMaintenance()
             } finally {

@@ -70,6 +70,7 @@ val MaterialTheme.noveloColors: NoveloSemanticColors
 @Composable
 fun NoveloTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    motionEnabled: Boolean = rememberMotionEnabled(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -87,7 +88,10 @@ fun NoveloTheme(
         }
     }
 
-    CompositionLocalProvider(LocalNoveloColors provides semanticColors) {
+    CompositionLocalProvider(
+        LocalNoveloColors provides semanticColors,
+        LocalMotionEnabled provides motionEnabled
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

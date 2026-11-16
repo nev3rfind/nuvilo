@@ -428,3 +428,24 @@ No task or phase shall be marked complete without providing direct terminal exec
 ### Safe Application Data Testing Protocol
 - **Prohibition of Direct SQLite Copying**: Copying raw SQLite database files (`novelo.db` / `novelo.db-wal`) via ADB while Room is running is strictly prohibited due to race conditions with live WAL buffers and database corruption risks.
 - **Encrypted Application Backup & Restoration**: All data migration and test validation across certificate boundaries (e.g. `CN=Android Debug` vs `CN=Nuvilo QA`) must be performed using Nuvilo's built-in AES-256-GCM encrypted JSON export/restore via the Storage Access Framework (SAF) onto a disposable test environment, as detailed in `docs/ui-ux-audit/stage2/PHYSICAL_DEVICE_CHECKLIST.md`.
+
+---
+
+## 14. Latest Verified Test Execution (Phase 11: UI/UX Audit, Medication CRUD/Safe Delete, Prescription Dates & NHS PPC)
+
+### Unit Tests (`testDebugUnitTest`)
+- **Status**: `BUILD SUCCESSFUL`
+- **Coverage**: Includes `PpcCalculatorTest` (8 tests: 3/12-month `LocalDate` math, leap years, month-end clamping, ongoing exemptions, manual expiry override, overlap detection), `PpcAlarmPlannerTest` (4 tests: 30/14/7/0-day offsets, Privacy Mode, official terminology), `PpcBackupCompatibilityTest` (4 tests: JSON/CSV PPC round-trip + legacy v1–v4 compatibility), and `MedicationEditAndSafeDeleteDomainTest`.
+
+### On-Device Connected Tests (`connectedDebugAndroidTest` on `SM-S948B` / `R3GL5059FTZ`, Android 17)
+- **Status**: `BUILD SUCCESSFUL`
+- **Result**: **173 / 173 PASSED** (`0 failed`, `0 skipped`), including:
+  - `NoveloDatabaseMigrationTest.migration4To5_preservesExistingDataAndAddsPpcAndMedicationPrescriptionColumns` [PASSED]
+  - `Phase11RepositoryVerificationTest` (5/5: Safe delete without history + Undo, Safe delete with history requiring explicit consent, Archive/Restore preserving history, PPC save/renew/archive/delete, Prescription `repeatRequestedDateEpochDay` & `dispensedDateEpochDay` persistence) [PASSED]
+  - `Phase11PpcUiTest` (2/2: `PpcStatusBannerCard` Light/Dark rendering & click, `PpcManagementScreen` 4-step wizard) [PASSED]
+  - `Phase11MedicationCrudUiTest` (1/1: Edit dialog & Safe Delete Consent dialog offering Archive Instead) [PASSED]
+
+### Static Analysis, Release Build & Privacy Verification
+- `lintDebug`: `BUILD SUCCESSFUL` (`0 errors`)
+- `assembleDebug` & `assembleRelease`: `BUILD SUCCESSFUL`
+- **Merged Release Manifest (`app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml`)**: Verified ZERO `android.permission.INTERNET`, ZERO `ACCESS_NETWORK_STATE`, and ZERO remote SDKs.

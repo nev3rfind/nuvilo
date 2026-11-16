@@ -33,3 +33,8 @@ val NoveloCardShape = RoundedCornerShape(18.dp)
  * Dialog and bottom sheet surface shape.
  */
 val NoveloSheetShape = RoundedCornerShape(24.dp)
+
+/**
+ * Compact clinical banner and NHS PPC status card shape.
+ */
+val NoveloBannerShape = RoundedCornerShape(14.dp)
