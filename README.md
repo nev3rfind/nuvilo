@@ -47,6 +47,8 @@ Designed with healthcare-grade rigor, Nuvilo focuses on mathematical stock integ
 - [x] **Phase 7 & 7.1**: Release hardening, GitHub Actions CI, R8 minification, QA release signing, WCAG AA compliance audit ($\ge 48\text{dp}$ touch targets), lifecycle flow collections (`collectAsStateWithLifecycle`).
 - [x] **Phase 8 & UI/UX Pro Max**: Complete UI/UX overhaul, Master design system (`design-system/novelo/MASTER.md`), tabular numerics (`fontFeatureSettings = "tnum"`), expressive pill silhouettes (`NoveloPillShape`), 3-tier mobile data rows (`NoveloDataRow`), Bullet KPI adherence card (80% benchmark), official 3D logo and animated splash screen.
 - [x] **Pre-Merge Regression & Quality Audit**: 202 new automated regression tests (T001–T200, T130b, T148b), BUG-001 (receiver null safety) and BUG-002 (stock recount race condition) remediated, 287/287 tests passing with 100% pass rate, and all branches merged into `main`.
+- [x] **Phase 9 & 10**: Real-world physical package inventory (`UNOPENED`/`OPENED`/`EMPTY`/`DISCARDED`), early package depletion, FEFO day-by-day supply simulation, 7 notification channels, and haptic-first feedback.
+- [x] **Phase 11**: Whole-app UI/UX & edge-to-edge audit, full Medication Edit/Archive/Safe Delete/Undo, Prescription repeat/dispensed dates, offline NHS PPC & Free Exemption tracking (4-step wizard + `AlarmManager` reminders), Room Schema v5 (`MIGRATION_4_5`), and **173/173** on-device instrumentation tests passing on `SM-S948B`.
 
 ---
 

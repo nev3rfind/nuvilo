@@ -120,6 +120,19 @@ To prevent sensitive medication records from leaking into unencrypted cloud back
 
 ---
 
+## 7. Phase 11 Security & Privacy Verification (`2026-11-16`)
+
+- **Merged Release Manifest Audit**: Inspected `app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml` after `assembleRelease`:
+  - `android.permission.INTERNET`: **Absent (0 occurrences)**.
+  - `android.permission.ACCESS_NETWORK_STATE`: **Absent (0 occurrences)**.
+  - Third-party remote SDKs (Firebase, Crashlytics, Sentry, Mixpanel, Ads, OkHttp, Retrofit): **Absent (0 occurrences)**.
+- **NHS PPC & Exemption Privacy**:
+  - All Prescription Prepayment Certificate (PPC) and Free Exemption records are stored strictly locally in Room (`ppc_certificates` table, Schema v5) and included in local AES-256-GCM encrypted SAF backups.
+  - `PpcAlarmReceiver` is declared `android:exported="false"` in `AndroidManifest.xml` and masks certificate details when Privacy Mode is enabled.
+  - All UI and notification copy explicitly states *"Based on your recorded certificate dates"* without any external NHS API calls.
+
+---
+
 ## 7. Android IPC, Intent & Receiver Security
 
 Nuvilo enforces strict Android IPC security policies across all background receivers and pending intents:

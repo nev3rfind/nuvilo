@@ -48,13 +48,14 @@ flowchart TD
     end
 
     subgraph Data_Layer ["Data Layer (Room & DataStore)"]
-        NoveloDatabase[("Room Database (SQLite v4)")]
+        NoveloDatabase[("Room Database (SQLite v5)")]
         MedicationDao["MedicationDao"]
         ScheduleDao["ScheduleDao"]
         DoseEventDao["DoseDao"]
         StockLotDao["StockLotDao"]
         StockLedgerDao["StockLedgerDao"]
         PrescriptionDao["PrescriptionDao"]
+        PpcDao["PpcDao (NHS PPC & Exemptions)"]
         UserPreferences["UserPreferences (DataStore)"]
     end
 
