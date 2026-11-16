@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nuvilo.R
+import com.example.nuvilo.ui.theme.LocalMotionEnabled
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -71,34 +72,49 @@ fun SplashScreen(
     onSplashComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val logoScale = remember { Animatable(0.72f) }
-    val logoAlpha = remember { Animatable(0f) }
-    val contentAlpha = remember { Animatable(0f) }
-    var progress by remember { mutableFloatStateOf(0f) }
+    val animatorsEnabled = LocalMotionEnabled.current
+    val logoScale = remember { Animatable(if (animatorsEnabled) 0.72f else 1f) }
+    val logoAlpha = remember { Animatable(if (animatorsEnabled) 0f else 1f) }
+    val contentAlpha = remember { Animatable(if (animatorsEnabled) 0f else 1f) }
+    var progress by remember { mutableFloatStateOf(if (animatorsEnabled) 0f else 1f) }
 
-    // Breathing glow animation around the logo
-    val infiniteTransition = rememberInfiniteTransition(label = "splashAuraTransition")
-    val auraScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.16f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "auraScale"
-    )
-    val auraAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.28f,
-        targetValue = 0.58f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "auraAlpha"
-    )
+    // Breathing glow animation around the logo (disabled when system reduced-motion is active)
+    val auraScale: Float
+    val auraAlpha: Float
+    if (animatorsEnabled) {
+        val infiniteTransition = rememberInfiniteTransition(label = "splashAuraTransition")
+        val animatedScale by infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.16f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "auraScale"
+        )
+        val animatedAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.28f,
+            targetValue = 0.58f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "auraAlpha"
+        )
+        auraScale = animatedScale
+        auraAlpha = animatedAlpha
+    } else {
+        auraScale = 1f
+        auraAlpha = 0.35f
+    }
 
     // Coordinated entrance and progress lifecycle
-    LaunchedEffect(Unit) {
+    LaunchedEffect(animatorsEnabled) {
+        if (!animatorsEnabled) {
+            delay(350)
+            onSplashComplete()
+            return@LaunchedEffect
+        }
         // Step 1: Logo spring entrance & alpha fade
         launch {
             logoAlpha.animateTo(1f, animationSpec = tween(380, easing = FastOutSlowInEasing))

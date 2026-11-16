@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -48,6 +49,7 @@ import com.example.nuvilo.security.AppLockManager
 import com.example.nuvilo.security.BiometricAuthManager
 import com.example.nuvilo.security.BiometricAuthResult
 import com.example.nuvilo.security.BiometricStatus
+import com.example.nuvilo.system.alarm.PpcAlarmReceiver
 import com.example.nuvilo.system.notification.NotificationHelper
 import com.example.nuvilo.ui.haptics.AndroidNuviloHapticController
 import com.example.nuvilo.ui.haptics.HapticSettings
@@ -58,13 +60,16 @@ import com.example.nuvilo.ui.screens.LockScreen
 import com.example.nuvilo.ui.screens.MedicationDetailScreen
 import com.example.nuvilo.ui.screens.MedicationDoseHistoryScreen
 import com.example.nuvilo.ui.screens.MedicationListScreen
+import com.example.nuvilo.ui.screens.PpcManagementScreen
 import com.example.nuvilo.ui.screens.SettingsScreen
 import com.example.nuvilo.ui.screens.SplashScreen
+import com.example.nuvilo.ui.theme.LocalMotionEnabled
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.NoveloTheme
 import com.example.nuvilo.ui.viewmodel.AdherenceCalendarViewModel
 import com.example.nuvilo.ui.viewmodel.DashboardViewModel
 import com.example.nuvilo.ui.viewmodel.MedicationViewModel
+import com.example.nuvilo.ui.viewmodel.PpcViewModel
 import com.example.nuvilo.ui.viewmodel.SettingsViewModel
 import com.example.nuvilo.ui.viewmodel.ViewModelFactory
 import kotlinx.coroutines.flow.first
@@ -90,11 +95,13 @@ class MainActivity : FragmentActivity() {
     private val medicationViewModel: MedicationViewModel by viewModels { viewModelFactory }
     private val adherenceCalendarViewModel: AdherenceCalendarViewModel by viewModels { viewModelFactory }
     private val settingsViewModel: SettingsViewModel by viewModels { viewModelFactory }
+    private val ppcViewModel: PpcViewModel by viewModels { viewModelFactory }
 
     private val appLockManager: AppLockManager by lazy { appContainer.appLockManager }
     private val biometricAuthManager: BiometricAuthManager by lazy { appContainer.biometricAuthManager }
 
     private val intentMedicationIdState = mutableStateOf<String?>(null)
+    private val intentOpenPpcState = mutableStateOf(false)
     private val authErrorMessageState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,7 +123,7 @@ class MainActivity : FragmentActivity() {
             val isLocked by appLockManager.isLocked.collectAsStateWithLifecycle()
 
             var showSplashScreen by rememberSaveable {
-                mutableStateOf(intentMedicationIdState.value == null)
+                mutableStateOf(intentMedicationIdState.value == null && !intentOpenPpcState.value)
             }
 
             val darkTheme = when (prefs.themeMode) {
@@ -161,9 +168,10 @@ class MainActivity : FragmentActivity() {
                 LocalNuviloHaptics provides hapticController
             ) {
                 NoveloTheme(darkTheme = darkTheme) {
+                    val motionEnabled = LocalMotionEnabled.current
                     AnimatedContent(
                         targetState = showSplashScreen,
-                        transitionSpec = { NoveloMotion.screenTransition() },
+                        transitionSpec = { NoveloMotion.screenTransition(motionEnabled) },
                         label = "splashAppTransition"
                     ) { isSplash ->
                         if (isSplash) {
@@ -183,9 +191,12 @@ class MainActivity : FragmentActivity() {
                                 medicationViewModel = medicationViewModel,
                                 adherenceCalendarViewModel = adherenceCalendarViewModel,
                                 settingsViewModel = settingsViewModel,
+                                ppcViewModel = ppcViewModel,
                                 viewModelFactory = viewModelFactory,
                                 intentMedicationId = intentMedicationIdState.value,
-                                onConsumeIntentMedicationId = { intentMedicationIdState.value = null }
+                                onConsumeIntentMedicationId = { intentMedicationIdState.value = null },
+                                intentOpenPpc = intentOpenPpcState.value,
+                                onConsumeIntentOpenPpc = { intentOpenPpcState.value = false }
                             )
                         }
                     }
@@ -251,6 +262,9 @@ class MainActivity : FragmentActivity() {
         if (!medId.isNullOrBlank()) {
             intentMedicationIdState.value = medId
         }
+        if (intent?.getBooleanExtra(PpcAlarmReceiver.EXTRA_OPEN_PPC_MANAGEMENT, false) == true) {
+            intentOpenPpcState.value = true
+        }
     }
 }
 
@@ -260,25 +274,45 @@ private fun NoveloMainContent(
     medicationViewModel: MedicationViewModel,
     adherenceCalendarViewModel: AdherenceCalendarViewModel,
     settingsViewModel: SettingsViewModel,
+    ppcViewModel: PpcViewModel,
     viewModelFactory: ViewModelFactory,
     intentMedicationId: String?,
-    onConsumeIntentMedicationId: () -> Unit
+    onConsumeIntentMedicationId: () -> Unit,
+    intentOpenPpc: Boolean,
+    onConsumeIntentOpenPpc: () -> Unit
 ) {
     var currentScreenName by rememberSaveable { mutableStateOf(Screen.TODAY.name) }
     var selectedMedicationId by rememberSaveable { mutableStateOf<String?>(null) }
     var showMedicationDoseHistory by rememberSaveable { mutableStateOf(false) }
+    var showPpcManagement by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(intentMedicationId) {
         if (!intentMedicationId.isNullOrBlank()) {
             selectedMedicationId = intentMedicationId
             showMedicationDoseHistory = false
+            showPpcManagement = false
             onConsumeIntentMedicationId()
+        }
+    }
+
+    LaunchedEffect(intentOpenPpc) {
+        if (intentOpenPpc) {
+            showPpcManagement = true
+            selectedMedicationId = null
+            showMedicationDoseHistory = false
+            onConsumeIntentOpenPpc()
         }
     }
 
     val currentScreen = runCatching { Screen.valueOf(currentScreenName) }.getOrDefault(Screen.TODAY)
 
-    if (selectedMedicationId != null) {
+    if (showPpcManagement) {
+        BackHandler { showPpcManagement = false }
+        PpcManagementScreen(
+            viewModel = ppcViewModel,
+            onNavigateBack = { showPpcManagement = false }
+        )
+    } else if (selectedMedicationId != null) {
         val medId = selectedMedicationId!!
         val detailViewModel = remember(medId) {
             viewModelFactory.createMedicationDetailViewModel(medId)
@@ -318,7 +352,7 @@ private fun NoveloMainContent(
                                 icon = {
                                     Icon(
                                         imageVector = if (isSelected) screen.selectedIcon else screen.unselectedIcon,
-                                        contentDescription = screen.title
+                                        contentDescription = null
                                     )
                                 },
                                 label = {
@@ -343,13 +377,19 @@ private fun NoveloMainContent(
                 }
             }
         ) { innerPadding ->
+            val motionEnabled = LocalMotionEnabled.current
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
-                    NoveloMotion.directionalHorizontalTransition(targetState.ordinal > initialState.ordinal)
+                    NoveloMotion.directionalHorizontalTransition(
+                        forward = targetState.ordinal > initialState.ordinal,
+                        motionEnabled = motionEnabled
+                    )
                 },
                 label = "mainTabTransition",
-                modifier = Modifier.padding(innerPadding)
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding)
             ) { targetScreen ->
                 when (targetScreen) {
                     Screen.TODAY -> DashboardScreen(
@@ -360,6 +400,9 @@ private fun NoveloMainContent(
                         },
                         onNavigateToMedications = {
                             currentScreenName = Screen.MEDICATIONS.name
+                        },
+                        onOpenPpcManagement = {
+                            showPpcManagement = true
                         }
                     )
                     Screen.MEDICATIONS -> MedicationListScreen(

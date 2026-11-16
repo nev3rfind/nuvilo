@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,8 +56,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -143,6 +147,7 @@ fun MedicationListScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
@@ -170,6 +175,7 @@ fun MedicationListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -303,7 +309,20 @@ fun MedicationListScreen(
                                 pendingPrescription = item.pendingPrescription,
                                 supplyForecast = item.supplyForecast,
                                 onArchiveToggle = {
-                                    viewModel.setArchived(item.medication.id, !item.medication.isArchived)
+                                    val newArchived = !item.medication.isArchived
+                                    viewModel.setArchived(item.medication.id, newArchived)
+                                    scope.launch {
+                                        snackbarHostState.currentSnackbarData?.dismiss()
+                                        val actionLabel = if (newArchived) "Archived" else "Restored"
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "$actionLabel ${item.medication.name}",
+                                            actionLabel = "Undo",
+                                            duration = SnackbarDuration.Short
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            viewModel.setArchived(item.medication.id, !newArchived)
+                                        }
+                                    }
                                 },
                                 onCardClick = {
                                     onSelectMedication(item.medication.id)
@@ -419,7 +438,7 @@ private fun SegmentedMedicationTabs(
                 Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 44.dp)
+                        .heightIn(min = 48.dp)
                         .clip(NoveloPillShape)
                         .clickable(
                             onClick = { onSelectTab(index) },
@@ -435,7 +454,7 @@ private fun SegmentedMedicationTabs(
                     ) {
                         Text(
                             text = label,
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelLarge.tabular,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) {
                                 MaterialTheme.colorScheme.primary
@@ -700,9 +719,9 @@ fun AddMedicationDialog(
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 36.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(NoveloPillShape)
-                                .clickable {
+                                .clickable(role = Role.Tab) {
                                     nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                                     currentStep = idx
                                 },

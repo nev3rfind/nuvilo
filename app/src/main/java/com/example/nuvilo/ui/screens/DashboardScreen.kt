@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,8 +55,10 @@ import com.example.nuvilo.ui.components.AlertBanner
 import com.example.nuvilo.ui.components.CompletedDayCard
 import com.example.nuvilo.ui.components.EmptyStateCard
 import com.example.nuvilo.ui.components.HeroDoseCard
+import com.example.nuvilo.ui.components.PpcStatusBannerCard
 import com.example.nuvilo.ui.components.SectionHeader
 import com.example.nuvilo.ui.components.TimelineDoseItem
+import com.example.nuvilo.ui.theme.LocalMotionEnabled
 import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
@@ -68,7 +72,8 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     onSelectMedication: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onNavigateToMedications: () -> Unit = {}
+    onNavigateToMedications: () -> Unit = {},
+    onOpenPpcManagement: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -77,12 +82,14 @@ fun DashboardScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -106,6 +113,12 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(bottom = 28.dp)
                     ) {
+                        item(key = "ppc_status_banner", contentType = "ppc_banner") {
+                            PpcStatusBannerCard(
+                                evaluation = uiState.ppcEvaluation,
+                                onClick = onOpenPpcManagement
+                            )
+                        }
                         if (uiState.lowStockCount > 0 || uiState.expiringPrescriptionsCount > 0 || uiState.discardWarningCount > 0) {
                             item(key = "alerts_banner", contentType = "alert_banner") {
                                 AlertBanner(
@@ -132,6 +145,14 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(bottom = 28.dp)
                     ) {
+                        // 0. Compact NHS PPC / Exemption Status Card
+                        item(key = "ppc_status_banner", contentType = "ppc_banner") {
+                            PpcStatusBannerCard(
+                                evaluation = uiState.ppcEvaluation,
+                                onClick = onOpenPpcManagement
+                            )
+                        }
+
                         // 1. Attention Alerts Banner
                         if (uiState.lowStockCount > 0 || uiState.expiringPrescriptionsCount > 0 || uiState.discardWarningCount > 0) {
                             item(key = "alerts_banner", contentType = "alert_banner") {
@@ -146,9 +167,10 @@ fun DashboardScreen(
 
                         // 2. Hero Focal Card (Animated transition between Next Pending Dose and Completed Day)
                         item(key = "hero_section", contentType = "hero_card") {
+                            val motionEnabled = LocalMotionEnabled.current
                             AnimatedContent(
                                 targetState = uiState.heroItem,
-                                transitionSpec = { NoveloMotion.heroTransition() },
+                                transitionSpec = { NoveloMotion.heroTransition(motionEnabled) },
                                 label = "dashboardHeroTransition"
                             ) { hero ->
                                 if (hero != null) {
@@ -264,7 +286,7 @@ private fun DashboardHeaderSection(uiState: DashboardUiState) {
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_novelo_logo),
-                    contentDescription = "Nuvilo",
+                    contentDescription = null,
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(7.dp))
@@ -331,7 +353,9 @@ private fun DashboardHeaderSection(uiState: DashboardUiState) {
         if (uiState.totalDoses > 0) {
             val isComplete = uiState.takenDoses == uiState.totalDoses
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {},
                 shape = NoveloCardShape,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),

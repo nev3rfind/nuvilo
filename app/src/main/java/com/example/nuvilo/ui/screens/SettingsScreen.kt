@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -110,6 +111,7 @@ import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
 import com.example.nuvilo.ui.haptics.NuviloHapticEvent
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.noveloColors
+import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.ExportState
 import com.example.nuvilo.ui.viewmodel.RestoreState
 import com.example.nuvilo.ui.viewmodel.SettingsViewModel
@@ -1141,10 +1143,16 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { showCreatePassphraseDialog = false },
+            modifier = Modifier.imePadding(),
             icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Encrypt Backup File", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "Your backup will be encrypted using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation. Keep this passphrase safe — Nuvilo operates offline and cannot recover forgotten passphrases.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1260,10 +1268,16 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { viewModel.resetRestoreState() },
+            modifier = Modifier.imePadding(),
             icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Unlock Encrypted Backup", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "This backup is protected with AES-256-GCM encryption. Enter the passphrase used when it was exported:",
                         style = MaterialTheme.typography.bodyMedium
@@ -1341,10 +1355,16 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { viewModel.resetRestoreState() },
+            modifier = Modifier.imePadding(),
             icon = { Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Validated Backup Preview", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "All referential integrity and ledger checks passed. Review the contents before restoring:",
                         style = MaterialTheme.typography.bodySmall,
@@ -1601,7 +1621,7 @@ private fun PreviewRow(label: String, value: String) {
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodySmall.tabular,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
