@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -55,6 +58,7 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -88,8 +92,10 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -100,9 +106,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.nuvilo.domain.adherence.AdherenceSummary
 import com.example.nuvilo.domain.model.AdministrationProfile
@@ -133,23 +143,33 @@ import com.example.nuvilo.domain.model.StockLot
 import com.example.nuvilo.domain.model.StockUnit
 import com.example.nuvilo.domain.model.TrackingPrecision
 import com.example.nuvilo.domain.stock.SupplyForecast
+import com.example.nuvilo.ui.components.DialogSystemBarsEffect
+import com.example.nuvilo.ui.components.DosageFormSelectionGrid
 import com.example.nuvilo.ui.components.DoseStatusBadge
+import com.example.nuvilo.ui.components.FormChangeConfirmationDialog
 import com.example.nuvilo.ui.components.PackageStatusChip
+import com.example.nuvilo.ui.components.PackageTypeSelectionGrid
 import com.example.nuvilo.ui.components.ScheduleConfigurationContent
 import com.example.nuvilo.ui.components.StockBadge
 import com.example.nuvilo.ui.components.TrackingPrecisionBadge
+import com.example.nuvilo.ui.components.WizardSectionCard
+import com.example.nuvilo.ui.components.availableRoutesForForm
+import com.example.nuvilo.ui.components.defaultContentsPerPackageStr
+import com.example.nuvilo.ui.components.defaultPackageTypeForForm
 import com.example.nuvilo.ui.components.defaultStockUnitForForm
 import com.example.nuvilo.ui.components.formatMinuteOfDay
 import com.example.nuvilo.ui.components.parseAccentColor
 import com.example.nuvilo.ui.haptics.LocalNuviloHaptics
 import com.example.nuvilo.ui.haptics.NuviloHapticEvent
 import com.example.nuvilo.ui.theme.MedicationAccentSwatches
+import com.example.nuvilo.ui.theme.NoveloBannerShape
 import com.example.nuvilo.ui.theme.NoveloCardShape
 import com.example.nuvilo.ui.theme.NoveloMotion
 import com.example.nuvilo.ui.theme.NoveloPillShape
 import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.theme.tabular
 import com.example.nuvilo.ui.viewmodel.MedicationDetailViewModel
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -506,14 +526,16 @@ fun MedicationDetailScreen(
             existingSchedule = uiState.schedules.firstOrNull(),
             stockUnit = med.effectiveConsumptionUnit,
             onDismiss = { showEditScheduleDialog = false },
-            onConfirm = { times, daysOfWeek, doseQty, instructions ->
+            onConfirmWithDates = { times, daysOfWeek, doseQty, instructions, startDay, endDay ->
                 nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
                 viewModel.saveSchedule(
                     existingSchedule = uiState.schedules.firstOrNull(),
                     targetTimesMinuteOfDay = times,
                     daysOfWeek = daysOfWeek,
                     doseQuantityStr = doseQty,
-                    instructions = instructions
+                    instructions = instructions,
+                    startDateEpochDay = startDay,
+                    endDateEpochDay = endDay
                 )
                 showEditScheduleDialog = false
             }
@@ -2722,6 +2744,11 @@ fun EditMedicationDialog(
         notificationsEnabled: Boolean
     ) -> Unit)? = null
 ) {
+    val semantic = MaterialTheme.noveloColors
+    val nuviloHaptics = LocalNuviloHaptics.current
+    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+
     val existingPackaging = medication.packagingConfig
     val existingAdmin = medication.administrationProfile
 
@@ -2741,15 +2768,7 @@ fun EditMedicationDialog(
 
     var selectedPackageTypeName by rememberSaveable {
         mutableStateOf(
-            existingPackaging?.packageType?.name ?: when (medication.form) {
-                MedicationForm.DROPS -> PackageType.BOTTLE.name
-                MedicationForm.TOPICAL_CREAM -> PackageType.TUBE.name
-                MedicationForm.INHALER_PUFFS -> PackageType.INHALER.name
-                MedicationForm.LIQUID_ML -> PackageType.BOTTLE.name
-                MedicationForm.PATCH -> PackageType.PATCH_BOX.name
-                MedicationForm.INJECTION -> PackageType.VIAL.name
-                else -> PackageType.BLISTER_PACK.name
-            }
+            (existingPackaging?.packageType ?: defaultPackageTypeForForm(medication.form)).name
         )
     }
     var contentsPerPackageStr by rememberSaveable {
@@ -2772,6 +2791,10 @@ fun EditMedicationDialog(
     var containersPerAdminStr by rememberSaveable {
         mutableStateOf(existingAdmin.containersPerAdministration?.toDisplayString() ?: "1")
     }
+    var hasCustomizedPackage by rememberSaveable { mutableStateOf(false) }
+    var pendingFormSwitchName by rememberSaveable { mutableStateOf<String?>(null) }
+    var attemptedSave by rememberSaveable { mutableStateOf(false) }
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
     val selectedForm = runCatching { MedicationForm.valueOf(selectedFormName) }.getOrDefault(medication.form)
     val selectedRoute = runCatching { AdministrationRoute.valueOf(selectedRouteName) }
@@ -2785,9 +2808,27 @@ fun EditMedicationDialog(
     val selectedAdminSite = runCatching { AdministrationSite.valueOf(adminSiteName) }
         .getOrDefault(AdministrationSite.NONE)
 
+    val applyFormEditDefaults = { form: MedicationForm ->
+        selectedFormName = form.name
+        selectedRouteName = AdministrationRoute.defaultForForm(form).name
+        val nextPkg = defaultPackageTypeForForm(form)
+        val nextUnit = defaultStockUnitForForm(form)
+        selectedPackageTypeName = nextPkg.name
+        selectedUnitName = nextUnit.name
+        contentsPerPackageStr = defaultContentsPerPackageStr(form, nextPkg, nextUnit)
+        discardAfterOpeningDaysStr = if (form == MedicationForm.DROPS && nextPkg == PackageType.BOTTLE) "28" else ""
+        adminSiteName = if (form == MedicationForm.DROPS) {
+            if (selectedAdminSite == AdministrationSite.NONE) AdministrationSite.BOTH_EYES.name else adminSiteName
+        } else {
+            AdministrationSite.NONE.name
+        }
+        hasCustomizedPackage = false
+    }
+
     val parsedContents = contentsPerPackageStr.trim().takeIf { it.isNotEmpty() }?.let {
         runCatching { ScaledQuantity.fromDisplayString(it) }.getOrNull()?.takeIf { q -> q.isPositive() }
     }
+    val hasValidContents = contentsPerPackageStr.isBlank() || parsedContents != null
     val effectiveConsumptionUnit = when {
         selectedForm == MedicationForm.DROPS &&
             (selectedPackageType == PackageType.BOX_SINGLE_DOSE || selectedPackageType == PackageType.SINGLE_DOSE_UNIT) ->
@@ -2817,437 +2858,644 @@ fun EditMedicationDialog(
         else -> if (parsedContents != null) TrackingPrecision.APPROXIMATE else TrackingPrecision.EXACT
     }
 
-    val packageChoices = remember(selectedForm) {
-        when (selectedForm) {
-            MedicationForm.DROPS -> listOf(
-                PackageType.BOTTLE,
-                PackageType.BOX_SINGLE_DOSE,
-                PackageType.SINGLE_DOSE_UNIT
+    val parsedThreshold = runCatching { ScaledQuantity.fromDisplayString(lowStockThresholdStr) }.getOrNull()
+    val hasValidName = name.isNotBlank()
+    val hasValidStrength = strength.isNotBlank()
+    val hasValidThreshold = parsedThreshold != null && !parsedThreshold.isNegative()
+    val isValid = hasValidName && hasValidStrength && hasValidContents && hasValidThreshold && !isSubmitting
+
+    val editMissingHint = when {
+        !hasValidName -> "Medication name is required."
+        !hasValidStrength -> "Strength / concentration is required."
+        !hasValidContents -> "Package capacity must be a positive number or left blank."
+        !hasValidThreshold -> "Low-stock alert threshold must be zero or positive."
+        else -> null
+    }
+
+    val futureImpactLines = buildList {
+        add("Historical dose events and append-only stock ledger entries remain completely intact.")
+        if (selectedForm != medication.form || selectedPackageType != existingPackaging?.packageType ||
+            parsedContents != existingPackaging?.contentsPerPackage
+        ) {
+            add("Updated packaging configuration applies to future supply runway forecasts and new restocks.")
+        }
+        if (selectedMode != medication.recordingMode) {
+            add("Recording mode changes to ${selectedMode.displayName} for upcoming doses only.")
+        }
+        if (notificationsEnabled != medication.notificationsEnabled) {
+            add(
+                if (notificationsEnabled) "Dose reminders will be re-scheduled after saving."
+                else "Upcoming reminders for this medication will be muted after saving."
             )
-            MedicationForm.TOPICAL_CREAM -> listOf(PackageType.TUBE, PackageType.JAR, PackageType.CUSTOM)
-            MedicationForm.INHALER_PUFFS -> listOf(PackageType.INHALER, PackageType.CUSTOM)
-            MedicationForm.LIQUID_ML -> listOf(PackageType.BOTTLE, PackageType.VIAL, PackageType.CUSTOM)
-            MedicationForm.PATCH -> listOf(PackageType.PATCH_BOX, PackageType.CUSTOM)
-            MedicationForm.INJECTION -> listOf(PackageType.VIAL, PackageType.CUSTOM)
-            else -> listOf(PackageType.BLISTER_PACK, PackageType.BOTTLE, PackageType.CUSTOM)
         }
     }
 
-    val isValid = name.isNotBlank() && strength.isNotBlank()
-
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.imePadding(),
-        title = { Text("Edit Medication Details", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        DialogSystemBarsEffect()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .widthIn(max = 640.dp)
+                    .fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
             ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Medication Name *") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = strength,
-                    onValueChange = { strength = it },
-                    label = { Text("Strength / Concentration *") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text("Dosage Form", style = MaterialTheme.typography.labelLarge)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    MedicationForm.entries.forEach { form ->
-                        FilterChip(
-                            selected = selectedForm == form,
-                            onClick = {
-                                selectedFormName = form.name
-                                selectedUnitName = defaultStockUnitForForm(form).name
-                                selectedPackageTypeName = when (form) {
-                                    MedicationForm.DROPS -> PackageType.BOTTLE.name
-                                    MedicationForm.TOPICAL_CREAM -> PackageType.TUBE.name
-                                    MedicationForm.INHALER_PUFFS -> PackageType.INHALER.name
-                                    MedicationForm.LIQUID_ML -> PackageType.BOTTLE.name
-                                    MedicationForm.PATCH -> PackageType.PATCH_BOX.name
-                                    MedicationForm.INJECTION -> PackageType.VIAL.name
-                                    else -> PackageType.BLISTER_PACK.name
-                                }
-                                if (form != MedicationForm.DROPS) {
-                                    adminSiteName = AdministrationSite.NONE.name
-                                } else if (selectedAdminSite == AdministrationSite.NONE) {
-                                    adminSiteName = AdministrationSite.BOTH_EYES.name
-                                }
-                            },
-                            label = { Text(form.displayName) }
-                        )
-                    }
-                }
-
-                Text("Administration Route", style = MaterialTheme.typography.labelLarge)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    AdministrationRoute.entries.forEach { route ->
-                        FilterChip(
-                            selected = selectedRoute == route,
-                            onClick = { selectedRouteName = route.name },
-                            label = { Text(route.displayName) }
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(
-                            text = "Dose Reminders",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Text(
-                            text = if (notificationsEnabled) "Notifications active for scheduled doses" else "Reminders muted for this medication",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = notificationsEnabled,
-                        onCheckedChange = { notificationsEnabled = it }
-                    )
-                }
-
-                if (onConfirmWithPackaging != null || onConfirmFull != null) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                    Text("Packaging & Shelf Life", style = MaterialTheme.typography.labelLarge)
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        packageChoices.forEach { pkgType ->
-                            FilterChip(
-                                selected = selectedPackageType == pkgType,
-                                onClick = {
-                                    selectedPackageTypeName = pkgType.name
-                                    if (selectedForm == MedicationForm.DROPS) {
-                                        selectedUnitName = if (
-                                            pkgType == PackageType.BOX_SINGLE_DOSE ||
-                                            pkgType == PackageType.SINGLE_DOSE_UNIT
-                                        ) {
-                                            StockUnit.CONTAINERS.name
-                                        } else {
-                                            StockUnit.DROPS.name
-                                        }
-                                    }
-                                },
-                                label = { Text(pkgType.displayName) }
-                            )
-                        }
-                    }
-
-                    if (selectedForm == MedicationForm.TOPICAL_CREAM) {
-                        Text("Gel / Ointment Tracking Mode", style = MaterialTheme.typography.labelMedium)
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            GelTrackingMode.entries.forEach { gelMode ->
-                                FilterChip(
-                                    selected = selectedGelMode == gelMode,
-                                    onClick = { gelTrackingModeName = gelMode.name },
-                                    label = { Text(gelMode.displayName) }
-                                )
-                            }
-                        }
-                    }
-
-                    Row(
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Header Bar
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp
                     ) {
-                        OutlinedTextField(
-                            value = contentsPerPackageStr,
-                            onValueChange = { contentsPerPackageStr = it },
-                            label = { Text("Per ${selectedPackageType.displayName} (${effectiveConsumptionUnit.abbreviation})") },
-                            placeholder = { Text("Optional") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = discardAfterOpeningDaysStr,
-                            onValueChange = { discardAfterOpeningDaysStr = it },
-                            label = { Text("Discard Days") },
-                            placeholder = { Text("e.g. 28") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(0.75f)
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = netContentLabel,
-                        onValueChange = { netContentLabel = it },
-                        label = { Text("Printed Package Size Label (Optional)") },
-                        placeholder = { Text("e.g. 10 ml bottle or 5 g tube") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (selectedForm == MedicationForm.DROPS) {
-                        Text("Ophthalmic Eye Selection", style = MaterialTheme.typography.labelMedium)
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            listOf(
-                                AdministrationSite.LEFT_EYE,
-                                AdministrationSite.RIGHT_EYE,
-                                AdministrationSite.BOTH_EYES
-                            ).forEach { eyeSite ->
-                                FilterChip(
-                                    selected = selectedAdminSite == eyeSite,
-                                    onClick = { adminSiteName = eyeSite.name },
-                                    label = { Text(eyeSite.displayName) }
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Edit Medication Details",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.semantics { heading() }
+                                )
+                                Text(
+                                    text = "Update regimen settings safely without modifying past records.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
+                    }
 
-                        if (selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
-                            selectedPackageType == PackageType.SINGLE_DOSE_UNIT
+                    // Scrollable Form Content
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        WizardSectionCard(
+                            title = "Medication Identity",
+                            subtitle = "Update name, strength, visual tag, and notes."
                         ) {
                             OutlinedTextField(
-                                value = containersPerAdminStr,
-                                onValueChange = { containersPerAdminStr = it },
-                                label = { Text("Single-Dose Containers Used Per Administration") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Medication Name *") },
+                                isError = attemptedSave && !hasValidName,
+                                supportingText = if (attemptedSave && !hasValidName) {
+                                    { Text("Enter the medication name.") }
+                                } else null,
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
-                        } else {
+
+                            OutlinedTextField(
+                                value = strength,
+                                onValueChange = { strength = it },
+                                label = { Text("Strength / Concentration *") },
+                                isError = attemptedSave && !hasValidStrength,
+                                supportingText = if (attemptedSave && !hasValidStrength) {
+                                    { Text("Enter strength or concentration.") }
+                                } else null,
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Text("Visual Accent Tag", style = MaterialTheme.typography.labelMedium)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                MedicationAccentSwatches.forEach { (hex, label) ->
+                                    val swatchColor = parseAccentColor(hex, MaterialTheme.colorScheme.primary)
+                                    val isChosen = selectedColorHex.equals(hex, ignoreCase = true)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .clickable(
+                                                role = Role.RadioButton,
+                                                onClickLabel = "Select $label color tag"
+                                            ) {
+                                                nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                                selectedColorHex = hex
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(CircleShape)
+                                                .background(swatchColor)
+                                                .border(
+                                                    width = if (isChosen) 2.5.dp else 1.dp,
+                                                    color = if (isChosen) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                                    shape = CircleShape
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (isChosen) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "$label selected",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = notes,
+                                onValueChange = { notes = it },
+                                label = { Text("Clinical Notes (Optional)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        WizardSectionCard(
+                            title = "Dosage Form & Route",
+                            subtitle = "Adjust how the medication is formulated and administered."
+                        ) {
+                            DosageFormSelectionGrid(
+                                selectedForm = selectedForm,
+                                onSelectForm = { form ->
+                                    if (form != selectedForm) {
+                                        nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                        if (hasCustomizedPackage || existingPackaging?.contentsPerPackage != null) {
+                                            pendingFormSwitchName = form.name
+                                        } else {
+                                            applyFormEditDefaults(form)
+                                        }
+                                    }
+                                }
+                            )
+
+                            Text("Administration Route", style = MaterialTheme.typography.labelLarge)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                availableRoutesForForm(selectedForm).forEach { route ->
+                                    FilterChip(
+                                        selected = selectedRoute == route,
+                                        onClick = {
+                                            nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                            selectedRouteName = route.name
+                                        },
+                                        label = { Text(route.displayName) },
+                                        modifier = Modifier.heightIn(min = 48.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (onConfirmWithPackaging != null || onConfirmFull != null) {
+                            WizardSectionCard(
+                                title = "Packaging & Administration",
+                                subtitle = "Physical container format, capacity, and site configuration."
+                            ) {
+                                PackageTypeSelectionGrid(
+                                    form = selectedForm,
+                                    selectedPackageType = selectedPackageType,
+                                    onSelectPackageType = { pkgType ->
+                                        nuviloHaptics.perform(NuviloHapticEvent.SELECTION_TICK)
+                                        selectedPackageTypeName = pkgType.name
+                                        if (selectedForm == MedicationForm.DROPS) {
+                                            selectedUnitName = if (
+                                                pkgType == PackageType.BOX_SINGLE_DOSE ||
+                                                pkgType == PackageType.SINGLE_DOSE_UNIT
+                                            ) {
+                                                StockUnit.CONTAINERS.name
+                                            } else {
+                                                StockUnit.DROPS.name
+                                            }
+                                        }
+                                        hasCustomizedPackage = true
+                                    }
+                                )
+
+                                if (selectedForm == MedicationForm.TOPICAL_CREAM) {
+                                    Text("Gel / Ointment Tracking Mode", style = MaterialTheme.typography.labelMedium)
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        GelTrackingMode.entries.forEach { gelMode ->
+                                            FilterChip(
+                                                selected = selectedGelMode == gelMode,
+                                                onClick = {
+                                                    gelTrackingModeName = gelMode.name
+                                                    hasCustomizedPackage = true
+                                                },
+                                                label = { Text(gelMode.displayName) },
+                                                modifier = Modifier.heightIn(min = 48.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = contentsPerPackageStr,
+                                        onValueChange = {
+                                            contentsPerPackageStr = it
+                                            hasCustomizedPackage = true
+                                        },
+                                        label = { Text("Per ${selectedPackageType.displayName} (${effectiveConsumptionUnit.abbreviation})") },
+                                        placeholder = { Text("Optional") },
+                                        isError = !hasValidContents,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = discardAfterOpeningDaysStr,
+                                        onValueChange = {
+                                            discardAfterOpeningDaysStr = it.filter { ch -> ch.isDigit() }
+                                            hasCustomizedPackage = true
+                                        },
+                                        label = { Text("Discard Days") },
+                                        placeholder = { Text("e.g. 28") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(0.75f)
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = netContentLabel,
+                                    onValueChange = {
+                                        netContentLabel = it
+                                        hasCustomizedPackage = true
+                                    },
+                                    label = { Text("Printed Package Size Label (Optional)") },
+                                    placeholder = { Text("e.g. 10 ml bottle or 5 g tube") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                if (selectedForm == MedicationForm.DROPS) {
+                                    Text("Ophthalmic Eye Selection", style = MaterialTheme.typography.labelMedium)
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        listOf(
+                                            AdministrationSite.LEFT_EYE,
+                                            AdministrationSite.RIGHT_EYE,
+                                            AdministrationSite.BOTH_EYES
+                                        ).forEach { eyeSite ->
+                                            FilterChip(
+                                                selected = selectedAdminSite == eyeSite,
+                                                onClick = { adminSiteName = eyeSite.name },
+                                                label = { Text(eyeSite.displayName) },
+                                                leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(15.dp)) },
+                                                modifier = Modifier.heightIn(min = 48.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
+                                        selectedPackageType == PackageType.SINGLE_DOSE_UNIT
+                                    ) {
+                                        OutlinedTextField(
+                                            value = containersPerAdminStr,
+                                            onValueChange = { containersPerAdminStr = it },
+                                            label = { Text("Single-Dose Containers Used Per Administration") },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    } else {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (selectedAdminSite == AdministrationSite.LEFT_EYE ||
+                                                selectedAdminSite == AdministrationSite.BOTH_EYES
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = leftEyeQtyStr,
+                                                    onValueChange = { leftEyeQtyStr = it },
+                                                    label = { Text("Left Eye Drops") },
+                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                    singleLine = true,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                            if (selectedAdminSite == AdministrationSite.RIGHT_EYE ||
+                                                selectedAdminSite == AdministrationSite.BOTH_EYES
+                                            ) {
+                                                OutlinedTextField(
+                                                    value = rightEyeQtyStr,
+                                                    onValueChange = { rightEyeQtyStr = it },
+                                                    label = { Text("Right Eye Drops") },
+                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                    singleLine = true,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        WizardSectionCard(
+                            title = "Thresholds, Reminders & Recording",
+                            subtitle = "Configure low-stock alerts, dose notification status, and confirmation mode."
+                        ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (selectedAdminSite == AdministrationSite.LEFT_EYE ||
-                                    selectedAdminSite == AdministrationSite.BOTH_EYES
-                                ) {
+                                OutlinedTextField(
+                                    value = lowStockThresholdStr,
+                                    onValueChange = { lowStockThresholdStr = it },
+                                    label = { Text("Low Stock (${effectiveConsumptionUnit.abbreviation})") },
+                                    isError = !hasValidThreshold,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (onConfirmWithPackaging != null || onConfirmFull != null) {
                                     OutlinedTextField(
-                                        value = leftEyeQtyStr,
-                                        onValueChange = { leftEyeQtyStr = it },
-                                        label = { Text("Left Eye (drops)") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        value = lowStockDaysStr,
+                                        onValueChange = { lowStockDaysStr = it.filter { ch -> ch.isDigit() } },
+                                        label = { Text("Runway Days") },
+                                        placeholder = { Text("e.g. 7") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                                if (selectedAdminSite == AdministrationSite.RIGHT_EYE ||
-                                    selectedAdminSite == AdministrationSite.BOTH_EYES
-                                ) {
-                                    OutlinedTextField(
-                                        value = rightEyeQtyStr,
-                                        onValueChange = { rightEyeQtyStr = it },
-                                        label = { Text("Right Eye (drops)") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(0.75f)
                                     )
                                 }
                             }
-                        }
-                    }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = lowStockThresholdStr,
-                        onValueChange = { lowStockThresholdStr = it },
-                        label = { Text("Low-Stock (${effectiveConsumptionUnit.abbreviation})") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (onConfirmWithPackaging != null || onConfirmFull != null) {
-                        OutlinedTextField(
-                            value = lowStockDaysStr,
-                            onValueChange = { lowStockDaysStr = it },
-                            label = { Text("Runway Days") },
-                            placeholder = { Text("e.g. 7") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(0.75f)
-                        )
-                    }
-                }
-
-                Text("Visual Accent Tag", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MedicationAccentSwatches.forEach { (hex, label) ->
-                        val swatchColor = parseAccentColor(hex, MaterialTheme.colorScheme.primary)
-                        val isChosen = selectedColorHex.equals(hex, ignoreCase = true)
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(swatchColor)
-                                .border(
-                                    width = if (isChosen) 2.5.dp else 1.dp,
-                                    color = if (isChosen) MaterialTheme.colorScheme.onSurface else Color.Transparent,
-                                    shape = CircleShape
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(
+                                        text = "Dose Reminders",
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Text(
+                                        text = if (notificationsEnabled) "Notifications active for scheduled doses" else "Reminders muted for this medication",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = notificationsEnabled,
+                                    onCheckedChange = { notificationsEnabled = it }
                                 )
-                                .clickable { selectedColorHex = hex },
-                            contentAlignment = Alignment.Center
+                            }
+
+                            Text("Recording Mode", style = MaterialTheme.typography.labelLarge)
+                            RecordingModeSelectorCard(
+                                selectedMode = selectedMode,
+                                onSelectMode = { selectedModeName = it.name }
+                            )
+                        }
+
+                        // Future Impact Explanation Card
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = NoveloBannerShape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                         ) {
-                            if (isChosen) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = label,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "History Protection & Supply Impact",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                futureImpactLines.forEach { impactLine ->
+                                    Text(
+                                        text = "• $impactLine",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // Sticky Footer Bar
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                            .navigationBarsPadding(),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 6.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AnimatedVisibility(visible = editMissingHint != null && (attemptedSave || !hasValidContents || !hasValidThreshold)) {
+                                Text(
+                                    text = editMissingHint.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = semantic.warning,
+                                    fontWeight = FontWeight.Medium
                                 )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier.heightIn(min = 48.dp)
+                                ) {
+                                    Text("Cancel")
+                                }
+                                Button(
+                                    onClick = {
+                                        attemptedSave = true
+                                        if (!isValid) {
+                                            nuviloHaptics.perform(NuviloHapticEvent.WARNING_CONFIRMED)
+                                            scope.launch { scrollState.animateScrollTo(0) }
+                                        } else {
+                                            isSubmitting = true
+                                            val trimmedName = name.trim()
+                                            val trimmedStrength = strength.trim()
+                                            val trimmedNotes = notes.trim()
+                                            val isConfirmFull = onConfirmFull != null
+                                            if (isConfirmFull || onConfirmWithPackaging != null) {
+                                                val updatedPackaging = PackagingConfig(
+                                                    packageType = selectedPackageType,
+                                                    consumptionUnit = effectiveConsumptionUnit,
+                                                    contentsPerPackage = parsedContents,
+                                                    netContentLabel = netContentLabel.trim().takeIf { it.isNotEmpty() },
+                                                    discardAfterOpeningDays = discardAfterOpeningDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
+                                                    trackingPrecision = effectivePrecision,
+                                                    gelTrackingMode = if (selectedForm == MedicationForm.TOPICAL_CREAM) selectedGelMode else null
+                                                )
+                                                val updatedAdmin = if (selectedForm == MedicationForm.DROPS) {
+                                                    val leftParsed = runCatching { ScaledQuantity.fromDisplayString(leftEyeQtyStr) }.getOrNull()
+                                                        ?.takeIf { it.isPositive() }
+                                                    val rightParsed = runCatching { ScaledQuantity.fromDisplayString(rightEyeQtyStr) }.getOrNull()
+                                                        ?.takeIf { it.isPositive() }
+                                                    val containerParsed = runCatching { ScaledQuantity.fromDisplayString(containersPerAdminStr) }.getOrNull()
+                                                        ?.takeIf { it.isPositive() }
+                                                    AdministrationProfile(
+                                                        site = if (selectedAdminSite == AdministrationSite.NONE) {
+                                                            AdministrationSite.BOTH_EYES
+                                                        } else {
+                                                            selectedAdminSite
+                                                        },
+                                                        leftEyeQuantity = if (
+                                                            selectedPackageType == PackageType.BOTTLE &&
+                                                            (selectedAdminSite == AdministrationSite.LEFT_EYE || selectedAdminSite == AdministrationSite.BOTH_EYES)
+                                                        ) leftParsed else null,
+                                                        rightEyeQuantity = if (
+                                                            selectedPackageType == PackageType.BOTTLE &&
+                                                            (selectedAdminSite == AdministrationSite.RIGHT_EYE || selectedAdminSite == AdministrationSite.BOTH_EYES)
+                                                        ) rightParsed else null,
+                                                        containersPerAdministration = if (
+                                                            selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
+                                                            selectedPackageType == PackageType.SINGLE_DOSE_UNIT
+                                                        ) containerParsed else null
+                                                    )
+                                                } else {
+                                                    AdministrationProfile(site = AdministrationSite.NONE)
+                                                }
+                                                if (onConfirmFull != null) {
+                                                    onConfirmFull(
+                                                        trimmedName,
+                                                        trimmedStrength,
+                                                        selectedForm,
+                                                        effectiveConsumptionUnit,
+                                                        lowStockThresholdStr,
+                                                        selectedMode,
+                                                        trimmedNotes,
+                                                        selectedColorHex,
+                                                        updatedPackaging,
+                                                        updatedAdmin,
+                                                        lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
+                                                        selectedRoute,
+                                                        notificationsEnabled
+                                                    )
+                                                } else {
+                                                    onConfirmWithPackaging?.invoke(
+                                                        trimmedName,
+                                                        trimmedStrength,
+                                                        selectedForm,
+                                                        effectiveConsumptionUnit,
+                                                        lowStockThresholdStr,
+                                                        selectedMode,
+                                                        trimmedNotes,
+                                                        selectedColorHex,
+                                                        updatedPackaging,
+                                                        updatedAdmin,
+                                                        lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 }
+                                                    )
+                                                }
+                                            } else {
+                                                onConfirm(
+                                                    trimmedName,
+                                                    trimmedStrength,
+                                                    selectedForm,
+                                                    effectiveConsumptionUnit,
+                                                    lowStockThresholdStr,
+                                                    selectedMode,
+                                                    trimmedNotes,
+                                                    selectedColorHex
+                                                )
+                                            }
+                                        }
+                                    },
+                                    enabled = !isSubmitting,
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = semantic.interactionBlue,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text("Save Changes", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
-
-                Text("Recording Mode", style = MaterialTheme.typography.labelLarge)
-                RecordingModeSelectorCard(
-                    selectedMode = selectedMode,
-                    onSelectMode = { selectedModeName = it.name }
-                )
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Clinical Notes (Optional)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (isValid) {
-                        val trimmedName = name.trim()
-                        val trimmedStrength = strength.trim()
-                        val trimmedNotes = notes.trim()
-                        val isConfirmFull = onConfirmFull != null
-                        if (isConfirmFull || onConfirmWithPackaging != null) {
-                            val updatedPackaging = PackagingConfig(
-                                packageType = selectedPackageType,
-                                consumptionUnit = effectiveConsumptionUnit,
-                                contentsPerPackage = parsedContents,
-                                netContentLabel = netContentLabel.trim().takeIf { it.isNotEmpty() },
-                                discardAfterOpeningDays = discardAfterOpeningDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
-                                trackingPrecision = effectivePrecision,
-                                gelTrackingMode = if (selectedForm == MedicationForm.TOPICAL_CREAM) selectedGelMode else null
-                            )
-                            val updatedAdmin = if (selectedForm == MedicationForm.DROPS) {
-                                val leftParsed = runCatching { ScaledQuantity.fromDisplayString(leftEyeQtyStr) }.getOrNull()
-                                    ?.takeIf { it.isPositive() }
-                                val rightParsed = runCatching { ScaledQuantity.fromDisplayString(rightEyeQtyStr) }.getOrNull()
-                                    ?.takeIf { it.isPositive() }
-                                val containerParsed = runCatching { ScaledQuantity.fromDisplayString(containersPerAdminStr) }.getOrNull()
-                                    ?.takeIf { it.isPositive() }
-                                AdministrationProfile(
-                                    site = if (selectedAdminSite == AdministrationSite.NONE) {
-                                        AdministrationSite.BOTH_EYES
-                                    } else {
-                                        selectedAdminSite
-                                    },
-                                    leftEyeQuantity = if (
-                                        selectedPackageType == PackageType.BOTTLE &&
-                                        (selectedAdminSite == AdministrationSite.LEFT_EYE || selectedAdminSite == AdministrationSite.BOTH_EYES)
-                                    ) leftParsed else null,
-                                    rightEyeQuantity = if (
-                                        selectedPackageType == PackageType.BOTTLE &&
-                                        (selectedAdminSite == AdministrationSite.RIGHT_EYE || selectedAdminSite == AdministrationSite.BOTH_EYES)
-                                    ) rightParsed else null,
-                                    containersPerAdministration = if (
-                                        selectedPackageType == PackageType.BOX_SINGLE_DOSE ||
-                                        selectedPackageType == PackageType.SINGLE_DOSE_UNIT
-                                    ) containerParsed else null
-                                )
-                            } else {
-                                AdministrationProfile(site = AdministrationSite.NONE)
-                            }
-                            if (onConfirmFull != null) {
-                                onConfirmFull(
-                                    trimmedName,
-                                    trimmedStrength,
-                                    selectedForm,
-                                    effectiveConsumptionUnit,
-                                    lowStockThresholdStr,
-                                    selectedMode,
-                                    trimmedNotes,
-                                    selectedColorHex,
-                                    updatedPackaging,
-                                    updatedAdmin,
-                                    lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 },
-                                    selectedRoute,
-                                    notificationsEnabled
-                                )
-                            } else {
-                                onConfirmWithPackaging?.invoke(
-                                    trimmedName,
-                                    trimmedStrength,
-                                    selectedForm,
-                                    effectiveConsumptionUnit,
-                                    lowStockThresholdStr,
-                                    selectedMode,
-                                    trimmedNotes,
-                                    selectedColorHex,
-                                    updatedPackaging,
-                                    updatedAdmin,
-                                    lowStockDaysStr.trim().toIntOrNull()?.takeIf { it > 0 }
-                                )
-                            }
-                        } else {
-                            onConfirm(
-                                trimmedName,
-                                trimmedStrength,
-                                selectedForm,
-                                effectiveConsumptionUnit,
-                                lowStockThresholdStr,
-                                selectedMode,
-                                trimmedNotes,
-                                selectedColorHex
-                            )
-                        }
-                    }
-                },
-                enabled = isValid
-            ) {
-                Text("Save Changes")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
             }
         }
-    )
+    }
+
+    pendingFormSwitchName?.let { nextFormName ->
+        val nextForm = runCatching { MedicationForm.valueOf(nextFormName) }.getOrNull()
+        if (nextForm != null) {
+            FormChangeConfirmationDialog(
+                currentForm = selectedForm,
+                pendingForm = nextForm,
+                onDismissKeepCurrent = { pendingFormSwitchName = null },
+                onConfirmSwitch = {
+                    pendingFormSwitchName = null
+                    applyFormEditDefaults(nextForm)
+                }
+            )
+        }
+    }
 }
 
 @Composable
@@ -3260,8 +3508,17 @@ fun EditScheduleDialog(
         daysOfWeek: Set<Int>,
         doseQuantityStr: String,
         instructions: String
-    ) -> Unit
+    ) -> Unit = { _, _, _, _ -> },
+    onConfirmWithDates: ((
+        targetTimesMinuteOfDay: List<Int>,
+        daysOfWeek: Set<Int>,
+        doseQuantityStr: String,
+        instructions: String,
+        startDateEpochDay: Long,
+        endDateEpochDay: Long?
+    ) -> Unit)? = null
 ) {
+    val todayEpochDay = remember { LocalDate.now().toEpochDay() }
     var isSpecificWeekdays by rememberSaveable {
         mutableStateOf(existingSchedule?.scheduleType == ScheduleType.SPECIFIC_WEEKDAYS && existingSchedule.daysOfWeek.isNotEmpty())
     }
@@ -3275,6 +3532,12 @@ fun EditScheduleDialog(
             existingSchedule?.targetTimesMinuteOfDay?.takeIf { it.isNotEmpty() }?.sorted() ?: listOf(480)
         )
     }
+    var startDateEpochDay by rememberSaveable {
+        mutableLongStateOf(existingSchedule?.startDateEpochDay ?: todayEpochDay)
+    }
+    var endDateEpochDay by rememberSaveable {
+        mutableStateOf(existingSchedule?.endDateEpochDay)
+    }
     var doseQuantityStr by rememberSaveable {
         mutableStateOf(existingSchedule?.doseQuantityPerOccurrence?.toDisplayString() ?: "1")
     }
@@ -3284,9 +3547,11 @@ fun EditScheduleDialog(
 
     val effectiveDays = if (isSpecificWeekdays) selectedDaysList.toSet() else emptySet()
     val parsedDose = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }.getOrNull()
+    val dateRangeValid = endDateEpochDay == null || endDateEpochDay!! >= startDateEpochDay
     val isValid = selectedTimesList.isNotEmpty() &&
         (!isSpecificWeekdays || effectiveDays.isNotEmpty()) &&
-        parsedDose != null && parsedDose.isPositive()
+        parsedDose != null && parsedDose.isPositive() &&
+        dateRangeValid
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -3322,7 +3587,12 @@ fun EditScheduleDialog(
                     onDoseQuantityChange = { doseQuantityStr = it },
                     stockUnit = stockUnit,
                     instructions = instructions,
-                    onInstructionsChange = { instructions = it }
+                    onInstructionsChange = { instructions = it },
+                    startDateEpochDay = startDateEpochDay,
+                    onStartDateEpochDayChange = { startDateEpochDay = it },
+                    endDateEpochDay = endDateEpochDay,
+                    onEndDateEpochDayChange = { endDateEpochDay = it },
+                    showValidationErrors = !isValid
                 )
             }
         },
@@ -3330,12 +3600,23 @@ fun EditScheduleDialog(
             Button(
                 onClick = {
                     if (isValid) {
-                        onConfirm(
-                            selectedTimesList.sorted(),
-                            effectiveDays,
-                            doseQuantityStr,
-                            instructions
-                        )
+                        if (onConfirmWithDates != null) {
+                            onConfirmWithDates(
+                                selectedTimesList.sorted(),
+                                effectiveDays,
+                                doseQuantityStr,
+                                instructions,
+                                startDateEpochDay,
+                                endDateEpochDay
+                            )
+                        } else {
+                            onConfirm(
+                                selectedTimesList.sorted(),
+                                effectiveDays,
+                                doseQuantityStr,
+                                instructions
+                            )
+                        }
                     }
                 },
                 enabled = isValid
