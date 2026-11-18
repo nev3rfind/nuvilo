@@ -98,7 +98,7 @@ class Phase9UiAndAccessibilityTest {
         composeTestRule.onNodeWithText("Medication Name *").performScrollTo().performTextReplacement("Tear Guard PF")
         composeTestRule.onNodeWithText("Strength / Concentration *").performScrollTo().performTextReplacement("0.15%")
 
-        composeTestRule.onNodeWithText("Next Step").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
 
         // Step 2: Both eyes treated, single-dose container decoupling visible
         composeTestRule.onNodeWithText("Treated Eye(s)").performScrollTo().assertIsDisplayed()
@@ -106,11 +106,11 @@ class Phase9UiAndAccessibilityTest {
             .performScrollTo()
             .assertIsDisplayed()
 
-        composeTestRule.onNodeWithText("Next Step").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
 
         // Step 3: Save & assert rich Phase 9 payload
         composeTestRule.onNodeWithText("Step 3 of 3").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Save").performClick()
+        composeTestRule.onNodeWithText("Save medication").performClick()
 
         composeTestRule.waitForIdle()
         assertNotNull(capturedPackaging)

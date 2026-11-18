@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -336,15 +337,19 @@ class AccessibilityTest {
 
         // Step 1 visible initially
         composeTestRule.onNodeWithText("Step 1 of 3").assertIsDisplayed()
-        composeTestRule.onNodeWithText("1. Identity").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("01 Identity").assertIsDisplayed()
+
+        // Complete required Step 1 identity fields before advancing
+        composeTestRule.onNodeWithText("Medication Name *").performTextReplacement("Hydro Forte")
+        composeTestRule.onNodeWithText("Strength / Concentration *").performTextReplacement("0.2%")
 
         // Navigate to Step 2 (Schedule)
-        composeTestRule.onNodeWithText("Next Step").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
         composeTestRule.onNodeWithText("Step 2 of 3").assertIsDisplayed()
         composeTestRule.onNodeWithText("Specific Weekdays").assertIsDisplayed()
 
         // Navigate to Step 3 (Stock)
-        composeTestRule.onNodeWithText("Next Step").performClick()
+        composeTestRule.onNodeWithText("Continue").performClick()
         composeTestRule.onNodeWithText("Step 3 of 3").assertIsDisplayed()
         composeTestRule.onNodeWithText("Regimen Summary").assertIsDisplayed()
     }

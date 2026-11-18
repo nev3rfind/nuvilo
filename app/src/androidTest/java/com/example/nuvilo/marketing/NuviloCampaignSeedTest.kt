@@ -441,7 +441,7 @@ class NuviloCampaignSeedTest {
         composeTestRule.onNodeWithText("Medication Name *").performTextInput("Ramipril")
         composeTestRule.onNodeWithText("Strength / Concentration *").performTextInput("5mg")
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("3. Stock", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithContentDescription("03 Stock").performClick()
         composeTestRule.waitForIdle()
         hideKeyboardAndCapture("setup.png", closeKeyboard = false)
 
