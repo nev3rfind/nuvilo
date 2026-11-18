@@ -96,6 +96,9 @@ class Phase11MedicationCrudUiTest {
             }
         }
 
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            !viewModel.uiState.value.isLoading && viewModel.uiState.value.medication != null
+        }
         composeTestRule.waitForIdle()
 
         // 1. Open Edit Medication Dialog and close
@@ -111,7 +114,9 @@ class Phase11MedicationCrudUiTest {
 
         // 3. Choose Archive Instead -> preserves medication in archived state
         composeTestRule.onNodeWithText("Archive Instead (Preserve History)").performClick()
-        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(5_000) {
+            runBlocking { repository.getMedication("med_ui_crud")?.isArchived == true }
+        }
 
         val archivedMed = repository.getMedication("med_ui_crud")
         assertTrue(archivedMed?.isArchived == true)

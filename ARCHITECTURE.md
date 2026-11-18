@@ -399,3 +399,15 @@ Each physical container is tracked as an identifiable `StockLot` record progress
   - `revertOpenedPackage`: Reverts an accidentally opened container back to `UNOPENED` if and only if zero units have been consumed (`remainingQuantity == initialQuantity`).
   - `reopenDepletedPackage`: Restores an accidentally depleted container to `OPENED` via a compensating `MovementType.ADJUSTMENT_IN` ledger entry.
 
+---
+
+## 11. Full-Screen Medication Setup & Edit Architecture (Phase 12)
+
+- **Shared Wizard Component System (`ui/components/AddMedicationWizardComponents.kt`)**:
+  - `DialogSystemBarsEffect`: Synchronizes edge-to-edge system bar icon appearance (`isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars`) inside full-screen dialog windows in both Light and Dark themes.
+  - `AddMedicationTopBarAndProgressHeader`: Editorial top bar paired with compact interactive `01 Identity` / `02 Schedule` / `03 Stock` step badges and `maxVisitedStep` completion tracking.
+  - `DosageFormSelectionGrid`, `PackageTypeSelectionGrid`, & `FormChangeConfirmationDialog`: Contextually filters purchasing packaging per `MedicationForm` (`TABLET`, `CAPSULE`, `LIQUID_ML`, `DROPS`, `INHALER_PUFFS`, `TOPICAL_CREAM`, `INJECTION`, `PATCH`, `OTHER`) and guards custom capacities/discard limits from accidental resets.
+  - `PackageQuantityStepper`, `LiveInventoryPreviewCard`, & `WizardBottomActionBar`: Combines integer `ScaledQuantity` supply previews with a keyboard/navigation-aware sticky action bar (`imePadding()`) and inline missing-requirement guidance.
+- **Responsive Setup Containers (`MedicationListScreen.kt`, `MedicationDetailScreen.kt`)**:
+  - Both `AddMedicationDialog` and `EditMedicationDialog` render inside `Dialog(properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false))` centered to `widthIn(max = 640.dp)`, ensuring consistent behavior across 360dp compact phones and tablet displays.
+

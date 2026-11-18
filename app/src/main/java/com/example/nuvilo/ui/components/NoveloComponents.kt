@@ -49,6 +49,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -59,9 +62,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -111,11 +116,14 @@ import com.example.nuvilo.ui.theme.NoveloTheme
 import com.example.nuvilo.ui.theme.noveloColors
 import com.example.nuvilo.ui.theme.tabular
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val HERO_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val SCHEDULE_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)
 
 /**
  * Maps a [MedicationForm] to its natural default [StockUnit] to reduce manual form friction.
@@ -1855,7 +1863,7 @@ fun MedicationItemCard(
  * Reusable ScheduleBuilder composable used by both the Add Medication Wizard (Step 2)
  * and the Edit Schedule Dialog on MedicationDetailScreen.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleConfigurationContent(
     isSpecificWeekdays: Boolean,
@@ -1869,18 +1877,27 @@ fun ScheduleConfigurationContent(
     stockUnit: StockUnit,
     instructions: String,
     onInstructionsChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    startDateEpochDay: Long? = null,
+    onStartDateEpochDayChange: ((Long) -> Unit)? = null,
+    endDateEpochDay: Long? = null,
+    onEndDateEpochDayChange: ((Long?) -> Unit)? = null,
+    showValidationErrors: Boolean = false
 ) {
     var customHourStr by rememberSaveable { mutableStateOf("") }
     var customMinuteStr by rememberSaveable { mutableStateOf("00") }
     var customTimeError by rememberSaveable { mutableStateOf<String?>(null) }
+    var showStartDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showEndDatePicker by rememberSaveable { mutableStateOf(false) }
+
+    val parsedDose = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }.getOrNull()
+    val doseIsValid = parsedDose != null && parsedDose.isPositive()
+    val dateRangeInvalid = startDateEpochDay != null && endDateEpochDay != null && endDateEpochDay < startDateEpochDay
 
     val presetTimes = listOf(
         480 to "08:00 Morning",
-        720 to "12:00 Midday",
-        840 to "14:00 Afternoon",
+        720 to "12:00 Noon",
         1080 to "18:00 Evening",
-        1200 to "20:00 Night",
         1320 to "22:00 Bedtime"
     )
     val weekdays = listOf(
@@ -1909,20 +1926,26 @@ fun ScheduleConfigurationContent(
             FilterChip(
                 selected = !isSpecificWeekdays,
                 onClick = { onScheduleModeChange(false) },
-                label = { Text("Every Day") },
+                label = { Text("Every Day", maxLines = 1, softWrap = false) },
                 leadingIcon = if (!isSpecificWeekdays) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 } else null,
-                modifier = Modifier.weight(1f)
+                colors = noveloWizardFilterChipColors(),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
             )
             FilterChip(
                 selected = isSpecificWeekdays,
                 onClick = { onScheduleModeChange(true) },
-                label = { Text("Specific Weekdays") },
+                label = { Text("Specific Weekdays", maxLines = 1) },
                 leadingIcon = if (isSpecificWeekdays) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 } else null,
-                modifier = Modifier.weight(1f)
+                colors = noveloWizardFilterChipColors(),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
             )
         }
 
@@ -1931,7 +1954,7 @@ fun ScheduleConfigurationContent(
                 Text(
                     text = "Select Active Days *",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (showValidationErrors && selectedDaysOfWeek.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -1944,12 +1967,20 @@ fun ScheduleConfigurationContent(
                             selected = isSelected,
                             onClick = { onToggleDayOfWeek(isoDay) },
                             label = { Text(label) },
+                            modifier = Modifier.heightIn(min = 48.dp),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         )
                     }
+                }
+                if (showValidationErrors && selectedDaysOfWeek.isEmpty()) {
+                    Text(
+                        text = "Select at least one weekday.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
@@ -1958,10 +1989,10 @@ fun ScheduleConfigurationContent(
             Text(
                 text = "Scheduled Dose Times * (${selectedTimesMinuteOfDay.size} selected)",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (showValidationErrors && selectedTimesMinuteOfDay.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Tap preset times or add a custom 24-hour time below:",
+                text = "Tap quick presets or add a custom 24-hour time:",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1975,7 +2006,9 @@ fun ScheduleConfigurationContent(
                     FilterChip(
                         selected = selected,
                         onClick = { onToggleTimeMinuteOfDay(minuteOfDay) },
-                        label = { Text(label) },
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium.tabular) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        colors = noveloWizardFilterChipColors(),
                         leadingIcon = if (selected) {
                             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp)) }
                         } else {
@@ -1989,11 +2022,20 @@ fun ScheduleConfigurationContent(
                     FilterChip(
                         selected = true,
                         onClick = { onToggleTimeMinuteOfDay(customMin) },
-                        label = { Text("${formatMinuteOfDay(customMin)} Custom") },
+                        label = { Text("${formatMinuteOfDay(customMin)} Custom", style = MaterialTheme.typography.labelMedium.tabular) },
+                        modifier = Modifier.heightIn(min = 48.dp),
                         leadingIcon = { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Remove custom time", modifier = Modifier.size(14.dp)) }
                     )
                 }
+            }
+
+            if (showValidationErrors && selectedTimesMinuteOfDay.isEmpty()) {
+                Text(
+                    text = "Select at least one scheduled time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
 
             Row(
@@ -2011,7 +2053,7 @@ fun ScheduleConfigurationContent(
                             customTimeError = null
                         }
                     },
-                    label = { Text("Hour (0-23)") },
+                    label = { Text("Hour", maxLines = 1) },
                     placeholder = { Text("09") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2025,7 +2067,7 @@ fun ScheduleConfigurationContent(
                             customTimeError = null
                         }
                     },
-                    label = { Text("Min (0-59)") },
+                    label = { Text("Minute", maxLines = 1) },
                     placeholder = { Text("30") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2036,7 +2078,7 @@ fun ScheduleConfigurationContent(
                         val h = customHourStr.toIntOrNull()
                         val m = customMinuteStr.toIntOrNull() ?: 0
                         if (h == null || h !in 0..23 || m !in 0..59) {
-                            customTimeError = "Enter valid 24h time (00:00–23:59)"
+                            customTimeError = "Enter a valid 24h time (00:00–23:59)"
                         } else {
                             val totalMin = h * 60 + m
                             if (!selectedTimesMinuteOfDay.contains(totalMin)) {
@@ -2064,12 +2106,115 @@ fun ScheduleConfigurationContent(
             }
         }
 
+        if (startDateEpochDay != null && onStartDateEpochDayChange != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Schedule Duration",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showStartDatePicker = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Start: ${LocalDate.ofEpochDay(startDateEpochDay).format(SCHEDULE_DATE_FORMATTER)}",
+                            style = MaterialTheme.typography.labelMedium.tabular,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (onEndDateEpochDayChange != null) {
+                        val isOngoing = endDateEpochDay == null
+                        OutlinedButton(
+                            onClick = { showEndDatePicker = true },
+                            enabled = !isOngoing,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (endDateEpochDay != null) {
+                                    "End: ${LocalDate.ofEpochDay(endDateEpochDay).format(SCHEDULE_DATE_FORMATTER)}"
+                                } else {
+                                    "Ongoing"
+                                },
+                                style = MaterialTheme.typography.labelMedium.tabular,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                if (onEndDateEpochDayChange != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                if (endDateEpochDay == null) {
+                                    onEndDateEpochDayChange(startDateEpochDay + 30L)
+                                } else {
+                                    onEndDateEpochDayChange(null)
+                                }
+                            }
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Ongoing schedule",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (endDateEpochDay == null) "Continues indefinitely until stopped" else "Ends automatically after the selected end date",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = endDateEpochDay == null,
+                            onCheckedChange = { ongoing ->
+                                onEndDateEpochDayChange(if (ongoing) null else startDateEpochDay + 30L)
+                            }
+                        )
+                    }
+                }
+                if (dateRangeInvalid) {
+                    Text(
+                        text = "End date must be on or after the start date.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
         OutlinedTextField(
             value = doseQuantityStr,
             onValueChange = onDoseQuantityChange,
-            label = { Text("Dose Quantity per Scheduled Time (${stockUnit.displayName}) *") },
+            label = { Text("Dose Quantity per Time (${stockUnit.displayName}) *") },
             placeholder = { Text("e.g. 1 or 2") },
             singleLine = true,
+            isError = !doseIsValid && (doseQuantityStr.isNotBlank() || showValidationErrors),
+            supportingText = if (!doseIsValid) {
+                { Text("Enter a positive quantity greater than 0.") }
+            } else null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth()
         )
@@ -2082,6 +2227,55 @@ fun ScheduleConfigurationContent(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+
+    if (showStartDatePicker && startDateEpochDay != null && onStartDateEpochDayChange != null) {
+        val initialMs = LocalDate.ofEpochDay(startDateEpochDay).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMs)
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { millis ->
+                            val pickedDay = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate().toEpochDay()
+                            onStartDateEpochDayChange(pickedDay)
+                        }
+                        showStartDatePicker = false
+                    }
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+
+    if (showEndDatePicker && startDateEpochDay != null && onEndDateEpochDayChange != null) {
+        val baseDay = endDateEpochDay ?: (startDateEpochDay + 30L)
+        val initialMs = LocalDate.ofEpochDay(baseDay).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMs)
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { millis ->
+                            val pickedDay = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate().toEpochDay()
+                            onEndDateEpochDayChange(pickedDay)
+                        }
+                        showEndDatePicker = false
+                    }
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
     }
 }
 

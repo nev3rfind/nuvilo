@@ -521,7 +521,11 @@ class MedicationViewModel(
         initialPackagesCount: Int = 1,
         lowStockDaysThreshold: Int? = null,
         expiryDateEpochMs: Long? = null,
-        lotNumber: String? = null
+        lotNumber: String? = null,
+        administrationRoute: AdministrationRoute = AdministrationRoute.defaultForForm(form),
+        startDateEpochDay: Long = LocalDate.now().toEpochDay(),
+        endDateEpochDay: Long? = null,
+        notificationsEnabled: Boolean = true
     ) {
         viewModelScope.launch {
             val medId = UUID.randomUUID().toString()
@@ -552,7 +556,9 @@ class MedicationViewModel(
                 notes = notes.trim(),
                 colorTagHex = colorTagHex,
                 packagingConfig = packagingConfig,
-                administrationProfile = administrationProfile
+                administrationProfile = administrationProfile,
+                administrationRoute = administrationRoute,
+                notificationsEnabled = notificationsEnabled
             )
 
             val schedule = ScheduleDefinition(
@@ -562,7 +568,8 @@ class MedicationViewModel(
                 targetTimesMinuteOfDay = targetTimesMinuteOfDay.sorted(),
                 daysOfWeek = daysOfWeek,
                 doseQuantityPerOccurrence = doseQuantity,
-                startDateEpochDay = LocalDate.now().toEpochDay(),
+                startDateEpochDay = startDateEpochDay,
+                endDateEpochDay = endDateEpochDay?.takeIf { it >= startDateEpochDay },
                 instructions = instructions.trim()
             )
 
@@ -1462,7 +1469,9 @@ class MedicationDetailViewModel(
         targetTimesMinuteOfDay: List<Int>,
         daysOfWeek: Set<Int>,
         doseQuantityStr: String,
-        instructions: String
+        instructions: String,
+        startDateEpochDay: Long = existingSchedule?.startDateEpochDay ?: LocalDate.now(zoneId).toEpochDay(),
+        endDateEpochDay: Long? = existingSchedule?.endDateEpochDay
     ) {
         viewModelScope.launch {
             val doseQty = runCatching { ScaledQuantity.fromDisplayString(doseQuantityStr) }.getOrNull()
@@ -1474,6 +1483,10 @@ class MedicationDetailViewModel(
                 _errorMessage.value = "At least one dose time is required"
                 return@launch
             }
+            if (endDateEpochDay != null && endDateEpochDay < startDateEpochDay) {
+                _errorMessage.value = "End date must be on or after the start date"
+                return@launch
+            }
             val updatedSchedule = ScheduleDefinition(
                 id = existingSchedule?.id ?: UUID.randomUUID().toString(),
                 medicationId = medicationId,
@@ -1481,8 +1494,8 @@ class MedicationDetailViewModel(
                 targetTimesMinuteOfDay = targetTimesMinuteOfDay.distinct().sorted(),
                 daysOfWeek = daysOfWeek,
                 doseQuantityPerOccurrence = doseQty,
-                startDateEpochDay = existingSchedule?.startDateEpochDay ?: LocalDate.now(zoneId).toEpochDay(),
-                endDateEpochDay = existingSchedule?.endDateEpochDay,
+                startDateEpochDay = startDateEpochDay,
+                endDateEpochDay = endDateEpochDay,
                 instructions = instructions.trim()
             )
             val result = medicationRepository.updateSchedule(updatedSchedule)

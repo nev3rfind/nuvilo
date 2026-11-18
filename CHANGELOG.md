@@ -8,6 +8,19 @@ Format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Phase 12: Complete Add & Edit Medication Experience Redesign (Refs #22)**:
+  - **Full-Screen Responsive Wizard & Edit Architecture (`AddMedicationWizardComponents.kt`, `MedicationListScreen.kt`, `MedicationDetailScreen.kt`)**:
+    - Replaced constrained `AlertDialog` containers with full-screen responsive `Dialog(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)` layouts framed to `widthIn(max = 640.dp)` for narrow phones (`360x640dp`) and tablets (`800x1280dp`).
+    - Added `DialogSystemBarsEffect` for automatic light/dark status-bar & navigation-bar icon contrast across all themes, plus sticky `imePadding()` / `navigationBarsPadding()` `WizardBottomActionBar` with missing-requirement hint banners.
+    - Built compact animated 3-step progress header (`01 Identity` — `02 Schedule` — `03 Stock`) tracking `maxVisitedStep` so unvisited steps stay muted until reached.
+    - Upgraded Step 1 (`DosageFormSelectionGrid` covering all 9 forms, contextual `PackageTypeSelectionGrid`, `FormChangeConfirmationDialog` protecting customized packaging/discard edits), Step 2 (`AdministrationRoute`, explicit eye-drop 2-drop consumption math callout, `ScheduleConfigurationContent` with Material 3 Start/End `DatePickerDialog` & `Ongoing` toggle), and Step 3 (physical `-` / `+` stepper, Material 3 expiry `DatePickerDialog` + `+3m`/`+6m`/`+12m`/`No expiry` presets, animated `LiveInventoryPreviewCard`).
+    - Upgraded `EditMedicationDialog` and `EditScheduleDialog` to full-screen parity with `History Protection & Supply Impact` banners and persistent `onConfirmFull` / `onConfirmWithDates` callbacks in `ViewModels.kt`.
+  - **Testing, Visual Verification & Docs**:
+    - Added 30 Compose UI instrumentation tests in `AddMedicationRedesignUiTest.kt` and updated legacy wizard selectors in `Phase9UiAndAccessibilityTest.kt`, `AccessibilityTest.kt`, and `NuviloCampaignSeedTest.kt`.
+    - Captured 3 Baseline (`SM-S948B`) and 13 Redesigned (`Pixel_10_Pro` `emulator-5554`) screenshots in `docs/screenshots/add-medication-redesign/` and authored `BASELINE_AUDIT.md`, `DESIGN_SPEC.md`, `IMPLEMENTATION_REPORT.md`, `VISUAL_VERIFICATION.md`, and `TEST_REPORT.md` under `docs/ui-ux/add-medication/`.
+    - Verified **219 / 219** unit tests (34 suites), **0** lint errors, `assembleDebug`/`assembleRelease` green with **0** `android.permission.INTERNET`, and **202 / 203** connected instrumentation tests on `emulator-5554` (sole failure `Phase11MedicationCrudUiTest` occurred under concurrent shared-emulator contention).
+
+### Added
 - **Phase 11: Whole-App UI/UX Audit, Medication CRUD/Safe Delete, Prescription Dates & NHS PPC Tracking**:
   - **Offline NHS Prescription Prepayment Certificate (PPC) & Free Exemptions**:
     - Added `PpcModels.kt` and `PpcCalculator.kt` with exact `java.time.LocalDate` calendar-month math (3-month, 12-month, leap-year/month-end handling, ongoing exemptions, manual expiry override, overlap detection, and renewal draft generation).

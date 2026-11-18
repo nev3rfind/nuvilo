@@ -3,9 +3,9 @@
 > **Product**: Nuvilo — *"Medication, made manageable."*  
 > **Package / Application ID**: `com.nuvilomed.app` (internal namespace: `com.example.nuvilo`)  
 > **Repository**: [https://github.com/nev3rfind/nuvilo](https://github.com/nev3rfind/nuvilo)  
-> **Active Branch**: `feat/18-physical-package-inventory` (Phase 10 feature branch; stacked on `feat/16-intelligent-medication-inventory` / `main`)  
-> **Latest Verified Milestone**: Phase 11 — Whole-App UI/UX Audit, Medication CRUD/Safe Delete, Prescription Dates & NHS PPC Tracking  
-> **Date**: 2026-11-16  
+> **Active Branch**: `feat/22-add-medication-redesign` (Phase 12 feature branch; stacked on `feat/20-premium-ux-ppc`)  
+> **Latest Verified Milestone**: Phase 12 — Complete Add & Edit Medication Experience Redesign  
+> **Date**: 2026-11-18  
 
 ---
 
@@ -29,17 +29,19 @@ Nuvilo is a native Android, offline-first personal medication tracking and stock
 
 ---
 
-## 2. Test Suite & Quality Status (287 Automated Tests, 100% Passing)
+## 2. Test Suite & Quality Status
 
-Before any PR, branch, or release claim, all quality gates must pass. As of commit `5a1ef35`, the suite is 100% green:
+Latest observed verification results (2026-11-18 on `feat/22-add-medication-redesign`):
 
 | Quality Gate | Gradle Task | Target / Environment | Count / Result | Pass Rate | Status |
 | :--- | :--- | :--- | :---: | :---: | :---: |
-| **JVM Unit Tests** | `.\gradlew.bat testDebugUnitTest` | OpenJDK 21 (Android Studio JBR) | **136 / 136** | 100.0% | **PASSED** |
-| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest` | `SM-S948B` (`R3GL5059FTZ`, Android 17) | **173 / 173** | 100.0% | **PASSED** |
-| **Grand Total Automated Tests** | — | **JVM + Android Instrumentation** | **295 / 295** | **100.0%** | **PASSED** |
-| **Static Analysis / Lint** | `.\gradlew.bat lintDebug` | 119 active checks | **0 Errors** | 100.0% | **PASSED** |
-| **Release Build & Shrinking** | `.\gradlew.bat assembleRelease` | R8 Minification + ProGuard | APK Generated | Zero Issues | **PASSED** |
+| **JVM Unit Tests** | `.\gradlew.bat testDebugUnitTest --no-daemon` | OpenJDK / Android Studio JBR | **219 / 219** (34 suites) | 100.0% | **PASSED** |
+| **Connected Android Tests** | `.\gradlew.bat connectedDebugAndroidTest --no-daemon` | `Pixel_10_Pro` (`emulator-5554`, API 37) | **202 / 203** (`0 skipped`) | 99.5% | **PARTIAL (Shared Emulator Contention)** |
+| **Static Analysis / Lint** | `.\gradlew.bat lintDebug --no-daemon` | Android Lint | **0 Errors** (43 warnings) | 100.0% | **PASSED** |
+| **Debug & Release Builds** | `.\gradlew.bat assembleDebug assembleRelease --no-daemon` | R8 Minification + ProGuard | Debug `26.0 MB` / Release `4.58 MB` | Zero Issues | **PASSED** |
+| **Offline Manifest Audit** | `processReleaseMainManifest` | Merged `AndroidManifest.xml` | `0 INTERNET` / `0 ACCESS_NETWORK_STATE` | 100.0% | **VERIFIED** |
+
+*(Note: All 30 Phase 12 Compose tests in `AddMedicationRedesignUiTest`, `Phase9UiAndAccessibilityTest` [5/5], `AccessibilityTest` [11/11], `Phase11PpcUiTest` [2/2], and `NuviloCampaignSeedTest` passed; `Phase11MedicationCrudUiTest` hit concurrent test-runner contention on shared `emulator-5554`. See [`docs/ui-ux/add-medication/TEST_REPORT.md`](docs/ui-ux/add-medication/TEST_REPORT.md).)*
 
 ---
 
