@@ -449,3 +449,20 @@ No task or phase shall be marked complete without providing direct terminal exec
 - `lintDebug`: `BUILD SUCCESSFUL` (`0 errors`)
 - `assembleDebug` & `assembleRelease`: `BUILD SUCCESSFUL`
 - **Merged Release Manifest (`app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml`)**: Verified ZERO `android.permission.INTERNET`, ZERO `ACCESS_NETWORK_STATE`, and ZERO remote SDKs.
+
+---
+
+## 15. Latest Verified Test Execution (Phase 12: Add & Edit Medication Experience Redesign)
+
+### Unit Tests (`testDebugUnitTest`)
+- **Status**: `BUILD SUCCESSFUL`
+- **Result**: **219 / 219 PASSED** across 34 test suites (`0 failures, 0 errors, 0 skipped`).
+
+### Connected Instrumentation Tests (`connectedDebugAndroidTest` on `Pixel_10_Pro` / `emulator-5554`, API 37)
+- **Full Suite Result**: **202 / 203 PASSED** (`0 skipped`), including all **30 / 30** new Phase 12 UI & validation tests in `AddMedicationRedesignUiTest.kt`, `Phase9UiAndAccessibilityTest` (5/5), `AccessibilityTest` (11/11), `Phase11PpcUiTest` (2/2), and `NuviloCampaignSeedTest` (1/1).
+- **Isolated / Contended Follow-up Note**: `Phase11MedicationCrudUiTest` experienced concurrent test-runner contention (`com.certpilot.app.test` & `com.dartscorepro.test` active on shared `emulator-5554`), whereas `Phase9UiAndAccessibilityTest` passed **5 / 5** under `am instrument`. See [`docs/ui-ux/add-medication/TEST_REPORT.md`](docs/ui-ux/add-medication/TEST_REPORT.md).
+
+### Static Analysis, Release Build & Privacy Verification
+- `lintDebug`: `BUILD SUCCESSFUL` (**0 errors**, 43 warnings).
+- `assembleDebug` (`26,009,753` bytes) & `assembleRelease` (`4,579,293` bytes): `BUILD SUCCESSFUL`.
+- **Merged Release Manifest (`app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml`)**: Verified **0** `android.permission.INTERNET` and **0** `ACCESS_NETWORK_STATE`.
